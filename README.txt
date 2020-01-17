@@ -132,7 +132,7 @@ values
 
 
 USER INTERFACE
-After starting FortiusANT, you will see a userinterface with three buttons:
+After starting FortiusANT, you will see a user-interface with three buttons:
 - Locate HW
 - Runoff
 - Start
@@ -140,10 +140,10 @@ After starting FortiusANT, you will see a userinterface with three buttons:
 
 Locate HW
 Checks for the presence of USB-trainer and ANT-dongle.
-If succesfull, resultas are displayed and the button is disabled.
+If succesfull, results are displayed and the button is disabled.
 
 Rundown test
-To ensure comparable training sessions, the trainer should exert the same relative resistance each time
+To ensure comparable training sessions, the trainer should provide the same relative resistance each time
 1. Aim for about 100psi in tyre when cold
 2. Warm up for 2-3 minutes to warm rubberer
 3. Perform test- try for about a 7 second rundown from 40kph
@@ -151,7 +151,7 @@ To ensure comparable training sessions, the trainer should exert the same relati
 Start
 Pressing this button starts FortiusANT to listen to the USB-trainer and ANT-dongle and exchange info between them.
 
-FortiusANT starts to calirate the trainer (unless -n is specified).
+FortiusANT starts to calibrate the trainer (unless -n is specified).
 Calibration means that the brake rotates the wheel at 20 km/hr and returns the resistance found.
 As soon as the resistance is constant, the calibration stops.
 The calibration time is at least 30 seconds (warming up the tyre) and stops when the resistance value is constant.
@@ -166,6 +166,6 @@ Pressing this button stops the currently running process (runoff, calibration or
 Buttons on the Fortius console
 There are four buttons: Cancel, Enter, Up, Down.
 
-Cancel is activaten in all modes.
-If not in an active mode, Up/Down navigate through the menu, Enter activates the selected button and cancel exist FortiusANT.
+Cancel is activated in all modes.
+If not in an active mode, Up/Down navigate through the menu, Enter activates the selected button and cancel exits FortiusANT.
 In manual mode, Up/Down increase/decrease the resistance of the Fortius.
