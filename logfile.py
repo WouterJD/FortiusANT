@@ -60,7 +60,7 @@ def Close():
         pass
 
 #-------------------------------------------------------------------------------
-# Hexlify3
+# HexSpace
 #-------------------------------------------------------------------------------
 # input         buffer;         e.g. "\01\02\03\04"
 # 
@@ -95,6 +95,6 @@ if __name__ == "__main__":
     Write("This is a logrecord")                              # ..
     Close()                                                   # ..
     print ("Test of wdLogfile done")
-    print (Hexlify3(binascii.unhexlify("203031")))
+    print (HexSpace(binascii.unhexlify("203031")))
 else:
     pass                                # We're included so do not take action!
