@@ -26,6 +26,8 @@ WindowTitle = "Fortius Antifier v2.01"
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
+# 2020-01-21    Calibration improved`
+#
 # 2020-01-07    Calibration implemented
 #
 # 2020-01-06    Calibration tested: calibrate=the initial resistance of the trainer
@@ -377,9 +379,10 @@ def Tacx2Dongle(self):
     # Calibrate trainer
     #---------------------------------------------------------------------------
     Buttons         = 0
-    CountDown       = 120 # Seconds; two minutes should be enough for calibration
-    ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0]) # Array for running everage
+    CountDown       = 120 * 4 # 8 minutes; 120 is the max on the cadence meter
+    ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for running everage
     Calibrate       = 0
+    SetTacxMsg(self, "* * * * * C A L I B R A T I N G * * * * *")
     while self.RunningSwitch == True and not clv.SimulateTrainer and clv.calibrate \
           and not Buttons == usbTrainer.CancelButton and Calibrate == 0:
         StartTime = time.time()
@@ -391,24 +394,27 @@ def Tacx2Dongle(self):
         SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, Resistance, Buttons, Axis = \
                     usbTrainer.ReceiveFromTrainer(devTrainer)
 
-        # ----------------------------------------------------------------------
-        # Average power over the last 10 readings
-        # Stop if difference between min/max is less than 10% of average
-        # ----------------------------------------------------------------------
-        if Resistance != 0:
-            ResistanceArray = numpy.append(ResistanceArray, Resistance * -1) # Add new value to array
-            ResistanceArray = numpy.delete(ResistanceArray, 0)               # Remove oldest from array
-            
-            if CountDown < 90 and numpy.amin(ResistanceArray) > 0:
-                if (numpy.amax(ResistanceArray) / numpy.amin(ResistanceArray) ) < 1.05:
-                    Calibrate = Resistance * -1
-
         #-------------------------------------------------------------------------
         # Show progress
         #-------------------------------------------------------------------------
-        SetTacxMsg(self, "* * * * * C A L I B R A T I N G * * * * *")
-        SetValues(self, SpeedKmh, int(CountDown), round(CurrentPower * -1,0), gui.mode_Power, 0, 0, Resistance * -1, 0)
-        CountDown -= 0.25
+        if clv.gui: SetTacxMsg(self, "* * * * * C A L I B R A T I N G * * * * *")
+        SetValues(self, SpeedKmh, int(CountDown/4), round(CurrentPower * -1,0), gui.mode_Power, 0, 0, Resistance * -1, 0)
+
+        # ----------------------------------------------------------------------
+        # Average power over the last 20 readings
+        # Stop if difference between min/max is below threshold (30)
+        # At least 30 seconds but not longer than the countdown time (8 minutes)
+        # Note that the limits are empiracally established.
+        # ----------------------------------------------------------------------
+        if Resistance < 0 and  WheelSpeed > 0:    # Calibration is started (with pedal kick)
+            ResistanceArray = numpy.append(ResistanceArray, Resistance * -1) # Add new value to array
+            ResistanceArray = numpy.delete(ResistanceArray, 0)               # Remove oldest from array
+            
+            if CountDown < (120 * 4 - 30) and numpy.min(ResistanceArray) > 0:
+                if (numpy.max(ResistanceArray) - numpy.min(ResistanceArray) ) < 30 or CountDown <= 0:
+                    Calibrate = Resistance * -1
+
+            CountDown -= 0.25                   # If not started, no count down!
             
         #-------------------------------------------------------------------------
         # WAIT        So we do not cycle faster than 4 x per second
