@@ -26,7 +26,9 @@ WindowTitle = "Fortius Antifier v2.01"
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-# 2020-01-21    Calibration improved`
+# 2020-01-21    Calibration improved
+#               - Will run 8 minutes to allow tyre to warmup
+#               - Will end when calibration-value is stable
 #
 # 2020-01-07    Calibration implemented
 #
@@ -165,6 +167,8 @@ def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGra
             sTarget = "%3.0fW" % iTargetPower
         elif iTargetMode == gui.mode_Grade:
             sTarget = "%3.1f%%" % fTargetGrade
+            if iTargetPower > 0:                         # 2020-01-22 
+                sTarget += "(%iW)" % iTargetPower        # Target power added for reference
         else:
             sTarget = "None"
         msg = "Target=%s Speed=%4.1fkmh hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f %3.0f%%" % \
@@ -234,11 +238,10 @@ def LocateHW(self):
         if clv.SimulateTrainer:
             SetTacxMsg(self, "Simulated Trainer")
         else:
-            devTrainer = usbTrainer.GetTrainer()
-            if not devTrainer:
-                SetTacxMsg(self, "Trainer not detected")
-            else:
-                SetTacxMsg(self, "Trainer detected")
+            devTrainer, msg = usbTrainer.GetTrainer()
+            SetTacxMsg(self, msg)
+            if devTrainer:
+                SetTacxMsg(self, msg)
                 usbTrainer.InitialiseTrainer(devTrainer)     #initialise trainer
 
     #---------------------------------------------------------------------------
@@ -438,14 +441,13 @@ def Tacx2Dongle(self):
     UserAndBikeWeight       = 75 + 10       # defined according the standard (data page 51)
 #   testWeight              = 10            # used to test SendToTrainer()
     
+    Cadence                 = 0
     CurrentPower            = 0
+    HeartRate               = 0
+    PedalEcho               = 0
+    Resistance              = 0
     SpeedKmh                = 0
     WheelSpeed              = 0
-    PedalEcho               = 0
-    HeartRate               = 0
-    CurrentPower            = 0
-    Cadence                 = 0
-    Resistance              = 0
     
     #---------------------------------------------------------------------------
     # Trainer variables and counters
@@ -512,7 +514,7 @@ def Tacx2Dongle(self):
                     TargetGrade = 0
 
                 elif TargetMode == gui.mode_Grade:
-                    TargetPower = 0
+                    TargetPower = TargetPowerFromDongle     # 2020-01-22 Now filled with Grade-based value
                     TargetGrade = TargetGradeFromDongle
 
                 else:
@@ -625,6 +627,14 @@ def Tacx2Dongle(self):
                             TargetMode            = gui.mode_Grade
                             TargetGradeFromDongle = ant.msgUnpage51_TrackResistance(info)
                             TargetPowerFromDongle = 0
+                            
+                            #-------------------------------------------------------
+                            # 2020-01-22 Translate "grade" to TargetPower for
+                            # display purpose on the console only
+                            # The trainer will only use Grade, because of TargetMode
+                            #-------------------------------------------------------
+                            r = usbTrainer.Grade2Resistance(TargetGradeFromDongle, UserAndBikeWeight, WheelSpeed, Cadence)
+                            TargetPowerFromDongle = usbTrainer.Resistance2Power(r, WheelSpeed)
                             
                         #-------------------------------------------------------
                         # Data page 55 User configuration

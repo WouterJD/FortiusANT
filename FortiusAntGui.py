@@ -11,6 +11,7 @@ import logfile
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
+# 2020-01-22    In GradeMode, TargetPower is also displayed for reference
 # 2020-01-01    SetValues, TargetMode added
 # 2019-12-30    Version 2.1
 #               SetValues() input: TargetPower/TargetGrade to be inline with
@@ -581,7 +582,10 @@ class frmFortiusAntGui(wx.Frame):
             if   iTargetMode == mode_Power:
                 self.txtTarget.SetValue("Target=%i Watt" % iTargetPower + suffix)
             elif iTargetMode == mode_Grade:
-                self.txtTarget.SetValue("Target grade=%4.1f%%" % fTargetGrade + suffix)
+                s = "Target %4.1f%%" % fTargetGrade
+                if iTargetPower > 0:                                # 2020-01-22 
+                    s += "(%iW)" % iTargetPower                     # Target power added for reference
+                self.txtTarget.SetValue(s + suffix)
             else:
                 self.txtTarget.SetValue("No target"  + suffix)
 

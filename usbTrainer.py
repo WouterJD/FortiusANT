@@ -1,6 +1,7 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
+# 2020-01-22    Error handling in GetTrainer() added (similar to GetDongle())
 # 2020-01-15    Grade2Resistance() option3 tested and OK
 # 2020-01-10    Test done at 200W and dropping cadence (100, 90...30)
 #               resulting in explanation at Power2Resistance()
@@ -320,7 +321,7 @@ def PfietsNL(TargetGrade, UserAndBikeWeight, WheelSpeed):
 #
 # function  find USB trainer
 #
-# returns   devTrainer
+# returns   devTrainer, msg
 #-------------------------------------------------------------------------------
 def GetTrainer():
   global trainer_type
@@ -335,14 +336,25 @@ def GetTrainer():
   #---------------------------------------------------------------------------
   # Find supported trainer
   #---------------------------------------------------------------------------
+  msg = "GetTrainer - No trainer found"
   for idp in idpl:
-    dev = usb.core.find(idVendor=0x3561, idProduct=idp)     # find trainer USB device
-    if dev != None:
-      if debug.on(debug.Function):
-        logfile.Write ("GetTrainer - Trainer found")
-        print (dev)
-      trainer_type = idp
-      break
+    try:
+        dev = usb.core.find(idVendor=0x3561, idProduct=idp)     # find trainer USB device
+        if dev != None:
+          msg = "GetTrainer - Trainer found: " + hex(idp)
+          if debug.on(debug.Function):
+            print (dev)
+          trainer_type = idp
+          break
+    except Exception as e:
+        if debug.on(debug.Function): logfile.Write ("GetTrainer - " + str(e))
+
+        if "AttributeError" in str(e):
+            msg = "GetTrainer - Could not find USB trainer: " + str(e)
+        elif "No backend" in str(e):
+            msg = "GetTrainer - No backend, check libusb: " + str(e)
+        else:
+            msg = "GetTrainer: " + str(e)
     
   #---------------------------------------------------------------------------
   # Initialise trainer (if found)
@@ -361,13 +373,13 @@ def GetTrainer():
         time.sleep(5)
         dev = usb.core.find(idVendor=0x3561, idProduct=0x1942)
         if dev != None:
-          logfile.Write ("GetTrainer - 1942 head unit initialised")
+          msg = "GetTrainer - 1942 head unit initialised"
           trainer_type = 0x1942
         else:
-          logfile.Write ("GetTrainer - Unable to load firmware")
+          msg = "GetTrainer - Unable to load firmware"
           dev = False
       except:                                                                   # not found
-        logfile.Write ("GetTrainer - Unable to initialise trainer")
+        msg = "GetTrainer - Unable to initialise trainer"
         dev = False
       
     #---------------------------------------------------------------------------
@@ -377,8 +389,9 @@ def GetTrainer():
   #---------------------------------------------------------------------------
   # Done
   #---------------------------------------------------------------------------
+  logfile.Write(msg)
   if debug.on(debug.Function):logfile.Write ("GetTrainer() returns, trainertype=" + hex(trainer_type))
-  return dev
+  return dev, msg
   
 #-------------------------------------------------------------------------------
 #  I n i t i a l i s e T r a i n e r
@@ -492,11 +505,11 @@ def ReceiveFromTrainer(devTrainer):
   Buttons           = 0
   Cadence           = 0
   CurrentPower      = 0
+  CurrentResistance = 0
   HeartRate         = 0
   PedalEcho         = 0
-  TargetResistance  = 0
-  CurrentResistance = 0
   Speed             = 0
+  TargetResistance  = 0
   WheelSpeed        = 0
 
   #-----------------------------------------------------------------------------

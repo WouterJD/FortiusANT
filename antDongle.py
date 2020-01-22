@@ -18,6 +18,7 @@ import FortiusAntCommand    as cmd
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
+# 2020-01-22    Error handling in GetDongle made similar to GetTrainer()
 # 2020-01-15    hexlify/unhexlify removed, buffers are all of type 'bytes' now
 # 2019-12-30    strings[] replaced by messages[]
 #-------------------------------------------------------------------------------
@@ -201,11 +202,11 @@ def GetDongle():
                     if debug.on(debug.Function): logfile.Write ("GetDongle - " + str(e))
 
                     if "AttributeError" in str(e):
-                        msg = "Could not find dongle"
+                        msg = "GetDongle - Could not find dongle: " + str(e)
                     elif "No backend" in str(e):
-                        msg = str(e) + "- No backend- check libusb"
+                        msg = "GetDongle - No backend, check libusb: " + str(e)
                     else:
-                        msg = str(e)
+                        msg = "GetDongle: " + str(e)
                     found_available_ant_stick = False
 
         if found_available_ant_stick == False:
