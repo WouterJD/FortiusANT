@@ -26,6 +26,9 @@ WindowTitle = "Fortius Antifier v2.01"
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
+# 2020-01-23    manualGrade added
+#               in manual mode, dongle entirely ignored
+#
 # 2020-01-21    Calibration improved
 #               - Will run 8 minutes to allow tyre to warmup
 #               - Will end when calibration-value is stable
@@ -226,9 +229,13 @@ def LocateHW(self):
     #---------------------------------------------------------------------------
     # Get ANT dongle
     #---------------------------------------------------------------------------
+    if debug.on(debug.Application): logfile.Write ("Get Dongle")
     if not devAntDongle:
-        devAntDongle, msg = ant.GetDongle()
-        SetDongleMsg(self, msg)
+        if clv.manual or clv.manualGrade:
+            SetDongleMsg(self, "Simulated Dongle (manual mode)")
+        else:
+            devAntDongle, msg = ant.GetDongle()
+            SetDongleMsg(self, msg)
 
     #---------------------------------------------------------------------------
     # Get Trainer and find trainer model for Windows and Linux
@@ -248,7 +255,7 @@ def LocateHW(self):
     # Done
     #---------------------------------------------------------------------------
     if debug.on(debug.Application): logfile.Write ("Scan for hardware - end")
-    if devAntDongle and (clv.SimulateTrainer or devTrainer): 
+    if (clv.manual or clv.manualGrade or devAntDongle) and (clv.SimulateTrainer or devTrainer): 
         return True
     else:
         return False
@@ -365,10 +372,11 @@ def Tacx2Dongle(self):
     #    one to transmit the trainer info (Fitness Equipment)
     #    one to transmit heartrate info   (HRM monitor)
     #---------------------------------------------------------------------------
-    ant.ResetDongle(devAntDongle)             # reset dongle
-    ant.Calibrate(devAntDongle)               # calibrate ANT+ dongle
-    ant.Trainer_ChannelConfig(devAntDongle)   # Create ANT+ master channel for FE-C
-    ant.HRM_ChannelConfig(devAntDongle)       # Create ANT+ master channel for HRM
+    if not (clv.manual or clv.manualGrade):
+        ant.ResetDongle(devAntDongle)             # reset dongle
+        ant.Calibrate(devAntDongle)               # calibrate ANT+ dongle
+        ant.Trainer_ChannelConfig(devAntDongle)   # Create ANT+ master channel for FE-C
+        ant.HRM_ChannelConfig(devAntDongle)       # Create ANT+ master channel for HRM
     
     if not clv.gui: logfile.Write ("Ctrl-C to exit")
 
@@ -385,7 +393,8 @@ def Tacx2Dongle(self):
     CountDown       = 120 * 4 # 8 minutes; 120 is the max on the cadence meter
     ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for running everage
     Calibrate       = 0
-    SetTacxMsg(self, "* * * * * C A L I B R A T I N G * * * * *")
+    if not clv.SimulateTrainer:
+        SetTacxMsg(self, "* * * * * C A L I B R A T I N G * * * * *")
     while self.RunningSwitch == True and not clv.SimulateTrainer and clv.calibrate \
           and not Buttons == usbTrainer.CancelButton and Calibrate == 0:
         StartTime = time.time()
@@ -482,26 +491,39 @@ def Tacx2Dongle(self):
                 if CurrentPower < 0: CurrentPower = 0       # No negative value defined for ANT message Page25 (#)
                 
                 CurrentPower /= clv.PowerFactor
-            
-            #-------------------------------------------------------------------
-            # Show results
-            #-------------------------------------------------------------------
-            if SpeedKmh == "Not Found":
-                SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0, 0, 0
-                SetTacxMsg(self, 'Cannot read from trainer')
-            else:
-                if clv.gui: SetTacxMsg(self, "Trainer detected")
+                #---------------------------------------------------------------
+                # Show results
+                #---------------------------------------------------------------
+                if SpeedKmh == "Not Found":
+                    SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0, 0, 0
+                    SetTacxMsg(self, 'Cannot read from trainer')
+                else:
+                    if clv.gui: SetTacxMsg(self, "Trainer detected")
 
             #-------------------------------------------------------------------
             # In manual-mode, power can be incremented or decremented
             # In all modes, operation can be stopped.
             #-------------------------------------------------------------------
             if clv.manual:
+                TargetMode = gui.mode_Power
                 if   Buttons == usbTrainer.EnterButton:     pass
                 elif Buttons == usbTrainer.DownButton:      TargetPower -= 50   # testWeight -= 10 to test effect of Weight
                 elif Buttons == usbTrainer.UpButton:        TargetPower += 50   # testWeight += 10
                 elif Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
                 else:                                       pass
+            elif clv.manualGrade:                           # 2020-01-23 new option
+                TargetMode = gui.mode_Grade
+                if   Buttons == usbTrainer.EnterButton:     pass
+                elif Buttons == usbTrainer.DownButton:      TargetGrade -= 1
+                elif Buttons == usbTrainer.UpButton:        TargetGrade += 1
+                elif Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
+                else:                                       pass
+                #--------------------------------------------------------------
+                # Translate "grade" to TargetPower for display purpose only
+                # The trainer will only use Grade, because of TargetMode
+                #--------------------------------------------------------------
+                r = usbTrainer.Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence)
+                TargetPower = usbTrainer.Resistance2Power(r, WheelSpeed)
             else:
                 if   Buttons == usbTrainer.EnterButton:     pass
                 elif Buttons == usbTrainer.DownButton:      pass
@@ -588,7 +610,10 @@ def Tacx2Dongle(self):
             #-------------------------------------------------------------------
             # Broadcast and receive ANT+ data
             #-------------------------------------------------------------------
-            data = ant.SendToDongle([newdata], devAntDongle, comment, True, False)
+            if clv.manual or clv.manualGrade:
+                data = []
+            else:
+                data = ant.SendToDongle([newdata], devAntDongle, comment, True, False)
 
             #-------------------------------------------------------------------
             # Here all response from the ANT dongle are processed (receive=True)
@@ -763,13 +788,8 @@ def Tacx2Dongle(self):
                 info   = ant.msgPage_Hrm (ant.channel_HRM, PageChangeToggle | DataPageNumber, Spec1, Spec2, Spec3, HeartBeatEventTime, HeartBeatCounter, HeartRate)
                 hrdata = ant.ComposeMessage (ant.msgID_BroadcastData, info)
 
-#   Removed, because I do not see the purpose
-#   We have to send every 250ms on either channel
-#   It does not meand, we have to send every 125ms on all channels.
-#               SleepTime = 0.125 - (time.time() - StartTime)
-#               if SleepTime > 0: time.sleep(SleepTime) # Sleep for 125ms
-#                                                       # So we transmit once every 125ms, alternating Trainer and HRM
-                ant.SendToDongle([hrdata], devAntDongle, comment, False)
+                if not (clv.manual or clv.manualGrade):
+                    ant.SendToDongle([hrdata], devAntDongle, comment, False)
 
             #---------------------------------------------------------------------
             # Show progress
@@ -797,7 +817,8 @@ def Tacx2Dongle(self):
     #---------------------------------------------------------------------------
     # Stop devices
     #---------------------------------------------------------------------------
-    ant.ResetDongle(devAntDongle)                             #reset dongle
+    if not (clv.manual or clv.manualGrade):
+        ant.ResetDongle(devAntDongle)
     usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeStop, 0, False, False, \
                              0, 0, 0, 0, 0, clv.SimulateTrainer)
 

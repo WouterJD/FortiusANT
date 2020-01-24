@@ -3,7 +3,7 @@ import glob
 import os
 import platform
 import re
-if platform.system() == 'Linux':
+if platform.system() == 'False':
     import serial
 import struct
 import usb.core
@@ -18,6 +18,7 @@ import FortiusAntCommand    as cmd
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
+# 2020-01-23    OS-dependant code seems unnecessarry; disabled
 # 2020-01-22    Error handling in GetDongle made similar to GetTrainer()
 # 2020-01-15    hexlify/unhexlify removed, buffers are all of type 'bytes' now
 # 2019-12-30    strings[] replaced by messages[]
@@ -161,7 +162,7 @@ def GetDongle():
     #---------------------------------------------------------------------------
     # https://github.com/pyusb/pyusb/blob/master/docs/tutorial.rst
     #---------------------------------------------------------------------------
-    if platform.system() == 'Windows' or platform.system() == 'Darwin':
+    if platform.system() in [ 'Windows', 'Darwin', 'Linux' ]:
         found_available_ant_stick= False
         for dongle in dongles:                                          # iterate through ant pids
             ant_pid = dongle[0]
@@ -214,8 +215,8 @@ def GetDongle():
     #---------------------------------------------------------------------------
     # Linux, Posix     --    Find ANT+ USB stick on serial (Linux)
     #---------------------------------------------------------------------------
-    elif platform.system() == 'Linux':
-        print ('***** Linux not tested *****')
+    elif False:
+        print ('***** not tested; what platform needs this? *****')
         found_available_ant_stick = False
         for p in glob.glob('/dev/ttyUSB*'):
             devAntDongle = serial.Serial(p, 19200, rtscts=True, dsrdtr=True)
@@ -277,9 +278,9 @@ def SendToDongle(messages, devAntDongle, comment, receive=True, drop=True):
         #-----------------------------------------------------------------------
         # Send the message
         #-----------------------------------------------------------------------
-        if platform.system() == 'Linux':
-            # ***** Linux not tested *****
-            devAntDongle.write(message)
+        if False:
+            print ('***** not tested; what platform needs this? *****')
+            devAntDongle.write(message)             # Note: devAntDongle is a serial here!
         else:
             try:
                 devAntDongle.write(0x01,message)    # input:   endpoint address, buffer, timeout
@@ -322,11 +323,11 @@ def ReadFromDongle(devAntDongle, drop):
     data = []
     try:
         while True:                                     # ends on exception
-            if platform.system() == 'Linux':
-                # ***** Linux not tested *****
+            if False:
+                print ('***** not tested; what platform needs this? *****')
                 devAntDongle.timeout = 0.1
                 try:
-                    trv = devAntDongle.read(size=256)
+                    trv = devAntDongle.read(size=256)   # Note: devAntDongle is a serial here!
                 except Exception as e:
                     trv = ""
                     logfile.Write ( str(e) )

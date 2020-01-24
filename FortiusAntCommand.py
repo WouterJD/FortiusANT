@@ -3,6 +3,12 @@ import debug
 import logfile
 
 #-------------------------------------------------------------------------------
+# Version info
+#-------------------------------------------------------------------------------
+# 2020-01-23    manualGrade added
+#-------------------------------------------------------------------------------
+
+#-------------------------------------------------------------------------------
 # Realize clv to be program-global, by accessing through these two functions
 #-------------------------------------------------------------------------------
 def Create():
@@ -38,6 +44,7 @@ class CommandLineVariables(object):
     ftp             = __ftp__
     gui             = False
     manual          = False
+    manualGrade     = False
     PowerFactor     = 1.00
     ResistanceH     = 150        # % of ftp
     ResistanceL     = 100        # % of ftp
@@ -57,7 +64,8 @@ class CommandLineVariables(object):
         parser.add_argument('-d','--debug',     help='Show debugging data',                                 required=False, default=False)
         parser.add_argument('-f','--ftp',       help='FTP of the rider, default=%s' % self.__ftp__,         required=False, default=False)
         parser.add_argument('-g','--gui',       help='Run with graphical user interface',                   required=False, action='store_true')
-        parser.add_argument('-m','--manual',    help='Run manual (ignore target from usbDongle)',           required=False, action='store_true')
+        parser.add_argument('-m','--manual',    help='Run manual power (ignore target from usbDongle)',     required=False, action='store_true')
+        parser.add_argument('-M','--manualGrade',help='Run manual grade (ignore target from usbDongle)',    required=False, action='store_true')
         parser.add_argument('-n','--calibrate', help='Do not calibrate before start',                       required=False, action='store_false')
         parser.add_argument('-p','--factor',    help='Adjust target Power by multiplying by this factor',   required=False, default=False)
         parser.add_argument('-r','--resistance',help='FTP percentages for resistance mode, default=150/100',required=False, default=False)
@@ -71,8 +79,16 @@ class CommandLineVariables(object):
         self.autostart       = args.autostart
         self.gui             = args.gui
         self.manual          = args.manual
+        self.manualGrade     = args.manualGrade
         self.calibrate       = args.calibrate
         self.SimulateTrainer = args.simulate
+        
+        if self.manual and self.manualGrade:
+            logfile.Write("-m and -M are mutually exclusive; manual power selected")
+            self.manualGrade = False        # Mutually exclusive
+        
+        if (self.manual or self.manualGrade) and self.SimulateTrainer:
+            logfile.Write("-m/-M and -s both specified, most likely for program test purpose")
         
         #-----------------------------------------------------------------------
         # Bicycle definition to be parsed; three parameters
@@ -177,12 +193,13 @@ class CommandLineVariables(object):
 
     def print(self):
         try:
-            if self.args.autostart:     logfile.Write ("-a")
+            if self.autostart:          logfile.Write ("-a")
             if self.args.bicycle:       logfile.Write ("-b %s,%s/%s,%s/%s" % (self.tyre, self.fL, self.fS, self.rS, self.rL))
             if self.args.debug:         logfile.Write ("-d %s (%s)" % (self.debug, bin(self.debug) ) )
             if self.args.ftp:           logfile.Write ("-f %s" % self.ftp )
-            if self.args.gui:           logfile.Write ("-g")
-            if self.args.manual:        logfile.Write ("-m")
+            if self.gui:                logfile.Write ("-g")
+            if self.manual:             logfile.Write ("-m")
+            if self.manualGrade:        logfile.Write ("-M")
             if not self.args.calibrate: logfile.Write ("-n")
             if self.args.factor:        logfile.Write ("-p %s" % self.PowerFactor )
             if self.args.resistance:    logfile.Write ("-r %s/%s" % (self.ResistanceH, self.ResistanceL))
