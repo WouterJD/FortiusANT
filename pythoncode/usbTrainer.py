@@ -339,6 +339,7 @@ def GetTrainer():
   msg = "GetTrainer - No trainer found"
   for idp in idpl:
     try:
+        if debug.on(debug.Function): logfile.Write ("GetTrainer - Check for trainer %s" % (hex(idp)))
         dev = usb.core.find(idVendor=0x3561, idProduct=idp)     # find trainer USB device
         if dev != None:
           msg = "GetTrainer - Trainer found: " + hex(idp)

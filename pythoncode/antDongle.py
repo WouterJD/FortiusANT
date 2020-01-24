@@ -18,7 +18,7 @@ import FortiusAntCommand    as cmd
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-# 2020-01-23    OS-dependant code seems unnecessarry; disabled
+# 2020-01-23    OS-dependant code seems unnecessary; disabled
 # 2020-01-22    Error handling in GetDongle made similar to GetTrainer()
 # 2020-01-15    hexlify/unhexlify removed, buffers are all of type 'bytes' now
 # 2019-12-30    strings[] replaced by messages[]

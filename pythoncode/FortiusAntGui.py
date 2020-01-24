@@ -1,6 +1,8 @@
 import math
 import numpy
+import os
 import random
+import sys
 import threading
 import time
 import wx
@@ -11,6 +13,7 @@ import logfile
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
+# 2020-01-24    ico and jpg can be embedded in pyinstaller executable
 # 2020-01-22    In GradeMode, TargetPower is also displayed for reference
 # 2020-01-01    SetValues, TargetMode added
 # 2019-12-30    Version 2.1
@@ -61,15 +64,28 @@ class staticVariables:
 class frmFortiusAntGui(wx.Frame):
     def __init__(self, parent):
         # ----------------------------------------------------------------------
+		# Images are either in directory of the .py or embedded in .exe
+        # ----------------------------------------------------------------------
+        if getattr(sys, 'frozen', False):
+            FortiusAnt_ico = os.path.join(sys._MEIPASS, "FortiusAnt.ico")
+            FortiusAnt_jpg = os.path.join(sys._MEIPASS, "FortiusAnt.jpg")
+            Heart_jpg      = os.path.join(sys._MEIPASS, "Heart.jpg"     )
+        else:
+            FortiusAnt_ico = "FortiusAnt.ico"
+            FortiusAnt_jpg = "FortiusAnt.jpg"
+            Heart_jpg      = "Heart.jpg"
+
+        # ----------------------------------------------------------------------
 		# Default initial actions, bind functions to frame
         # ----------------------------------------------------------------------
         wx.Frame.__init__(self, parent, -1, WindowTitle, \
                style = wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
         
         try:
-            ico = wx.Icon('FortiusAnt.ico', wx.BITMAP_TYPE_ICO)
+            ico = wx.Icon(FortiusAnt_ico, wx.BITMAP_TYPE_ICO)
             self.SetIcon(ico)
         except:
+            print('Cannot load '+ FortiusAnt_ico)
             pass
 
         self.Bind(wx.EVT_CLOSE, self.OnClose)
@@ -98,11 +114,11 @@ class frmFortiusAntGui(wx.Frame):
         BitmapW = 900
         BitmapH = 600
         try:
-            self.BackgroundBitmap = wx.Bitmap('FortiusAnt.jpg')       # Image on the window background
+            self.BackgroundBitmap = wx.Bitmap(FortiusAnt_jpg)       # Image on the window background
             BitmapW = self.BackgroundBitmap.Size.GetWidth()
             BitmapH = self.BackgroundBitmap.Size.GetHeight()
         except:
-            print('Cannot load FortiusAnt.jpg')
+            print('Cannot load '+ FortiusAnt_jpg)
         # ----------------------------------------------------------------------
 		# Load HeartRate image
         # ----------------------------------------------------------------------
@@ -112,7 +128,7 @@ class frmFortiusAntGui(wx.Frame):
         self.HeartRateY     = BitmapH - 50 - self.HeartRateWH
         self.HeartRateImage = False
         try:
-            self.HeartRateImage = wx.Image('Heart.jpg')  # HeartRate
+            self.HeartRateImage = wx.Image(Heart_jpg)  # HeartRate
 
             img           = self.HeartRateImage.Scale(36, 36, wx.IMAGE_QUALITY_HIGH)
             self.bmp36x36 = wx.Bitmap(img)
@@ -121,7 +137,7 @@ class frmFortiusAntGui(wx.Frame):
             self.bmp40x40 = wx.Bitmap(img)
 
         except:
-            # print('Cannot load Heart.jpg')
+            # print('Cannot load ' + Heart_jpg)
             pass
         # ----------------------------------------------------------------------
 		# Calculate Width and X
