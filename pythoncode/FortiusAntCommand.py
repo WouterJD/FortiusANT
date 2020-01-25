@@ -1,12 +1,12 @@
-import argparse
-import debug
-import logfile
-
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
+__version__ = "2020-01-25"
 # 2020-01-23    manualGrade added
 #-------------------------------------------------------------------------------
+import argparse
+import debug
+import logfile
 
 #-------------------------------------------------------------------------------
 # Realize clv to be program-global, by accessing through these two functions

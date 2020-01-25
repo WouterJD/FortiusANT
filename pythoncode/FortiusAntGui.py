@@ -1,18 +1,7 @@
-import math
-import numpy
-import os
-import random
-import sys
-import threading
-import time
-import wx
-import wx.lib.agw.speedmeter as SM
-
-import debug
-import logfile
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
+__version__ = "2020-01-25"
 # 2020-01-24    ico and jpg can be embedded in pyinstaller executable
 # 2020-01-22    In GradeMode, TargetPower is also displayed for reference
 # 2020-01-01    SetValues, TargetMode added
@@ -28,6 +17,18 @@ import logfile
 #
 #               Also, text fields are flickering, therefore updated every second
 #-------------------------------------------------------------------------------
+import math
+import numpy
+import os
+import random
+import sys
+import threading
+import time
+import wx
+import wx.lib.agw.speedmeter as SM
+
+import debug
+import logfile
 
 #-------------------------------------------------------------------------------
 # constants

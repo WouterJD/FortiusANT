@@ -1,31 +1,8 @@
-import argparse
-import numpy
-import os
-import pickle
-import platform, glob
-import random
-import sys
-import struct
-import threading
-import time
-import usb.core
-import wx
-
-from datetime import datetime
-
-import antDongle         as ant
-import debug
-import FortiusAntCommand as cmd
-import FortiusAntGui     as gui
-import logfile
-import structConstants   as sc
-import usbTrainer
-
-WindowTitle = "Fortius Antifier v2.01"
-
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
+__version__ = "2020-01-25"
+WindowTitle = "Fortius Antifier v2.01"
 # 2020-01-23    manualGrade added
 #               in manual mode, dongle entirely ignored
 #
@@ -109,6 +86,30 @@ WindowTitle = "Fortius Antifier v2.01"
 #               - test with Zwift; done 2019-12-24
 #               - calibration test; done 2020-01-07
 #-------------------------------------------------------------------------------
+import argparse
+import binascii
+import math
+import numpy
+import os
+import pickle
+import platform, glob
+import random
+import sys
+import struct
+import threading
+import time
+import usb.core
+import wx
+
+from datetime import datetime
+
+import antDongle         as ant
+import debug
+import FortiusAntCommand as cmd
+import FortiusAntGui     as gui
+import logfile
+import structConstants   as sc
+import usbTrainer
 
 #-------------------------------------------------------------------------------
 # constants
@@ -901,6 +902,37 @@ if True or debug.on(debug.Any):
     logfile.Write("FortiusANT started")
     clv.print()
     logfile.Write("------------------")
+
+#-------------------------------------------------------------------------------
+# Component info
+#-------------------------------------------------------------------------------
+if debug.on(debug.Any):
+    logfile.Write('Version info for the components' )
+    s = " %17s = %s"
+    logfile.Write(s % ('FortiusAnt',                   __version__ ))
+    logfile.Write(s % ('antDongle',                ant.__version__ ))
+    logfile.Write(s % ('debug',                  debug.__version__ ))
+    logfile.Write(s % ('FortiusAntCommand',        cmd.__version__ ))
+    logfile.Write(s % ('FortiusAntGui',            gui.__version__ ))
+    logfile.Write(s % ('logfile',              logfile.__version__ ))
+    logfile.Write(s % ('structConstants',           sc.__version__ ))
+    logfile.Write(s % ('usbTrainer',        usbTrainer.__version__ ))
+
+    logfile.Write(s % ('argparse',            argparse.__version__ ))
+#   logfile.Write(s % ('binascii',            binascii.__version__ ))
+#   logfile.Write(s % ('math',                    math.__version__ ))
+    logfile.Write(s % ('numpy',                  numpy.__version__ ))
+#   logfile.Write(s % ('os',                        os.__version__ ))
+    logfile.Write(s % ('pickle',                pickle.format_version ))
+    logfile.Write(s % ('platform',            platform.__version__ ))
+#   logfile.Write(s % ('glob',                    glob.__version__ ))
+#   logfile.Write(s % ('random',                random.__version__ ))
+    logfile.Write(s % ('sys (python)',             sys.version ))
+#   logfile.Write(s % ('struct',                struct.__version__ ))
+#   logfile.Write(s % ('threading',          threading.__version__ ))
+#   logfile.Write(s % ('time',                    time.__version__ ))
+    logfile.Write(s % ('usb',                      usb.__version__ ))
+    logfile.Write(s % ('wx',                        wx.__version__ ))
 
 #-------------------------------------------------------------------------------
 # Main program; and go!

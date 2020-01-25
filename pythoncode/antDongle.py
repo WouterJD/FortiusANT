@@ -1,3 +1,12 @@
+#-------------------------------------------------------------------------------
+# Version info
+#-------------------------------------------------------------------------------
+__version__ = "2020-01-25"
+# 2020-01-23    OS-dependant code seems unnecessary; disabled
+# 2020-01-22    Error handling in GetDongle made similar to GetTrainer()
+# 2020-01-15    hexlify/unhexlify removed, buffers are all of type 'bytes' now
+# 2019-12-30    strings[] replaced by messages[]
+#-------------------------------------------------------------------------------
 import binascii
 import glob
 import os
@@ -14,15 +23,6 @@ import logfile
 import structConstants      as sc
 
 import FortiusAntCommand    as cmd
-
-#-------------------------------------------------------------------------------
-# Version info
-#-------------------------------------------------------------------------------
-# 2020-01-23    OS-dependant code seems unnecessary; disabled
-# 2020-01-22    Error handling in GetDongle made similar to GetTrainer()
-# 2020-01-15    hexlify/unhexlify removed, buffers are all of type 'bytes' now
-# 2019-12-30    strings[] replaced by messages[]
-#-------------------------------------------------------------------------------
 
 #-------------------------------------------------------------------------------
 # Our own choice what channels are used
@@ -198,7 +198,7 @@ def GetDongle():
                             if debug.on(debug.Function): logfile.Write ("GetDongle - ANT dongle in use")
                             found_available_ant_stick = False
                     else:
-                        msg = "Could not find dongle"
+                        msg = "Could not find ANT-dongle"
                 except Exception as e:
                     if debug.on(debug.Function): logfile.Write ("GetDongle - " + str(e))
 

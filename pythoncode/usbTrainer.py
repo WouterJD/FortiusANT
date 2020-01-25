@@ -1,6 +1,7 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
+__version__ = "2020-01-25"
 # 2020-01-22    Error handling in GetTrainer() added (similar to GetDongle())
 # 2020-01-15    Grade2Resistance() option3 tested and OK
 # 2020-01-10    Test done at 200W and dropping cadence (100, 90...30)
