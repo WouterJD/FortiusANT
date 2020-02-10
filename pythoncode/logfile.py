@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-01-25"
+__version__ = "2020-02-02"
+# 2020-02-02    Open() has optional parameter for logfile-prefix
 #-------------------------------------------------------------------------------
 import binascii
 import os
@@ -21,11 +22,11 @@ import debug
 #-------------------------------------------------------------------------------
 # O p e n
 #-------------------------------------------------------------------------------
-def Open():
+def Open(prefix='FortiusANT'):
     global fLogfile
     
     if debug.on():
-        filename = "FortiusANT." + datetime.utcnow().strftime('%Y-%m-%d %H-%M-%S') + ".log"
+        filename = prefix + '.' + datetime.utcnow().strftime('%Y-%m-%d %H-%M-%S') + ".log"
         fLogfile = open(filename,"w+")
 
 def IsOpen():

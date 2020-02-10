@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-01-25"
+__version__ = "2020-02-09"
+# 2020-02-10    scs added for Alana, analoque to .hrm
+#               disabled (#scs) on command-line since not implemented
+# 2020-02-09    hrm added
 # 2020-01-23    manualGrade added
 #-------------------------------------------------------------------------------
 import argparse
@@ -35,16 +38,20 @@ class CommandLineVariables(object):
 
     autostart       = False
     calibrate       = True
+    debug           = 0
+    ftp             = __ftp__
+    gui             = False
+    hrm             = None       # introduced 2020-02-09; None=not specified, numeric=HRM device, -1=no HRM
+    manual          = False
+    manualGrade     = False
+    scs             = None       # introduced 2020-02-10; None=not specified, numeric=SCS device
+    
     tyre            = __tyre__   # m        tyre circumference
     fL              = __fL__     # teeth    chain wheel front / large
     fS              = __fS__     # teeth    chain wheel front / small
     rL              = __rL__     # teeth    cassette back / large
     rS              = __rS__     # teeth    cassette back / small
-    debug           = 0
-    ftp             = __ftp__
-    gui             = False
-    manual          = False
-    manualGrade     = False
+
     PowerFactor     = 1.00
     ResistanceH     = 150        # % of ftp
     ResistanceL     = 100        # % of ftp
@@ -64,12 +71,14 @@ class CommandLineVariables(object):
         parser.add_argument('-d','--debug',     help='Show debugging data',                                 required=False, default=False)
         parser.add_argument('-f','--ftp',       help='FTP of the rider, default=%s' % self.__ftp__,         required=False, default=False)
         parser.add_argument('-g','--gui',       help='Run with graphical user interface',                   required=False, action='store_true')
+        parser.add_argument('-H','--hrm',       help='Use this Heart Rate Monitor (0: default, -1: none)',  required=False, default=False)
         parser.add_argument('-m','--manual',    help='Run manual power (ignore target from usbDongle)',     required=False, action='store_true')
         parser.add_argument('-M','--manualGrade',help='Run manual grade (ignore target from usbDongle)',    required=False, action='store_true')
         parser.add_argument('-n','--calibrate', help='Do not calibrate before start',                       required=False, action='store_false')
         parser.add_argument('-p','--factor',    help='Adjust target Power by multiplying by this factor',   required=False, default=False)
         parser.add_argument('-r','--resistance',help='FTP percentages for resistance mode, default=150/100',required=False, default=False)
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
+#scs    parser.add_argument('-S','--scs',       help='Use this Speed Cadence Sensor (0: default device)',   required=False, default=False)
         args                 = parser.parse_args()
         self.args            = args
 
@@ -166,6 +175,33 @@ class CommandLineVariables(object):
                 logfile.Write('Command line error; -f incorrect ftp=%s' % args.ftp)
 
         #-----------------------------------------------------------------------
+        # Get HRM
+        # - None: read HRM from Tacx Fortius and broadcast as HRM master device
+        # - -1  : no master and no slave device
+        # - 0   : pair with the first ANT+ HRM that is found
+        # - next: pair with the defined ANT+ HRM monitor
+        #             the number can be found with ExplorANT
+        #-----------------------------------------------------------------------
+        if args.hrm:
+            try:
+                self.hrm = int(args.hrm)
+            except:
+                logfile.Write('Command line error; -H incorrect HRM=%s' % args.hrm)
+
+        #-----------------------------------------------------------------------
+        # Get SCS
+        # - None: No Speed Cadence Sensor
+        # - 0   : pair with the first ANT+ SCS that is found
+        # - next: pair with the defined ANT+ SCS
+        #             the number can be found with ExplorANT
+        #-----------------------------------------------------------------------
+#scs    if args.scs:
+#scs        try:
+#scs            self.scs = int(args.scs)
+#scs        except:
+#scs            logfile.Write('Command line error; -S incorrect SCS=%s' % args.scs)
+
+        #-----------------------------------------------------------------------
         # Get powerfactor
         #-----------------------------------------------------------------------
         if args.factor:
@@ -198,12 +234,14 @@ class CommandLineVariables(object):
             if self.args.debug:         logfile.Write ("-d %s (%s)" % (self.debug, bin(self.debug) ) )
             if self.args.ftp:           logfile.Write ("-f %s" % self.ftp )
             if self.gui:                logfile.Write ("-g")
+            if self.args.hrm:           logfile.Write ("-H %s" % self.hrm )
             if self.manual:             logfile.Write ("-m")
             if self.manualGrade:        logfile.Write ("-M")
             if not self.args.calibrate: logfile.Write ("-n")
             if self.args.factor:        logfile.Write ("-p %s" % self.PowerFactor )
             if self.args.resistance:    logfile.Write ("-r %s/%s" % (self.ResistanceH, self.ResistanceL))
             if self.args.simulate:      logfile.Write ("-s")
+#scs        if self.args.scs:           logfile.Write ("-S %s" % self.scs )
         except:
             pass # May occur when incorrect command line parameters, error already given before
 
@@ -212,4 +250,14 @@ class CommandLineVariables(object):
 #-------------------------------------------------------------------------------
 if __name__ == "__main__":
     Create()
-    Get().print()
+    clv=Get()
+    clv.print()
+    
+    print('HRM', clv.hrm)
+    print('SCS', clv.scs)
+    
+    if clv.hrm == None:
+        print("----hrm none")
+    else:
+        i = int(clv.hrm)
+        print(i)

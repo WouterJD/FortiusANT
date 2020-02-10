@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-01-25"
+__version__ = "2020-02-09"
+# 2020-02-09    Suffix to refresh text-fields removed (?(
+# 2020-02-07    Text resized; as large as possible. Units abbreviated
+#               Heartrate positioned left
 # 2020-01-24    ico and jpg can be embedded in pyinstaller executable
 # 2020-01-22    In GradeMode, TargetPower is also displayed for reference
 # 2020-01-01    SetValues, TargetMode added
@@ -33,7 +36,9 @@ import logfile
 #-------------------------------------------------------------------------------
 # constants
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier GUI v2.1"
+WindowTitle = "Fortius Antifier GUI v2.2"
+
+LargeTexts  = True  # 2020-02-07
 
 mode_Basic  = 0     # Basic Resistance
 mode_Power  = 1     # Target Power
@@ -125,7 +130,8 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
         self.HeartRate      = 123
         self.HeartRateWH    = 40
-        self.HeartRateX     = BitmapW - 25 - self.HeartRateWH
+                            # 2020-02-07    # 2020-01-25
+        self.HeartRateX     = 25            # BitmapW - 25 - self.HeartRateWH
         self.HeartRateY     = BitmapH - 50 - self.HeartRateWH
         self.HeartRateImage = False
         try:
@@ -325,15 +331,21 @@ class frmFortiusAntGui(wx.Frame):
 
         # ----------------------------------------------------------------------
 		# Font sizing for all measurements
+        # 2020-02-07: LargeTexts implemented
         # ----------------------------------------------------------------------
-        TextCtrlFont = wx.Font(12, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        TextCtrlH    = 25
-        TextCtrlW    = int(SpeedWH/2)
+        if LargeTexts:
+            TextCtrlFont = wx.Font(24, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+            TextCtrlH    = 40
+            TextCtrlW    = int(SpeedWH/2)
+        else:
+            TextCtrlFont = wx.Font(12, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+            TextCtrlH    = 25
+            TextCtrlW    = int(SpeedWH/2)
 
         # ----------------------------------------------------------------------
 		# self.Speed label & text
         # ----------------------------------------------------------------------
-        self.txtSpeed = wx.TextCtrl(self, value="99.9 km/hr", size=(TextCtrlW,TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtSpeed = wx.TextCtrl(self, value="99.9 km/h", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtSpeed.SetBackgroundColour(bg)
         self.txtSpeed.SetPosition((int(self.Speed.Position[0] + (self.Speed.Size[0] - self.txtSpeed.Size[0])/2), \
                                     self.Speed.Position[1] + self.Speed.Size[1] - 2 * self.txtSpeed.Size[1]))
@@ -341,7 +353,7 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# self.Revs
         # ----------------------------------------------------------------------
-        self.txtRevs = wx.TextCtrl(self, value="999 rev/min", size=(TextCtrlW,TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtRevs = wx.TextCtrl(self, value="999/min", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtRevs.SetBackgroundColour(bg)
         self.txtRevs.SetPosition((int(self.Revs.Position[0] + (self.Revs.Size[0] - self.txtRevs.Size[0])/2), \
                                     self.Revs.Position[1] + self.Revs.Size[1] - 2 * self.txtRevs.Size[1]))
@@ -354,12 +366,12 @@ class frmFortiusAntGui(wx.Frame):
         self.txtPower.SetPosition((int(self.Power.Position[0] + (self.Power.Size[0] - self.txtPower.Size[0])/2), \
                                     self.Power.Position[1] + self.Power.Size[1] - 2 * self.txtPower.Size[1]))
 
-        self.txtTarget = wx.TextCtrl(self, value="Target=999 Watt", size=(int(TextCtrlW *1.15),TextCtrlH), style=wx.TE_LEFT | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtTarget = wx.TextCtrl(self, value="Target=999 Watt", size=(int(TextCtrlW *1.3),TextCtrlH), style=wx.TE_LEFT | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtTarget.SetBackgroundColour(bg)
         self.txtTarget.SetPosition((self.Power.Position[0], \
                                     self.Power.Position[1] + self.Power.Size[1] - self.txtTarget.Size[1]))
 
-        self.txtTacx = wx.TextCtrl(self, value="Tacx=9999", size=(int(TextCtrlW * 0.85),TextCtrlH), style=wx.TE_RIGHT | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtTacx = wx.TextCtrl(self, value="Tacx=9999", size=(int(TextCtrlW * 0.7),TextCtrlH), style=wx.TE_RIGHT | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtTacx.SetBackgroundColour(bg)
         self.txtTacx.SetPosition((self.Power.Position[0] + self.Power.Size[0] - self.txtTacx.Size[0], \
                                     self.Power.Position[1] + self.Power.Size[1] - self.txtTacx.Size[1]))
@@ -388,9 +400,10 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# self.HeartRate
         # ----------------------------------------------------------------------
-        self.txtHeartRate = wx.TextCtrl(self, value="123", size=(self.HeartRateWH,TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY)
+        self.txtHeartRate = wx.TextCtrl(self, value="123", size=(int(self.HeartRateWH*2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY)
         self.txtHeartRate.SetBackgroundColour(bg)
-        self.txtHeartRate.SetPosition((self.HeartRateX, self.HeartRateY - self.txtHeartRate.Size[1] - 5))
+        self.txtHeartRate.SetPosition(( self.HeartRateX - int((self.txtHeartRate.Size[0] - self.HeartRateWH)/2), \
+                                        self.HeartRateY - self.txtHeartRate.Size[1] - 5))
 
         # ----------------------------------------------------------------------
 		# Font setting for all measurements
@@ -471,13 +484,14 @@ class frmFortiusAntGui(wx.Frame):
 #       tr = 255                                    # experimental purpose only
         while self.RunningSwitch == True:
             t = time.localtime()
-            r = random.randint(1,100) / 100
-            r = .5
+            r = (90 + random.randint(1,20)) / 100   # 0.9 ... 1.1
+#           r = .5
 #           self.SetTransparent(tr)                 # frame can be made transparent
 #           self.Speed.SetTransparent(tr)           # control on frame cannot be made transparent
 #           tr -= 5
 #           self.SetValues(r * self.SpeedMax, r * self.RevsMax, r * self.PowerMax, t[5], t[0] + t[5])
-            self.SetValues(35.6, 234, 123, mode_Power, 345, False, 2345, 123)
+#           self.SetValues(35.6, 234, 123, mode_Grade, 345, 19.5, 2345, 123)
+            self.SetValues(r * 35.6, r * 234, r * 123, mode_Grade, r * 345, r * 19.5, r * 2345, r * 123)
             time.sleep(0.250)                       # sleep 0.250 second (like Tacx2Dongle)
         return True
 
@@ -585,24 +599,40 @@ class frmFortiusAntGui(wx.Frame):
                 staticVariables.SpeedMeter  = 1
             else:
                 staticVariables.SpeedMeter += 1
-            
-            suffix1 = '.'                       # str(0x32) # space
-            suffix2 = ','                       # str(0xa0) # no break space
-            suffix = self.txtSpeed.Value[-1:]
-            suffix = suffix2 if suffix == suffix1 else suffix1
-               
-            self.txtSpeed.SetValue ("%4.1f km/hr"    % fSpeed  + suffix)
-            self.txtRevs.SetValue  ("%i revs/min"    % iRevs   + suffix)
-            self.txtPower.SetValue ("%i Watt"        % iPower  + suffix)
-            self.txtTacx.SetValue  ("Tacx=%i"        % iTacx   + suffix)
+
+            if True:
+                # Alternating suffix makes the texts being refreshed
+                suffix1 = '.'                       # str(0x32) # space
+                suffix2 = ','                       # str(0xa0) # no break space
+                suffix = self.txtSpeed.Value[-1:]
+                suffix = suffix2 if suffix == suffix1 else suffix1
+            else:
+                # Such a measurement is not needed (anymore)
+                suffix = ''
+
+            # 2020-02-07: LargeTexts implemented
+            if LargeTexts:
+                self.txtSpeed.SetValue ("%4.1fkm/h"   % fSpeed  + suffix)
+                self.txtRevs.SetValue  ("%i/min"      % iRevs   + suffix)
+                self.txtPower.SetValue ("%iW"         % iPower  + suffix)
+                self.txtTacx.SetValue  ("%i"          % iTacx   + suffix)
+                fTargetPower = "%iW"
+            else:
+                self.txtSpeed.SetValue ("%4.1f km/h"  % fSpeed  + suffix)
+                self.txtRevs.SetValue  ("%i revs/min" % iRevs   + suffix)
+                self.txtPower.SetValue ("%i Watt"     % iPower  + suffix)
+                self.txtTacx.SetValue  ("Tacx=%i"     % iTacx   + suffix)
+                fTargetPower = "%i Watt"
 
             if   iTargetMode == mode_Power:
-                self.txtTarget.SetValue("Target=%i Watt" % iTargetPower + suffix)
+                self.txtTarget.SetValue(fTargetPower % iTargetPower + suffix)
+
             elif iTargetMode == mode_Grade:
-                s = "Target %4.1f%%" % fTargetGrade
-                if iTargetPower > 0:                                # 2020-01-22 
-                    s += "(%iW)" % iTargetPower                     # Target power added for reference
+                s = "%2.0f%%" % fTargetGrade
+                if iTargetPower > 0:                                            # 2020-01-22 
+                    s += "%iW" % iTargetPower                                   # Target power added for reference
                 self.txtTarget.SetValue(s + suffix)
+
             else:
                 self.txtTarget.SetValue("No target"  + suffix)
 

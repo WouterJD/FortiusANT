@@ -1,7 +1,12 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-01-25"
+__version__ = "2020-02-10"
+# 2020-02-10    SCS added (example code, not tested)
+# 2020-02-02    Function EnumerateAll() added, GetDongle() has optional input
+#               Function SlaveTrainer_ChannelConfig(), SlaveHRM_ChannelConfig()
+#                   for device pairing, with related constants
+#               Improved logging, major overhaul
 # 2020-01-23    OS-dependant code seems unnecessary; disabled
 # 2020-01-22    Error handling in GetDongle made similar to GetTrainer()
 # 2020-01-15    hexlify/unhexlify removed, buffers are all of type 'bytes' now
@@ -27,24 +32,78 @@ import FortiusAntCommand    as cmd
 #-------------------------------------------------------------------------------
 # Our own choice what channels are used
 #-------------------------------------------------------------------------------
-channel_FE  = 0             # ANT+ channel for Fitness Equipment
-channel_HRM = 1             # ANT+ channel for Heart Rate Monitor
+channel_FE       = 1        # ANT+ channel for Fitness Equipment
+channel_HRM      = 2        # ANT+ channel for Heart Rate Monitor
+channel_SCS      = 3        # ANT+ Channel for Speed Cadence Sensor
+
+DeviceNumber_FE  = 57591    # These are the device-numbers FortiusANT uses and
+DeviceNumber_HRM = 57592    # slaves (TrainerRoad, Zwift, ExplorANT) will find.
 
 #-------------------------------------------------------------------------------
 # D00000652_ANT_Message_Protocol_and_Usage_Rev_5.1.pdf
-# 9.3 ANT Message summary
+# 5.2.1 Channel Type
+# 5.3   Establishing a channel (defines master/slave)
+# 9.3   ANT Message summary
 #-------------------------------------------------------------------------------
-ChannelType_BidirectionalTransmit=0x10
+ChannelType_BidirectionalReceive        = 0x00          # Slave
+ChannelType_BidirectionalTransmit       = 0x10          # Master
 
-msgID_ANTversion        = 0x3e
-msgID_BroadcastData     = 0x4e
-msgID_AcknowledgedData  = 0x4f
-msgID_ChannelResponse   = 0x40
-msgID_Capabilities      = 0x54
+ChannelType_UnidirectionalReceiveOnly   = 0x40          # Slave
+ChannelType_UnidirectionalTransmitOnly  = 0x50          # Master
+
+ChannelType_SharedBidirectionalReceive  = 0x20          # Slave
+ChannelType_SharedBidirectionalTransmit = 0x30          # Master
+
+msgID_RF_EVENT                          = 0x01
+
+msgID_ANTversion                        = 0x3e
+msgID_BroadcastData                     = 0x4e
+msgID_AcknowledgedData                  = 0x4f
+msgID_ChannelResponse                   = 0x40
+msgID_Capabilities                      = 0x54
+
+msgID_AssignChannel                     = 0x42
+msgID_ChannelPeriod                     = 0x43
+msgID_ChannelRfFrequency                = 0x45
+msgID_SetNetworkKey                     = 0x46
+msgID_ResetSystem                       = 0x4a
+msgID_OpenChannel                       = 0x4b
+msgID_RequestMessage                    = 0x4d
+
+msgID_ChannelID                         = 0x51          # Set, but also receive master channel - but how/when?
+msgID_ChannelTransmitPower              = 0x60
+
+msgID_StartUp                           = 0x6f
 
 # profile.xlsx: antplus_device_type
-DeviceTypeID_FE         = 0x11
-DeviceTypeID_HRM        = 0x78
+DeviceTypeID_antfs                      =  1
+DeviceTypeID_bike_power                 = 11
+DeviceTypeID_environment_sensor_legacy  = 12
+DeviceTypeID_multi_sport_speed_distance = 15
+DeviceTypeID_control                    = 16
+DeviceTypeID_fitness_equipment          = 17
+DeviceTypeID_blood_pressure             = 18
+DeviceTypeID_geocache_node              = 19
+DeviceTypeID_light_electric_vehicle     = 20
+DeviceTypeID_env_sensor                 = 25
+DeviceTypeID_racquet                    = 26
+DeviceTypeID_control_hub                = 27
+DeviceTypeID_muscle_oxygen              = 31
+DeviceTypeID_bike_light_main            = 35
+DeviceTypeID_bike_light_shared          = 36
+DeviceTypeID_exd                        = 38
+DeviceTypeID_bike_radar                 = 40
+DeviceTypeID_bike_aero                  = 46
+DeviceTypeID_weight_scale               =119
+DeviceTypeID_heart_rate                 =120
+DeviceTypeID_bike_speed_cadence         =121
+DeviceTypeID_bike_cadence               =122
+DeviceTypeID_bike_speed                 =123
+DeviceTypeID_stride_speed_distance      =124
+
+DeviceTypeID_FE         = DeviceTypeID_fitness_equipment
+DeviceTypeID_HRM        = DeviceTypeID_heart_rate
+DeviceTypeID_SCS        = DeviceTypeID_bike_speed_cadence
 
 TransmissionType_IC     = 0x01          # 5.2.3.1   Transmission Type
 TransmissionType_IC_GDP = 0x05          #           0x01 = Independant Channel
@@ -87,41 +146,92 @@ def CalcChecksum (message):
 #   hrm:     D00000693_-_ANT+_Device_Profile_-_Heart_Rate_Rev_2.1.pdf
 #-------------------------------------------------------------------------------
 def Calibrate(devAntDongle):
-  if debug.on(debug.Function): logfile.Write ("Calibrate()")
+  if debug.on(debug.Data1): logfile.Write ("Calibrate()")
   messages=[
-    msg4D_RequestMessage        (channel_FE, msgID_Capabilities),   # request max channels
+    msg4D_RequestMessage        (0, msgID_Capabilities),   # request max channels
     msg4A_ResetSystem           (),
-    msg4D_RequestMessage        (channel_FE, msgID_ANTversion),     # request ant version
+    msg4D_RequestMessage        (0, msgID_ANTversion),     # request ant version
     msg46_SetNetworkKey         ()
   ]
-  SendToDongle(messages,devAntDongle, "(Calibrate)")
+  SendToDongle(messages,devAntDongle)
   
+def SlavePair_ChannelConfig(devAntDongle, channel_pair):
+  if debug.on(debug.Data1): logfile.Write ("SlavePair_ChannelConfig()")
+  messages=[
+    msg42_AssignChannel         (channel_pair, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
+    msg51_ChannelID             (channel_pair, 0, 0, 0), # Slave, full wildcards ChannelID, see msg51 comment
+    msg45_ChannelRfFrequency    (channel_pair, RfFrequency_2457Mhz), 
+    msg43_ChannelPeriod         (channel_pair, ChannelPeriod=0x1f86),
+    msg60_ChannelTransmitPower  (channel_pair, TransmitPower_0dBm),
+    msg4B_OpenChannel           (channel_pair)
+  ]
+  return SendToDongle(messages, devAntDongle, '', True, False)
+
 def Trainer_ChannelConfig(devAntDongle):
-  if debug.on(debug.Function): logfile.Write ("Trainer_ChannelConfig()")
+  if debug.on(debug.Data1): logfile.Write ("Trainer_ChannelConfig()")
   messages=[
     msg42_AssignChannel         (channel_FE, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
-    msg51_ChannelID             (channel_FE, 0x00cf, DeviceTypeID_FE, TransmissionType_IC_GDP),         # [cf] device number 207
+    msg51_ChannelID             (channel_FE, DeviceNumber_FE, DeviceTypeID_FE, TransmissionType_IC_GDP),
     msg45_ChannelRfFrequency    (channel_FE, RfFrequency_2457Mhz), 
     msg43_ChannelPeriod         (channel_FE, ChannelPeriod=0x2000),                                     # 4 Hz
     msg60_ChannelTransmitPower  (channel_FE, TransmitPower_0dBm),
     msg4B_OpenChannel           (channel_FE)
   ]
-  SendToDongle(messages, devAntDongle, "(Trainer channel config)")
+  SendToDongle(messages, devAntDongle, '')
+
+def SlaveTrainer_ChannelConfig(devAntDongle, DeviceNumber):
+  if debug.on(debug.Data1): logfile.Write ("SlaveTrainer_ChannelConfig()")
+  messages=[
+    msg42_AssignChannel         (channel_FE, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
+    msg51_ChannelID             (channel_FE, DeviceNumber, DeviceTypeID_FE, TransmissionType_IC_GDP),
+    msg45_ChannelRfFrequency    (channel_FE, RfFrequency_2457Mhz), 
+    msg43_ChannelPeriod         (channel_FE, ChannelPeriod=0x2000),                                     # 4 Hz
+    msg60_ChannelTransmitPower  (channel_FE, TransmitPower_0dBm),
+    msg4B_OpenChannel           (channel_FE),
+    msg4D_RequestMessage        (channel_FE, msgID_ChannelID) # Note that answer may be in logfile only
+  ]
+  SendToDongle(messages, devAntDongle, '')
 
 def HRM_ChannelConfig(devAntDongle):
-  if debug.on(debug.Function): logfile.Write ("HRM_ChannelConfig()")
+  if debug.on(debug.Data1): logfile.Write ("HRM_ChannelConfig()")
   messages=[
     msg42_AssignChannel         (channel_HRM, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
-    msg51_ChannelID             (channel_HRM, 0x0065, DeviceTypeID_HRM, TransmissionType_IC),           # [65] device number 101
+    msg51_ChannelID             (channel_HRM, DeviceNumber_HRM, DeviceTypeID_HRM, TransmissionType_IC),
     msg45_ChannelRfFrequency    (channel_HRM, RfFrequency_2457Mhz), 
     msg43_ChannelPeriod         (channel_HRM, ChannelPeriod=0x1f86),
     msg60_ChannelTransmitPower  (channel_HRM, TransmitPower_0dBm),
     msg4B_OpenChannel           (channel_HRM)
   ]
-  SendToDongle(messages, devAntDongle, "(HRM channel config)")
+  SendToDongle(messages, devAntDongle, '')
+
+def SlaveHRM_ChannelConfig(devAntDongle, DeviceNumber):
+  if debug.on(debug.Data1): logfile.Write ("SlaveHRM_ChannelConfig()")
+  messages=[
+    msg42_AssignChannel         (channel_HRM, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
+    msg51_ChannelID             (channel_HRM, DeviceNumber, DeviceTypeID_HRM, TransmissionType_IC),
+    msg45_ChannelRfFrequency    (channel_HRM, RfFrequency_2457Mhz), 
+    msg43_ChannelPeriod         (channel_HRM, ChannelPeriod=0x1f86),
+    msg60_ChannelTransmitPower  (channel_HRM, TransmitPower_0dBm),
+    msg4B_OpenChannel           (channel_HRM),
+    msg4D_RequestMessage        (channel_HRM, msgID_ChannelID) # Note that answer may be in logfile only
+  ]
+  SendToDongle(messages, devAntDongle, '')
+
+def SlaveSCS_ChannelConfig(devAntDongle, DeviceNumber):                     # Note: not tested!!!
+  if debug.on(debug.Data1): logfile.Write ("SlaveSCS_ChannelConfig()")
+  messages=[
+    msg42_AssignChannel         (channel_SCS, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
+    msg51_ChannelID             (channel_SCS, DeviceNumber, DeviceTypeID_SCS, TransmissionType_IC),
+    msg45_ChannelRfFrequency    (channel_SCS, RfFrequency_2457Mhz), 
+    msg43_ChannelPeriod         (channel_SCS, ChannelPeriod=0x1f86),
+    msg60_ChannelTransmitPower  (channel_SCS, TransmitPower_0dBm),
+    msg4B_OpenChannel           (channel_SCS),
+    msg4D_RequestMessage        (channel_SCS, msgID_ChannelID) # Note that answer may be in logfile only
+  ]
+  SendToDongle(messages, devAntDongle, '')
 
 def PowerDisplay_unused(devAntDongle):
-  if debug.on(debug.Function): logfile.Write ("powerdisplay()")
+  if debug.on(debug.Data1): logfile.Write ("powerdisplay()")
                                                     # calibrate as power display
   stringl=[
   "a4 03 42 00 00 00 e5",                     # 42 assign channel
@@ -133,14 +243,41 @@ def PowerDisplay_unused(devAntDongle):
   "a4 02 44 00 02 e0",                        # 44 Host Command/Response 
   "a4 01 4b 00 ee"                            # 4b ANT_OpenChannel message ID channel = 0 D00001229_Fitness_Modules_ANT+_Application_Note_Rev_3.0.pdf
   ]
-  SendToDongle(stringl, devAntDongle, "(Power display)")
+  SendToDongle(stringl, devAntDongle, '')
 
 def ResetDongle(devAntDongle):
-  if debug.on(debug.Function): logfile.Write ("ResetDongle()")
+  if debug.on(debug.Data1): logfile.Write ("ResetDongle()")
   messages=[
     msg4A_ResetSystem(),
   ]
-  return SendToDongle(messages, devAntDongle, "(Reset dongle)")
+  return SendToDongle(messages, devAntDongle, '')
+
+#-------------------------------------------------------------------------------
+# E n u m e r a t e A l l
+#-------------------------------------------------------------------------------
+# input     none
+#
+# function  list all usb-devices
+#
+# returns   none
+#-------------------------------------------------------------------------------
+def EnumerateAll():
+    logfile.Write("Dongles in the system:")
+    devices = usb.core.find(find_all=True)
+    for device in devices:
+#       print (device)
+        s = "manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
+                (device.manufacturer, device.product, \
+                 hex(device.idVendor), hex(device.idProduct), device.idProduct) 
+        logfile.Write (s.replace('\0',''))
+
+        i = 0
+        for cfg in device:          # Do not understand this construction; see pyusb tutorial
+            i += 1
+            for intf in cfg:
+                for ep in intf:
+                    pass
+    logfile.Write("--------------------")
   
 #-------------------------------------------------------------------------------
 # G e t D o n g l e
@@ -151,11 +288,12 @@ def ResetDongle(devAntDongle):
 #
 # returns   return devAntDongle and readable message
 #-------------------------------------------------------------------------------
-def GetDongle():
-    if debug.on(debug.Function): logfile.Write ("GetDongle()")
-
+def GetDongle(p=None):
     msg     = ""
-    dongles = { (4104, "Suunto"), (4105, "Garmin"), (4100, "Older") }
+    if p==None:
+        dongles = { (4104, "Suunto"), (4105, "Garmin"), (4100, "Older") }
+    else:
+        dongles = { (p, "(provided)")                                     }
 
     #---------------------------------------------------------------------------
     # Windows, Darwin
@@ -169,7 +307,7 @@ def GetDongle():
             if not found_available_ant_stick:                           # if haven't found a working ANT dongle yet
                 if debug.on(debug.Function): logfile.Write ("GetDongle - Check for dongle %s %s" % (ant_pid, dongle[1]))
                 try:
-                    devAntDongle = usb.core.find(idVendor=0x0fcf, idProduct=ant_pid) #get ANT+ stick 
+                    devAntDongle = usb.core.find(idProduct=ant_pid)     # get ANT+ stick (removed: idVendor=0x0fcf)
                     if devAntDongle:                                    # No Exception when no ANT+ stick
                         if debug.on(debug.Function): logfile.Write ("GetDongle - Dongle found")
 
@@ -189,19 +327,18 @@ def GetDongle():
 
                             msg = "No expected reply from dongle"
                             for s in reply:
-                                synch, length, id, info, checksum, rest = DongleData2Fields(s)
+                                synch, length, id, info, checksum, rest, c, d = DecomposeMessage(s)
                                 if synch==0xa4 and length==0x01 and id==0x6f:
                                     found_available_ant_stick = True
-                                    msg = "Using %s dongle" % dongle[1]
+                                    msg = "Using %s dongle" %  devAntDongle.manufacturer # dongle[1]
+                                    msg = msg.replace('\0','')            # .manufacturer is NULL-terminated
 
                         except usb.core.USBError:                         # cannot write to ANT dongle
-                            if debug.on(debug.Function): logfile.Write ("GetDongle - ANT dongle in use")
+                            msg = "GetDongle - ANT dongle in use"
                             found_available_ant_stick = False
                     else:
                         msg = "Could not find ANT-dongle"
                 except Exception as e:
-                    if debug.on(debug.Function): logfile.Write ("GetDongle - " + str(e))
-
                     if "AttributeError" in str(e):
                         msg = "GetDongle - Could not find dongle: " + str(e)
                     elif "No backend" in str(e):
@@ -226,7 +363,7 @@ def GetDongle():
             reply = ResetDongle(devAntDongle)
             msg = "No expected reply from dongle"
             for s in reply:
-                synch, length, id, info, checksum, rest = DongleData2Fields(s)
+                synch, length, id, info, checksum, rest, c, p = DecomposeMessage(s)
                 if synch==0xa4 and length==0x01 and id==0x6f:
                     serial_port = p
                     found_available_ant_stick = True
@@ -261,7 +398,7 @@ def GetDongle():
 #-------------------------------------------------------------------------------
 # input     devAntDongle
 #			strings             an array of data-buffers
-#			comment				for the logfile
+#			comment				deprecated
 #
 #           receive             after sending the data, receive all responses
 #           drop                the caller does not process the returned data
@@ -271,8 +408,7 @@ def GetDongle():
 #
 # returns   rtn                 the string-array as received from antDongle
 #-------------------------------------------------------------------------------
-def SendToDongle(messages, devAntDongle, comment, receive=True, drop=True):
-    if debug.on(debug.Function): logfile.Write ("SendToDongle(" +  logfile.HexSpaceL(messages) + "," + comment + ")")
+def SendToDongle(messages, devAntDongle, comment='', receive=True, drop=True):
     rtn = []
     for message in messages:
         #-----------------------------------------------------------------------
@@ -288,7 +424,7 @@ def SendToDongle(messages, devAntDongle, comment, receive=True, drop=True):
             except Exception as e:
                 logfile.Write ("SendToDongle write error: " + str(e))
 
-        DongleDebugMessage("Dongle    send   :", message, comment)
+        DongleDebugMessage("Dongle    send   :", message)
 
         #-----------------------------------------------------------------------
         # Read all responses
@@ -312,7 +448,6 @@ def SendToDongle(messages, devAntDongle, comment, receive=True, drop=True):
 # returns   return array of data-buffers
 #-------------------------------------------------------------------------------
 def ReadFromDongle(devAntDongle, drop):
-    if debug.on(debug.Function): logfile.Write ("ReadFromDongle()")
     #---------------------------------------------------------------------------
     # Read from antDongle untill no more data (timeout), or error
     # Usually, dongle gives one buffer at the time, starting with 0xa4
@@ -369,9 +504,9 @@ def ReadFromDongle(devAntDongle, drop):
                     else:
                         data.append(d)                         # add data to array
                         if drop == True:
-                            DongleDebugMessage ("Dongle    drop   :", d, "")
+                            DongleDebugMessage ("Dongle    drop   :", d)
                         else:
-                            DongleDebugMessage ("Dongle    receive:", d, "")
+                            DongleDebugMessage ("Dongle    receive:", d)
                 else:
                     error = "error: message exceeds buffer length"
                 if error:
@@ -421,48 +556,149 @@ def DecomposeMessage(d):
     checksum = d[3+length]              # Character after info
 
     if len(d) > 4 + length:
-        rest=d[4 + length:]             # Remainder
+        rest = d[4 + length:]           # Remainder (should not occur)
     else:
-        rest= ""                        # No remainder
-        
+        rest = ""                       # No remainder (normal)
+
+    Channel         = -1
+    DataPageNumber  = -1
     if length >= 1: Channel         = d[3]
     if length >= 2: DataPageNumber  = d[4]
 
-#   print(synch, length, "id=", id, info, checksum, "r=", rest, "ch=", Channel, "dp=", DataPageNumber)
-    
     return synch, length, id, info, checksum, rest, Channel, DataPageNumber
 
 #-------------------------------------------------------------------------------
 # D e b u g M e s s a g e
 #-------------------------------------------------------------------------------
-# input     msg, d, comment
+# input     msg, d
 #
 # function  Write structured dongle message to logfile if so requested
+#           Message ID is translated to text
+#           Also, channel and page are logged
+#           - the first byte of info is not always channel, if not ignore!
+#           - only some messages have a datapage, then page is printed
+#           - and some messages, payload is not printed but specific data
+#               e.g. ANTversion
 #
 # returns   none
 #-------------------------------------------------------------------------------
-def DongleDebugMessage(text, d, comment):
+def DongleDebugMessage(text, d):
     if debug.on(debug.Data1): 
-        synch, length, id, info, checksum, rest = DongleData2Fields(d)
-        logfile.Write ("%s synch=%s, len=%2s, id=%s, check=%s, info=%s +%s %s" % \
-                    (text,   synch,  length,  id, checksum,  logfile.HexSpace(info),  rest,    comment))
+        synch, length, id, info, checksum, rest, Channel, p = DecomposeMessage(d)
+        #-----------------------------------------------------------------------
+        # info_ is the payload of the message
+        # Channel and p are filled, but only valid for some messages
+        #-----------------------------------------------------------------------
+        info_ = logfile.HexSpace(info)
+
+        #-----------------------------------------------------------------------
+        # First add readable name (id_) to id
+        #-----------------------------------------------------------------------
+        if   id == msgID_ANTversion             : id_ = 'ANT version'
+        
+        elif id == msgID_BroadcastData          : id_ = 'Broadcast Data'
+        elif id == msgID_AcknowledgedData       : id_ = 'Acknowledged Data'
+        
+        elif id == msgID_ChannelResponse        : id_ = 'Channel Response'
+        elif id == msgID_Capabilities           : id_ = 'Capabilities'
+        elif id == msgID_AssignChannel          : id_ = 'Assign Channel'
+        elif id == msgID_ChannelPeriod          : id_ = 'Channel Period'
+        elif id == msgID_ChannelRfFrequency     : id_ = 'Channel RfFrequency'
+        elif id == msgID_SetNetworkKey          : id_ = 'Set NetworkKey'
+        elif id == msgID_ResetSystem            : id_ = 'Reset System'
+        elif id == msgID_OpenChannel            : id_ = 'Open Channel'
+        elif id == msgID_RequestMessage         : id_ = 'Request Message'
+        elif id == msgID_ChannelID              : id_ = 'Channel ID'
+        elif id == msgID_ChannelTransmitPower   : id_ = 'Channel TransmitPower'
+        elif id == msgID_StartUp                : id_ = 'Start up'
+        elif id == msgID_RF_EVENT               : id_ = 'RF event'  # D00000652..._Rev_5.1.pdf 9.5.6.1 Channel response
+        else                                    : id_ = '??'
+
+        #-----------------------------------------------------------------------
+        # extra is additional info for the message
+        # p_ is readable pagenumber if there is a valid pagenumber
+        #-----------------------------------------------------------------------
+        extra = ''                                              # Initially empty
+        p_    = ''                                              # There is not always page-info, do not show
+
+        if   id == msgID_ChannelResponse or id == msgID_RequestMessage:
+                           Channel = -1                         # There is no channel number for this message
+                           extra   = " msg=" + hex(p)           # No page but acknowledged/requested message
+
+        elif id == msgID_ANTversion:
+                           Channel = -1                         # There is no channel number for this message
+                           extra = info.decode("utf-8").replace('\0', '') # ANTversion in string format
+                           info_ = ''
+
+        elif id == msgID_ChannelID:
+                           extra = " (ch=%s, nr=%s, ID=%s, tt=%s)" % (unmsg51_ChannelID(info))
+                           
+        elif id == msgID_BroadcastData or id == msgID_AcknowledgedData:
+                                                      # Pagenumber in Payload
+            if   p        <   0: pass
+            elif p & 0x7f ==  0: p_ = 'Default data page'             # D00000693_-_ANT+_Device_Profile_-_Heart_Rate_Rev_2.1
+                                                                      # Also called "Unknown data page"
+                                                                      # 'HRM' but other devices have other meanings
+                                                                      #    Left for future improvements.
+                                                                      #    e.g. dependant on Channel
+            elif p & 0x7f ==  1: p_ = 'HRM Cumulative Operating Time'
+            elif p & 0x7f ==  2: p_ = 'HRM Manufacturer info'
+            elif p & 0x7f ==  3: p_ = 'HRM Product information'
+            elif p & 0x7f ==  4: p_ = 'HRM Previous Heart beat'
+            elif p & 0x7f ==  5: p_ = 'HRM Swim interval summary'
+            elif p & 0x7f ==  6: p_ = 'HRM Capabilities'
+            elif p        == 16: p_ = 'General FE data'
+            elif p        == 25: p_ = 'Trainer Data'
+            elif p        == 48: p_ = 'Basic Resistance'
+            elif p        == 49: p_ = 'Target Power'
+            elif p        == 51: p_ = 'Track Resistance'
+            elif p        == 55: p_ = 'User Configuration'
+            elif p        == 70: p_ = 'Request Datapage'
+            elif p        == 76: p_ = 'Mode settings page'
+            elif p        == 80: p_ = 'Manufacturer Info'
+            elif p        == 81: p_ = 'Product Information'
+            elif p        == 82: p_ = 'Battery Status'
+#           elif p        == 89: p_ = 'Add channel ID to list ???'
+            else               : p_ = '??'
+
+            p_ = " p=%s(%s)" % (p, p_)                          # Page, show number and name
+
+        elif id == msgID_RF_EVENT:
+            pass                                                # We could fill info with error code
+
+        else:
+            Channel = -1                                        # There is no channel number for this message
+        
+        #-----------------------------------------------------------------------
+        # extra is the explanation of info
+        # - if already filled, do not change
+        # - for data-pages "ch=1 p, pagenumber"
+        #-----------------------------------------------------------------------
+        if extra != '':
+            pass                                                        # Already filled
+        else:
+            if   Channel == -1:  extra = ""                             # No Channel, do not show
+            else              :  extra = " [ch=%s%s]" % (Channel, p_)   # Channel, show it with optional pageinfo
+
+        #-----------------------------------------------------------------------
+        # Write to logfile
+        #-----------------------------------------------------------------------
+        if debug.on(debug.Data1):
+            logfile.Write ("%s synch=%s, len=%2s, id=%s %-21s, check=%4s, info=%s%s" % \
+                    (text,hex(synch), length, hex(id), id_, hex(checksum),  info_, extra))
                   
-def DongleData2Fields(d):
-    # d is a ANT message
-    # e.g. 0xa40340000103e5
-    #        s l i .1.2.3    synch=a4, len=03, id=40, info=000103, checksum=e5
-    # ==> length of d = length + 4
+# ==============================================================================
+# ANT+ message interface
+# ==============================================================================
 
-    synch    = d[0]             # byte 0
-    length   = d[1]             # byte 1; length of info
-    id       = d[2]             # byte 2; id
-    info     = d[3:3 + length]  # bytes 3...>>
-    checksum = d[3 + length]    # byte after info
-
-    if len(d) > 3 + length + 1: rest=d[3+length+1:len(d)]           # Remainder
-    else:     rest= ""          # No remainder (as expected)
-    
-    return synch, length, id, info, checksum, rest
+# ------------------------------------------------------------------------------
+# A N T   M e s s a g e   42   A s s i g n C h a n n e l
+# ------------------------------------------------------------------------------
+def msg41_UnassignChannel(ChannelNumber):
+    format  =    sc.no_alignment + sc.unsigned_char
+    info    = struct.pack(format,  ChannelNumber)
+    msg     = ComposeMessage (0x41, info)
+    return msg
 
 # ------------------------------------------------------------------------------
 # A N T   M e s s a g e   42   A s s i g n C h a n n e l
@@ -471,10 +707,6 @@ def msg42_AssignChannel(ChannelNumber, ChannelType, NetworkNumber):
     format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_char + sc.unsigned_char
     info    = struct.pack(format,  ChannelNumber,     ChannelType,       NetworkNumber)
     msg     = ComposeMessage (0x42, info)
-
-    if debug.on(debug.Data1):
-        logfile.Write ("msg42_AssignChannel(channel=%s, ChannelType=%s, NetworkNumber=%s)" % (ChannelNumber, ChannelType, NetworkNumber))
-
     return msg
 
 # ------------------------------------------------------------------------------
@@ -484,10 +716,6 @@ def msg43_ChannelPeriod(ChannelNumber, ChannelPeriod):
     format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_short
     info    = struct.pack(format,  ChannelNumber,     ChannelPeriod)
     msg     = ComposeMessage (0x43, info)
-
-    if debug.on(debug.Data1):
-        logfile.Write ("msg43_ChannelPeriod(channel=%s, ChannelPeriod=%s)" % (ChannelNumber, ChannelPeriod))
-
     return msg
 
 # ------------------------------------------------------------------------------
@@ -497,10 +725,6 @@ def msg45_ChannelRfFrequency(ChannelNumber, RfFrequency):
     format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_char
     info    = struct.pack(format,  ChannelNumber,     RfFrequency)
     msg     = ComposeMessage (0x45, info)
-
-    if debug.on(debug.Data1):
-        logfile.Write ("msg45_ChannelRfFrequency(channel=%s, RfFrequency=%s)" % (ChannelNumber, RfFrequency))
-
     return msg
 
 # ------------------------------------------------------------------------------
@@ -510,10 +734,6 @@ def msg46_SetNetworkKey(NetworkNumber = 0x00, NetworkKey=0x45c372bdfb21a5b9):
     format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_long_long
     info    = struct.pack(format,  NetworkNumber,     NetworkKey)
     msg     = ComposeMessage (0x46, info)
-
-    if debug.on(debug.Data1):
-        logfile.Write ("msg46_SetNetworkKey(NetworkNumber=%s, NetworkKey=%s)" % (NetworkNumber, hex(NetworkKey)))
-
     return msg
 
 # ------------------------------------------------------------------------------
@@ -523,9 +743,6 @@ def msg4A_ResetSystem():
     format  =    sc.no_alignment + sc.unsigned_char
     info    = struct.pack(format,  0x00)
     msg     = ComposeMessage (0x4a, info)
-
-    if debug.on(debug.Data1): logfile.Write ("msg4A_ResetSystem()")
-
     return msg
 
 # ------------------------------------------------------------------------------
@@ -535,10 +752,6 @@ def msg4B_OpenChannel(ChannelNumber):
     format  =    sc.no_alignment + sc.unsigned_char
     info    = struct.pack(format,  ChannelNumber)
     msg     = ComposeMessage (0x4b, info)
-
-    if debug.on(debug.Data1):
-        logfile.Write ("msg4B_OpenChannel(channel=%s)" % (ChannelNumber))
-
     return msg
 
 # ------------------------------------------------------------------------------
@@ -548,26 +761,28 @@ def msg4D_RequestMessage(ChannelNumber, RequestedMessageID):
     format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_char
     info    = struct.pack(format,  ChannelNumber,     RequestedMessageID)
     msg     = ComposeMessage (0x4d, info)
-
-    if debug.on(debug.Data1):
-        logfile.Write ("msg4D_RequestMessage(channel=%s, RequestedMessageID=%s)" % \
-            (ChannelNumber, hex(RequestedMessageID)))
-
     return msg
 
 # ------------------------------------------------------------------------------
 # A N T   M e s s a g e   51   C h a n n e l I D
 # ------------------------------------------------------------------------------
+# D00000652_ANT_Message_Protocol_and_Usage_Rev_5.1.pdf
+# Page  17.   5.2.3 Channel ID
+# Page  66. 9.5.2.3 Set Channel ID (0x51)
+# Page 121. 9.5.7.2 Channel ID (0x51)
+# ------------------------------------------------------------------------------
 def msg51_ChannelID(ChannelNumber, DeviceNumber, DeviceTypeID, TransmissionType):
     format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_short + sc.unsigned_char + sc.unsigned_char
     info    = struct.pack(format,  ChannelNumber,     DeviceNumber,       DeviceTypeID,      TransmissionType)
     msg     = ComposeMessage (0x51, info)
-
-    if debug.on(debug.Data1):
-        logfile.Write ("msg51_ChannelID(channel=%s,DeviceNumber=%s, DeviceTypeID=%s, TransmissionType=%s)" % \
-            (ChannelNumber, DeviceNumber, DeviceTypeID, TransmissionType))
-
     return msg
+
+def unmsg51_ChannelID(info):
+    #                              0                  1                   2                  3
+    format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_short + sc.unsigned_char + sc.unsigned_char
+    tuple  = struct.unpack (format, info)
+
+    return                         tuple[0],          tuple[1],           tuple[2],          tuple[2]
 
 # ------------------------------------------------------------------------------
 # A N T   M e s s a g e   60   C h a n n e l T r a n s m i t P o w e r
@@ -576,16 +791,7 @@ def msg60_ChannelTransmitPower(ChannelNumber, TransmitPower):
     format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_char
     info    = struct.pack(format,  ChannelNumber,     TransmitPower)
     msg     = ComposeMessage (0x60, info)
-
-    if debug.on(debug.Data1):
-        logfile.Write ("msg60_ChannelTransmitPower(channel=%s, TransmitPower=%s)" % \
-            (ChannelNumber, TransmitPower))
-
     return msg
-
-# ==============================================================================
-# ANT+ message interface
-# ==============================================================================
 
 # ------------------------------------------------------------------------------
 # U n m s g 6 4   C h a n n e l R e s p o n s e
@@ -638,11 +844,22 @@ def msgPage16_GeneralFEdata (Channel, ElapsedTime, DistanceTravelled, Speed, Hea
     format=   sc.no_alignment+fChannel+fDataPageNumber+fEquipmentType+fElapsedTime+fDistanceTravelled+fSpeed+fHeartRate+fCapabilities
     info  =struct.pack(format, Channel, DataPageNumber, EquipmentType, ElapsedTime, DistanceTravelled, Speed, HeartRate, Capabilities)
 
-    if debug.on(debug.Data1):
-        logfile.Write ("msgPage16_GeneralFEdata(channel=%s, elapsed=%s, distance=%s, speed=%s, hr=%s) returns %s" % \
-            (Channel, ElapsedTime, DistanceTravelled, Speed, HeartRate, logfile.HexSpace(info)))
-
     return info
+
+def msgUnpage16_GeneralFEdata (info):
+    fChannel            = sc.unsigned_char  #0 First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  #1 First byte of the ANT+ datapage (payload)
+    fEquipmentType      = sc.unsigned_char  #2
+    fElapsedTime        = sc.unsigned_char  #3
+    fDistanceTravelled  = sc.unsigned_char  #4
+    fSpeed              = sc.unsigned_short #5
+    fHeartRate          = sc.unsigned_char  #6
+    fCapabilities       = sc.unsigned_char  #7
+
+    format=   sc.no_alignment+fChannel+fDataPageNumber+fEquipmentType+fElapsedTime+fDistanceTravelled+fSpeed+fHeartRate+fCapabilities
+    tuple = struct.unpack (format, info)
+
+    return tuple[0], tuple[1], tuple[2], tuple[3], tuple[4], tuple[5], tuple[6], tuple[7]
 
 # ------------------------------------------------------------------------------
 # P a g e 2 5   T r a i n e r   i n f o
@@ -670,124 +887,24 @@ def msgPage25_TrainerData(Channel, EventCounter, Cadence, AccumulatedPower, Curr
     format=    sc.no_alignment + fChannel + fDataPageNumber + fEvent +      fCadence + fAccPower +       fInstPower +  fFlags
     info  = struct.pack (format,  Channel,   DataPageNumber,   EventCounter, Cadence,   AccumulatedPower, CurrentPower, Flags)
 
-    if debug.on(debug.Data1):
-        logfile.Write ("msgPage25_TrainerData(channel=%s, event=%s, cadence=%s, accPower=%s, power=%s) returns %s" % \
-            (Channel, EventCounter, Cadence, AccumulatedPower, CurrentPower, logfile.HexSpace(info)))
-
     return info
 
-# ------------------------------------------------------------------------------
-# P a g e 8 0 _ M a n u f a c t u r e r I n f o
-# ------------------------------------------------------------------------------
-# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
-# D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
-# Common Data Page 80: (0x50) Manufacturers Information          
-# ------------------------------------------------------------------------------
-def msgPage80_ManufacturerInfo(Channel):
-    DataPageNumber      = 80
+def msgUnpage25_TrainerData(info):
+    fChannel            = sc.unsigned_char  #0 First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  #1 First byte of the ANT+ datapage (payload)
+    fEvent              = sc.unsigned_char  #2
+    fCadence            = sc.unsigned_char  #3
+    fAccPower           = sc.unsigned_short #4
+    fInstPower          = sc.unsigned_short #5 The first four bits have another meaning!!
+    fFlags              = sc.unsigned_char  #6
 
-    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
-    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
-    fReserved1          = sc.unsigned_char
-    fReserved2          = sc.unsigned_char
-    fHWrevision         = sc.unsigned_char
-    fManufacturerID     = sc.unsigned_short
-    fModelNumber        = sc.unsigned_short
-
-    format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fReserved2 + fHWrevision + fManufacturerID + fModelNumber
-    info  = struct.pack (format,  Channel,   DataPageNumber,   0xff,        0xff,        0x01,         0x0059,          0x8385)
+    format= sc.no_alignment + fChannel + fDataPageNumber + fEvent + fCadence + fAccPower + fInstPower + fFlags
+    tuple = struct.unpack (format, info)
     
-    if debug.on(debug.Data1):
-        logfile.Write ("msgPage80_ManufacturerInfo(channel=%s) returns %s" % (Channel, logfile.HexSpace(info)))
-
-    return info
+    return tuple[0], tuple[1], tuple[2], tuple[3], tuple[4], tuple[5], tuple[6]
 
 # ------------------------------------------------------------------------------
-# P a g e 8 1   P r o d u c t I n f o r m a t i o n
-# ------------------------------------------------------------------------------
-# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
-# D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
-# Common Data Page 81: (0x51) Product Information          
-# ------------------------------------------------------------------------------
-def msgPage81_ProductInformation(Channel):
-    DataPageNumber      = 81
-
-    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
-    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
-    fReserved1          = sc.unsigned_char
-    fSWrevisionSupp     = sc.unsigned_char
-    fSWrevisionMain     = sc.unsigned_char
-    fSerialNumber       = sc.unsigned_int
-
-    format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fSWrevisionSupp + fSWrevisionMain + fSerialNumber
-    info  = struct.pack (format,  Channel,   DataPageNumber,   0xff,        0xff,             0x01,             0x19590705)
-    
-    if debug.on(debug.Data1):
-        logfile.Write ("msgPage81_ProductInformation(channel=%s) returns %s" % (Channel, logfile.HexSpace(info)))
-
-    return info
-
-# ------------------------------------------------------------------------------
-# P a g e 8 2   B a t t e r y S t a t u s 
-# ------------------------------------------------------------------------------
-# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
-# D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
-# Common Data Page 82: (0x52) Battery Status
-# ------------------------------------------------------------------------------
-def msgPage82_BatteryStatus(Channel):
-    DataPageNumber      = 80
-
-    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
-    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
-    fReserved1          = sc.unsigned_char
-    fBatteryIdentifier  = sc.unsigned_char
-    fCumulativeTime1    = sc.unsigned_char
-    fCumulativeTime2    = sc.unsigned_char
-    fCumulativeTime3    = sc.unsigned_char
-    fBatteryVoltage     = sc.unsigned_char
-    fDescriptiveBitField= sc.unsigned_char
-
-    format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fBatteryIdentifier + \
-                fCumulativeTime1 + fCumulativeTime2 + fCumulativeTime3 + \
-                fBatteryVoltage + fDescriptiveBitField
-    info  = struct.pack (format, Channel, DataPageNumber, 0xff, 0x00, 0,0,0, 0, 0x0f | 0x10 | 0x00)
-    
-    if debug.on(debug.Data1):
-        logfile.Write ("msgPage82_BatteryStatus(channel=%s) returns %s" % (Channel, logfile.HexSpace(info)))
-
-    return info
-
-# ------------------------------------------------------------------------------
-# P a g e 0, 1, 2   H e a r t R a t e I n f o
-# ------------------------------------------------------------------------------
-# https://www.thisisant.com/developer/resources/downloads#documents_tab
-# D00000693_-_ANT+_Device_Profile_-_Heart_Rate_Rev_2.1.pdf
-# ------------------------------------------------------------------------------
-def msgPage_Hrm (Channel, DataPageNumber, Spec1, Spec2, Spec3, HeartBeatEventTime, HeartBeatCount, HeartRate):
-    DataPageNumber      = int(min(  0xff, DataPageNumber     ))
-    Spec1               = int(min(  0xff, Spec1              ))
-    Spec2               = int(min(  0xff, Spec2              ))
-    Spec3               = int(min(  0xff, Spec3              ))
-    HeartBeatEventTime  = int(min(0xffff, HeartBeatEventTime * 1000/1024))  # Convert seconds into 1024seconds (since ever)
-    HeartBeatCount      = int(min(  0xff, HeartBeatCount     ))
-    HeartRate           = int(min(  0xff, HeartRate          ))
-
-    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
-    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
-    fSpec1              = sc.unsigned_char
-    fSpec2              = sc.unsigned_char
-    fSpec3              = sc.unsigned_char
-    fHeartBeatEventTime = sc.unsigned_short
-    fHeartBeatCount     = sc.unsigned_char
-    fHeartRate          = sc.unsigned_char
-    
-    format      = sc.no_alignment + fChannel + fDataPageNumber + fSpec1 + fSpec2 + fSpec3 + fHeartBeatEventTime +  fHeartBeatCount + fHeartRate
-    info        = struct.pack (format, Channel, DataPageNumber,   Spec1,   Spec2,   Spec3,   HeartBeatEventTime,    HeartBeatCount,   HeartRate)
-
-    return info
-
-# ------------------------------------------------------------------------------
-# U n p a g e 4 8   B a s i c R e s i s t a n c e
+# P a g e 4 8   B a s i c R e s i s t a n c e
 # ------------------------------------------------------------------------------
 # D000001231_-_ANT+_Device_Profile_-_Fitness_Equipment_-_Rev_5.0_(6).pdf
 # Data page 48 (0x30) Basic Resistance
@@ -809,13 +926,10 @@ def msgUnpage48_BasicResistance(info):
 
     rtn = tuple[nTotalResistance] * 0.005    # 0 ... 100%
     
-    if debug.on(debug.Data1):
-        logfile.Write ("msgUnpage48_BasicResistance(%s) returns power=%s" % (logfile.HexSpace(info), rtn))
-    
     return rtn
 
 # ------------------------------------------------------------------------------
-# U n p a g e 4 9   T a r g e t P o w e r
+# P a g e 4 9   T a r g e t P o w e r
 # ------------------------------------------------------------------------------
 # D000001231_-_ANT+_Device_Profile_-_Fitness_Equipment_-_Rev_5.0_(6).pdf
 # Data page 49 (0x31) Target Power
@@ -837,13 +951,10 @@ def msgUnpage49_TargetPower(info):
     
     rtn = tuple[nTargetPower] / 4      # returns units of 1Watt
 
-    if debug.on(debug.Data1):
-        logfile.Write ("msgUnpage49_TargetPower(%s) returns power=%s" % (logfile.HexSpace(info), rtn))
-    
     return rtn
 
 # ------------------------------------------------------------------------------
-# U n p a g e 5 1   T r a c k R e s i s t a n c e
+# P a g e 5 1   T r a c k R e s i s t a n c e
 # ------------------------------------------------------------------------------
 # D000001231_-_ANT+_Device_Profile_-_Fitness_Equipment_-_Rev_5.0_(6).pdf
 # Data page 51 (0x33) Target `Resistance
@@ -872,13 +983,10 @@ def msgUnpage51_TrackResistance(info):
     rtn  *= 2.5                         # Empirically...
     rtn   = round(rtn,2)
 
-    if debug.on(debug.Data1):
-        logfile.Write ("msgUnpage51_TrackResistance(%s) [Raw grade=%s] returns Grade(slope)=%s" % (logfile.HexSpace(info), Grade, rtn))
-    
     return rtn
 
 # ------------------------------------------------------------------------------
-# U n p a g e 5 5   U s e r   C o n f i g u r a t i o n
+# P a g e 5 5   U s e r   C o n f i g u r a t i o n
 # ------------------------------------------------------------------------------
 # D000001231_-_ANT+_Device_Profile_-_Fitness_Equipment_-_Rev_5.0_(6).pdf
 # Data page 55 (0x37) User Configuration
@@ -917,18 +1025,36 @@ def msgUnpage55_UserConfiguration(info):
     
     GearRatio                 = tuple[nGearRatio] * 0.03                 # 0.03 - 7.65
 
-    if debug.on(debug.Data1):
-        logfile.Write ("msgUnpage55_UserConfiguration(%s) returns UserWeigth=%s BicycleWeigth=%s" % \
-                        (logfile.HexSpace(info), UserWeigth, BicycleWeigth))
-
     return UserWeigth, BicycleWeigth, BicyleWheelDiameter, GearRatio
 
 # ------------------------------------------------------------------------------
-# U n p a g e 7 0 _ R e q u e s t D a t a P a g e
+# P a g e 7 0 _ R e q u e s t D a t a P a g e
 # ------------------------------------------------------------------------------
+# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
 # D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
-# Common page 70 (0x46) Request Data Page
+# Common Data Page 70: (0x46) RequestDataPage
 # ------------------------------------------------------------------------------
+def msgPage70_RequestDataPage(Channel, SlaveSerialNumber, DescriptorByte1, \
+                DescriptorByte2, NrTimes, RequestedPageNumber, CommandType):
+    DataPageNumber      = 70
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSlaveSerialNumber  = sc.unsigned_short
+    fDescriptorByte1    = sc.unsigned_char
+    fDescriptorByte2    = sc.unsigned_char
+    fReqTransmissionResp= sc.unsigned_char
+    fRequestedPageNumber= sc.unsigned_char
+    fCommandType        = sc.unsigned_char
+
+    format=    sc.no_alignment + fChannel + fDataPageNumber + fSlaveSerialNumber + fDescriptorByte1 + \
+               fDescriptorByte2 + fReqTransmissionResp + fRequestedPageNumber + fCommandType
+
+    info  = struct.pack (format,  Channel,   DataPageNumber,   SlaveSerialNumber,   DescriptorByte1,  \
+                DescriptorByte2,   NrTimes,               RequestedPageNumber,   CommandType)
+    
+    return info
+
 def msgUnpage70_RequestDataPage(info):
     nChannel            = 0
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
@@ -963,100 +1089,254 @@ def msgUnpage70_RequestDataPage(info):
     AckRequired         = ReqTranmissionResponse & 0x80
     NrTimes             = ReqTranmissionResponse & 0x7f
 
-    if debug.on(debug.Data1):
-        logfile.Write ("msgUnpage70_RequestDataPage(%s) returns %s %s %s ack=%s nr=%s page=%s type=%s" % \
-           (logfile.HexSpace(info), \
-           tuple[nSlaveSerialNumber], tuple[nDescriptorByte1], tuple[nDescriptorByte2], \
-           AckRequired, NrTimes, tuple[nRequestedPageNumber], tuple[nCommandType]))
-
     return tuple[nSlaveSerialNumber], tuple[nDescriptorByte1], tuple[nDescriptorByte2], \
            AckRequired, NrTimes, tuple[nRequestedPageNumber], tuple[nCommandType]
+
+# ------------------------------------------------------------------------------
+# P a g e 8 0 _ M a n u f a c t u r e r I n f o
+# ------------------------------------------------------------------------------
+# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
+# D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
+# Common Data Page 80: (0x50) Manufacturers Information          
+# ------------------------------------------------------------------------------
+def msgPage80_ManufacturerInfo(Channel):
+    DataPageNumber      = 80
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fReserved1          = sc.unsigned_char
+    fReserved2          = sc.unsigned_char
+    fHWrevision         = sc.unsigned_char
+    fManufacturerID     = sc.unsigned_short
+    fModelNumber        = sc.unsigned_short
+
+    format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fReserved2 + fHWrevision + fManufacturerID + fModelNumber
+    info  = struct.pack (format,  Channel,   DataPageNumber,   0xff,        0xff,        0x01,         0x0059,          0x8385)
+    
+    return info
+
+def msgUnpage80_ManufacturerInfo(info):
+    fChannel            = sc.unsigned_char  #0 First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  #1 First byte of the ANT+ datapage (payload)
+    fReserved1          = sc.unsigned_char  #2
+    fReserved2          = sc.unsigned_char  #3
+    fHWrevision         = sc.unsigned_char  #4
+    fManufacturerID     = sc.unsigned_short #5
+    fModelNumber        = sc.unsigned_short #6
+
+    format= sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fReserved2 + fHWrevision + fManufacturerID + fModelNumber
+    tuple = struct.unpack (format, info)
+    
+    return tuple[0], tuple[1], tuple[2], tuple[3], tuple[4], tuple[5], tuple[6]
+
+# ------------------------------------------------------------------------------
+# P a g e 8 1   P r o d u c t I n f o r m a t i o n
+# ------------------------------------------------------------------------------
+# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
+# D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
+# Common Data Page 81: (0x51) Product Information          
+# ------------------------------------------------------------------------------
+def msgPage81_ProductInformation(Channel):
+    DataPageNumber      = 81
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fReserved1          = sc.unsigned_char
+    fSWrevisionSupp     = sc.unsigned_char
+    fSWrevisionMain     = sc.unsigned_char
+    fSerialNumber       = sc.unsigned_int
+
+    format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fSWrevisionSupp + fSWrevisionMain + fSerialNumber
+    info  = struct.pack (format,  Channel,   DataPageNumber,   0xff,        0xff,             0x01,             0x19590705)
+    
+    return info
+
+def msgUnpage81_ProductInformation(info):
+    fChannel            = sc.unsigned_char  #0 First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  #1 First byte of the ANT+ datapage (payload)
+    fReserved1          = sc.unsigned_char  #2
+    fSWrevisionSupp     = sc.unsigned_char  #3
+    fSWrevisionMain     = sc.unsigned_char  #4
+    fSerialNumber       = sc.unsigned_int   #5
+
+    format= sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fSWrevisionSupp + fSWrevisionMain + fSerialNumber
+    tuple = struct.unpack (format, info)
+    
+    return tuple[0], tuple[1], tuple[2], tuple[3], tuple[4], tuple[5]
+
+# ------------------------------------------------------------------------------
+# P a g e 8 2   B a t t e r y S t a t u s 
+# ------------------------------------------------------------------------------
+# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
+# D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
+# Common Data Page 82: (0x52) Battery Status
+# ------------------------------------------------------------------------------
+def msgPage82_BatteryStatus(Channel):
+    DataPageNumber      = 82
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fReserved1          = sc.unsigned_char
+    fBatteryIdentifier  = sc.unsigned_char
+    fCumulativeTime1    = sc.unsigned_char
+    fCumulativeTime2    = sc.unsigned_char
+    fCumulativeTime3    = sc.unsigned_char
+    fBatteryVoltage     = sc.unsigned_char
+    fDescriptiveBitField= sc.unsigned_char
+
+    format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fBatteryIdentifier + \
+                fCumulativeTime1 + fCumulativeTime2 + fCumulativeTime3 + \
+                fBatteryVoltage + fDescriptiveBitField
+    info  = struct.pack (format, Channel, DataPageNumber, 0xff, 0x00, 0,0,0, 0, 0x0f | 0x10 | 0x00)
+    
+    return info
+
+# ------------------------------------------------------------------------------
+# P a g e 0, 1, 2   H e a r t R a t e I n f o
+# ------------------------------------------------------------------------------
+# https://www.thisisant.com/developer/resources/downloads#documents_tab
+# D00000693_-_ANT+_Device_Profile_-_Heart_Rate_Rev_2.1.pdf
+# ------------------------------------------------------------------------------
+def msgPage_Hrm (Channel, DataPageNumber, Spec1, Spec2, Spec3, HeartBeatEventTime, HeartBeatCount, HeartRate):
+    DataPageNumber      = int(min(  0xff, DataPageNumber     ))
+    Spec1               = int(min(  0xff, Spec1              ))
+    Spec2               = int(min(  0xff, Spec2              ))
+    Spec3               = int(min(  0xff, Spec3              ))
+    HeartBeatEventTime  = int(min(0xffff, HeartBeatEventTime * 1000/1024))  # Convert seconds into 1024seconds (since ever)
+    HeartBeatCount      = int(min(  0xff, HeartBeatCount     ))
+    HeartRate           = int(min(  0xff, HeartRate          ))
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSpec1              = sc.unsigned_char
+    fSpec2              = sc.unsigned_char
+    fSpec3              = sc.unsigned_char
+    fHeartBeatEventTime = sc.unsigned_short
+    fHeartBeatCount     = sc.unsigned_char
+    fHeartRate          = sc.unsigned_char
+    
+    format      = sc.no_alignment + fChannel + fDataPageNumber + fSpec1 + fSpec2 + fSpec3 + fHeartBeatEventTime +  fHeartBeatCount + fHeartRate
+    info        = struct.pack (format, Channel, DataPageNumber,   Spec1,   Spec2,   Spec3,   HeartBeatEventTime,    HeartBeatCount,   HeartRate)
+
+    return info
+
+def msgUnpage_Hrm (info):
+    fChannel            = sc.unsigned_char  #0 First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  #1 First byte of the ANT+ datapage (payload)
+    fSpec1              = sc.unsigned_char  #2
+    fSpec2              = sc.unsigned_char  #3
+    fSpec3              = sc.unsigned_char  #4
+    fHeartBeatEventTime = sc.unsigned_short #5
+    fHeartBeatCount     = sc.unsigned_char  #6
+    fHeartRate          = sc.unsigned_char  #7
+    
+    format      = sc.no_alignment + fChannel + fDataPageNumber + fSpec1 + fSpec2 + fSpec3 + fHeartBeatEventTime +  fHeartBeatCount + fHeartRate
+    tuple = struct.unpack (format, info)
+    
+    return tuple[0], tuple[1], tuple[2], tuple[3], tuple[4], tuple[5], tuple[6], tuple[7]
 
 #-------------------------------------------------------------------------------
 # Main program to compare strings with messages
 #-------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print ("calibrate---------------------------------------------------------------")
-    stringl=[
-    "a4 02 4d 00 54 bf",                        # request max channels
-    "a4 01 4a 00 ef",                           # reset system
-    "a4 02 4d 00 3e d5",                        # request ant version
-    "a4 09 46 00 b9 a5 21 fb bd 72 c3 45 64",   # set network key b9 a5 21 fb bd 72 c3 45
-    ]
-    messages=[
-    msg4D_RequestMessage(channel_FE, msgID_Capabilities),   # request max channels
-    msg4A_ResetSystem(),
-    msg4D_RequestMessage(channel_FE, msgID_ANTversion),
-    msg46_SetNetworkKey()
-    ]
+    if False:
+        print ("calibrate---------------------------------------------------------------")
+        stringl=[
+        "a4 02 4d 00 54 bf",                        # request max channels
+        "a4 01 4a 00 ef",                           # reset system
+        "a4 02 4d 00 3e d5",                        # request ant version
+        "a4 09 46 00 b9 a5 21 fb bd 72 c3 45 64",   # set network key b9 a5 21 fb bd 72 c3 45
+        ]
+        messages=[
+        msg4D_RequestMessage(channel_FE, msgID_Capabilities),   # request max channels
+        msg4A_ResetSystem(),
+        msg4D_RequestMessage(channel_FE, msgID_ANTversion),
+        msg46_SetNetworkKey()
+        ]
 
-    for i in range(0,len(messages)):
-        print(i, stringl[i])
-        print(i, logfile.HexSpace(messages[i]))
-        if messages[i] == binascii.unhexlify(stringl[i].replace(' ','')): print("equal")
-        else:                                                             print("unequal ***********")
+        for i in range(0,len(messages)):
+            print(i, stringl[i])
+            print(i, logfile.HexSpace(messages[i]))
+            if messages[i] == binascii.unhexlify(stringl[i].replace(' ','')): print("equal")
+            else:                                                             print("unequal ***********")
+            
+
+        print("Trainer_ChannelConfig---------------------------------------------------")
+        stringl=[
+        "a4 03 42 00 10 00 f5",                     # [42] assign channel, [00] 0, [10] type 10 bidirectional transmit, [00] network number 0, [f5] extended assignment
+        "a4 05 51 00 cf 00 11 05 2b",               # [51] set channel ID, [00] number 0 (wildcard search) , [cf] device number 207, [00] pairing request (off), [11] device type fec, [05] transmission type  (page 18 and 66 Protocols) 00000101 - 01= independent channel, 1=global data pages used
+        "a4 02 45 00 39 da",                        # [45] set channel freq, [00] transmit channel on network #0, [39] freq 2400 + 57 x 1 Mhz= 2457 Mhz
+        "a4 03 43 00 00 20 c4",                     # [43] set messaging period, [00] channel #0, [f61f] = 32768/8182(f61f) = 4Hz (The channel messaging period in seconds * 32768. Maximum messaging period is ~2 seconds. )
+        "a4 02 60 00 03 c5",                        # [60] set transmit power, [00] channel #0, [03] 0 dBm
+        "a4 01 4b 00 ee"                            #      open channel #0
+        ]
+        messages=[
+        msg42_AssignChannel         (channel_FE, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
+        msg51_ChannelID             (channel_FE, 0x00cf, DeviceTypeID_FE, TransmissionType_IC_GDP),             # [cf] device number 207
+        msg45_ChannelRfFrequency    (channel_FE, RfFrequency_2457Mhz), 
+        msg43_ChannelPeriod         (channel_FE, ChannelPeriod=0x2000),
+        msg60_ChannelTransmitPower  (channel_FE, TransmitPower_0dBm),
+        msg4B_OpenChannel           (channel_FE)
+        ]
+        for i in range(0,len(messages)):
+            print(i, stringl[i])
+            print(i, logfile.HexSpace(messages[i]))
+            if messages[i] == binascii.unhexlify(stringl[i].replace(' ','')): print("equal")
+            else:                                                             print("unequal ***********")
+
+
+        print("HRM_ChannelConfig-------------------------------------------------------")
+        stringl=[
+        "a4 03 42 01 10 00 f4",                   # [42] assign channel, [01] channel #1, [10] type 10 bidirectional transmit, [00] network number 0, [f4] normal assignment
+        "a4 05 51 01 65 00 78 01 ed",             # [51] set channel ID, [01] channel 1 , [02] device number 2, [00] pairing request (off), [78] device type HR sensor, [01] transmission type  (page 18 and 66 Protocols) 00000101 - 01= independent channel, 1=global data pages used
+        "a4 02 45 01 39 db",                      # [45] set channel freq, [01] set channel #1, [39] freq 2400 + 57 x 1 Mhz= 2457 Mhz
+        "a4 03 43 01 86 1f 7c",                   # [43] set messaging period, [01] channel #1, [861f] = 32768/8070(861f) = 4Hz (The channel messaging period in seconds * 32768. Maximum messaging period is ~2 seconds. )
+        "a4 02 60 01 03 c4",                      # [60] set transmit power, [01] channel #1, [03] 0 dBm
+        "a4 01 4b 01 ef"                          #      open channel #1
+        ]
+        messages=[
+        msg42_AssignChannel         (channel_HRM, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
+        msg51_ChannelID             (channel_HRM, 0x0065, DeviceTypeID_HRM, TransmissionType_IC),           # [65] device number 101
+        msg45_ChannelRfFrequency    (channel_HRM, RfFrequency_2457Mhz), 
+        msg43_ChannelPeriod         (channel_HRM, ChannelPeriod=0x1f86),
+        msg60_ChannelTransmitPower  (channel_HRM, TransmitPower_0dBm),
+        msg4B_OpenChannel           (channel_HRM)
+        ]
+
+        for i in range(0,len(messages)):
+            print(i, stringl[i])
+            print(i, logfile.HexSpace(messages[i]))
+            if messages[i] == binascii.unhexlify(stringl[i].replace(' ','')): print("equal")
+            else:                                                             print("unequal ***********")
+            
+
+        print("ResetDongle-------------------------------------------------------------")
+        stringl =[
+        "a4 01 4a 00 ef"
+        ]
+        messages=[
+        msg4A_ResetSystem(),
+        ]
+        for i in range(0,len(messages)):
+            print(i, stringl[i])
+            print(i, logfile.HexSpace(messages[i]))
+            if messages[i] == binascii.unhexlify(stringl[i].replace(' ','')): print("equal")
+            else:                                                             print("unequal ***********")
+    else:
+        debug.activate()
+        EnumerateAll()
         
-
-    print("Trainer_ChannelConfig---------------------------------------------------")
-    stringl=[
-    "a4 03 42 00 10 00 f5",                     # [42] assign channel, [00] 0, [10] type 10 bidirectional transmit, [00] network number 0, [f5] extended assignment
-    "a4 05 51 00 cf 00 11 05 2b",               # [51] set channel ID, [00] number 0 (wildcard search) , [cf] device number 207, [00] pairing request (off), [11] device type fec, [05] transmission type  (page 18 and 66 Protocols) 00000101 - 01= independent channel, 1=global data pages used
-    "a4 02 45 00 39 da",                        # [45] set channel freq, [00] transmit channel on network #0, [39] freq 2400 + 57 x 1 Mhz= 2457 Mhz
-    "a4 03 43 00 00 20 c4",                     # [43] set messaging period, [00] channel #0, [f61f] = 32768/8182(f61f) = 4Hz (The channel messaging period in seconds * 32768. Maximum messaging period is ~2 seconds. )
-    "a4 02 60 00 03 c5",                        # [60] set transmit power, [00] channel #0, [03] 0 dBm
-    "a4 01 4b 00 ee"                            #      open channel #0
-    ]
-    messages=[
-    msg42_AssignChannel         (channel_FE, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
-    msg51_ChannelID             (channel_FE, 0x00cf, DeviceTypeID_FE, TransmissionType_IC_GDP),             # [cf] device number 207
-    msg45_ChannelRfFrequency    (channel_FE, RfFrequency_2457Mhz), 
-    msg43_ChannelPeriod         (channel_FE, ChannelPeriod=0x2000),
-    msg60_ChannelTransmitPower  (channel_FE, TransmitPower_0dBm),
-    msg4B_OpenChannel           (channel_FE)
-    ]
-    for i in range(0,len(messages)):
-        print(i, stringl[i])
-        print(i, logfile.HexSpace(messages[i]))
-        if messages[i] == binascii.unhexlify(stringl[i].replace(' ','')): print("equal")
-        else:                                                             print("unequal ***********")
-
-
-    print("HRM_ChannelConfig-------------------------------------------------------")
-    stringl=[
-    "a4 03 42 01 10 00 f4",                   # [42] assign channel, [01] channel #1, [10] type 10 bidirectional transmit, [00] network number 0, [f4] normal assignment
-    "a4 05 51 01 65 00 78 01 ed",             # [51] set channel ID, [01] channel 1 , [02] device number 2, [00] pairing request (off), [78] device type HR sensor, [01] transmission type  (page 18 and 66 Protocols) 00000101 - 01= independent channel, 1=global data pages used
-    "a4 02 45 01 39 db",                      # [45] set channel freq, [01] set channel #1, [39] freq 2400 + 57 x 1 Mhz= 2457 Mhz
-    "a4 03 43 01 86 1f 7c",                   # [43] set messaging period, [01] channel #1, [861f] = 32768/8070(861f) = 4Hz (The channel messaging period in seconds * 32768. Maximum messaging period is ~2 seconds. )
-    "a4 02 60 01 03 c4",                      # [60] set transmit power, [01] channel #1, [03] 0 dBm
-    "a4 01 4b 01 ef"                          #      open channel #1
-    ]
-    messages=[
-    msg42_AssignChannel         (channel_HRM, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
-    msg51_ChannelID             (channel_HRM, 0x0065, DeviceTypeID_HRM, TransmissionType_IC),           # [65] device number 101
-    msg45_ChannelRfFrequency    (channel_HRM, RfFrequency_2457Mhz), 
-    msg43_ChannelPeriod         (channel_HRM, ChannelPeriod=0x1f86),
-    msg60_ChannelTransmitPower  (channel_HRM, TransmitPower_0dBm),
-    msg4B_OpenChannel           (channel_HRM)
-    ]
-
-    for i in range(0,len(messages)):
-        print(i, stringl[i])
-        print(i, logfile.HexSpace(messages[i]))
-        if messages[i] == binascii.unhexlify(stringl[i].replace(' ','')): print("equal")
-        else:                                                             print("unequal ***********")
+        print('----- # I have this one (sending ANT data)')
+        d, msg = GetDongle(4104)        
+        print(msg)
         
-
-    print("ResetDongle-------------------------------------------------------------")
-    stringl =[
-    "a4 01 4a 00 ef"
-    ]
-    messages=[
-    msg4A_ResetSystem(),
-    ]
-    for i in range(0,len(messages)):
-        print(i, stringl[i])
-        print(i, logfile.HexSpace(messages[i]))
-        if messages[i] == binascii.unhexlify(stringl[i].replace(' ','')): print("equal")
-        else:                                                             print("unequal ***********")
+        print('----- # I have this one, used for Trainer Road and Zwift')
+        d, msg = GetDongle(4105)        
+        print(msg)
+        
+        print('----- # This is the USB-interface to the trainer')
+        d, msg = GetDongle(0x1932)        
+        print(msg)
+        
 else:
     pass                                # We're included so do not take action!

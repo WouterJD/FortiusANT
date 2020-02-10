@@ -1,8 +1,12 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-01-25"
-WindowTitle = "Fortius Antifier v2.01"
+__version__ = "2020-02-10"
+WindowTitle = "Fortius Antifier v2.2"
+# 2020-02-10    clv.scs added (example code, not tested)
+# 2020-02-09    id / channel handling improved
+#                   (channel was checked before checking id)
+# 2020-02-09    clv.hrm implemented
 # 2020-01-23    manualGrade added
 #               in manual mode, dongle entirely ignored
 #
@@ -77,6 +81,8 @@ WindowTitle = "Fortius Antifier v2.01"
 #               - why is HeartRate not sent to Trainer Road directly but is a
 #                   separate HRM channel needed?
 #                   (see function ComposeGeneralFeInfo)
+#                   done - 2020-02-09: Because TrainerRoad and/or Zwift expect an
+#                       independant ANT+ HRM
 #               - read buttons from trainer and navigate through menu
 #                   (see function IdleFunction)
 #                   done - 2019-12-20
@@ -369,15 +375,27 @@ def Tacx2Dongle(self):
 
     #---------------------------------------------------------------------------
     # Initialize antDongle
-    # Open two channels:
+    # Open channels:
     #    one to transmit the trainer info (Fitness Equipment)
     #    one to transmit heartrate info   (HRM monitor)
+    #
+    # And if you want a dedicated Speed Cadence Sensor, implement like this...
     #---------------------------------------------------------------------------
     if not (clv.manual or clv.manualGrade):
         ant.ResetDongle(devAntDongle)             # reset dongle
         ant.Calibrate(devAntDongle)               # calibrate ANT+ dongle
         ant.Trainer_ChannelConfig(devAntDongle)   # Create ANT+ master channel for FE-C
-        ant.HRM_ChannelConfig(devAntDongle)       # Create ANT+ master channel for HRM
+        
+        if clv.hrm == None:
+            ant.HRM_ChannelConfig(devAntDongle)   # Create ANT+ master channel for HRM
+        else:
+            ant.SlaveHRM_ChannelConfig(devAntDongle, clv.hrm)   # Create ANT+ slave channel for HRM
+                                                  # 0: auto pair, nnn: defined HRM
+
+        if clv.scs != None:
+            ant.SlaveSCS_ChannelConfig(devAntDongle, clv.scs)   # Create ANT+ slave channel for SCS
+                                                  # 0: auto pair, nnn: defined SCS
+            pass
     
     if not clv.gui: logfile.Write ("Ctrl-C to exit")
 
@@ -484,10 +502,10 @@ def Tacx2Dongle(self):
             # TRAINER- SHOULD WRITE THEN READ 70MS LATER REALLY
             #-------------------------------------------------------------------
             if clv.SimulateTrainer:
-                SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
+                SpeedKmh, WheelSpeed, PedalEcho, HeartRateT, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
                     SimulateReceiveFromTrainer (TargetPower, CurrentPower)
             else:
-                SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
+                SpeedKmhT, WheelSpeedT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, CurrentResistance, Buttons, Axis = \
                     usbTrainer.ReceiveFromTrainer(devTrainer)
                 if CurrentPower < 0: CurrentPower = 0       # No negative value defined for ANT message Page25 (#)
                 
@@ -496,10 +514,26 @@ def Tacx2Dongle(self):
                 # Show results
                 #---------------------------------------------------------------
                 if SpeedKmh == "Not Found":
-                    SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0, 0, 0
+                    SpeedKmhT, WheelSpeedT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0, 0, 0
                     SetTacxMsg(self, 'Cannot read from trainer')
                 else:
                     if clv.gui: SetTacxMsg(self, "Trainer detected")
+
+                #---------------------------------------------------------------
+                # If NO Speed Cadence Sensor defined, use Trainer-info
+                #---------------------------------------------------------------
+                if clv.scs == None:
+                    SpeedKmh   = SpeedKmhT  
+                    WheelSpeed = WheelSpeedT
+                    Cadence    = CadenceT
+
+            #-------------------------------------------------------------------
+            # HeartRate from trainer is broadcasted
+            #   if -H is NOT specified
+            #   otherwise, HeartRate must be provided from other source
+            #-------------------------------------------------------------------
+            if clv.hrm == None:
+                HeartRate = HeartRateT  
 
             #-------------------------------------------------------------------
             # In manual-mode, power can be incremented or decremented
@@ -625,11 +659,12 @@ def Tacx2Dongle(self):
             for d in data:
                 synch, length, id, info, checksum, rest, Channel, DataPageNumber = ant.DecomposeMessage(d)
                 error = False
-                #---------------------------------------------------------------
-                # Fitness Equipment Channel inputs
-                #---------------------------------------------------------------
-                if Channel == ant.channel_FE:
-                    if id == ant.msgID_AcknowledgedData:
+
+                if id == ant.msgID_AcknowledgedData:
+                    #-----------------------------------------------------------
+                    # Fitness Equipment Channel inputs
+                    #-----------------------------------------------------------
+                    if Channel == ant.channel_FE:
                         #-------------------------------------------------------
                         # Data page 48 (0x30) Basic resistance
                         #-------------------------------------------------------
@@ -699,28 +734,92 @@ def Tacx2Dongle(self):
                         #-------------------------------------------------------
                         # Other data pages
                         #-------------------------------------------------------
-                        else: error = "Unknown data page"
+                        else: error = "Unknown FE data page"
 
-                    elif id == ant.msgID_ChannelResponse:
-                        Channel, InitiatingMessageID, ResponseCode = ant.unmsg64_ChannelResponse(info)
-                        pass
+                    #-----------------------------------------------------------
+                    # Unknown channel
+                    #-----------------------------------------------------------
+                    else: error="Unknown channel"
 
-                    else: error = "Unknown message ID"
+                elif id == ant.msgID_BroadcastData:
+                    #-----------------------------------------------------------
+                    # Heart Rate Monitor inputs
+                    #-----------------------------------------------------------
+                    if Channel == ant.channel_HRM:
+                        #-------------------------------------------------------
+                        # Data page 0...4 HRM data
+                        # Only expected when -H flag specified
+                        #-------------------------------------------------------
+                        if DataPageNumber & 0x7f in (0,1,2,3,4,5,6,7,89):
+                            if clv.hrm >= 0:
+                                Channel, DataPageNumber, Spec1, Spec2, Spec3, \
+                                    HeartBeatEventTime, HeartBeatCount, HeartRate = \
+                                    ant.msgUnpage_Hrm(info)
+                            else:
+                                pass                            # Ignore it
+                                
+                        #-------------------------------------------------------
+                        # Data page 89   ??????????????????????????????
+                        #   Added to previous section and it appears to work...
+                        #-------------------------------------------------------
+                        elif DataPageNumber == 89:
+                            pass                                # Ignore it
+
+                        #-------------------------------------------------------
+                        # Other data pages
+                        #-------------------------------------------------------
+                        else: error = "Unknown HRM data page"
+
+                    #-----------------------------------------------------------
+                    # Speed Cadence Sensor inputs
+                    #-----------------------------------------------------------
+                    elif Channel == ant.channel_SCS:
+                        #-------------------------------------------------------
+                        # Data page 0 CSC data
+                        # Only expected when -S flag specified
+                        #-------------------------------------------------------
+                        if False:
+                            pass
+#scs                    elif clv.scs >= 0 and DataPageNumber & 0x7f == 0:
+#scs                        Channel, DataPageNumber, BikeCadenceEventTime, \
+#scs                            CumulativeCadenceRevolutionCount, BikeSpeedEventTime, \
+#scs                            CumulativeSpeedRevolutionCount = \
+#scs                            ant.msgUnpage0_CombinedSpeedCadence(info) 
+#scs                        SpeedKmh   = ...
+#scs                        WheelSpeed = ...
+#scs                        Cadence    = ...
+
+                        #-------------------------------------------------------
+                        # Other data pages
+                        #-------------------------------------------------------
+                        else: error = "Unknown SCS data page"
+
+                    #-----------------------------------------------------------
+                    # Unknown channel
+                    #-----------------------------------------------------------
+                    else: error="Unknown channel"
 
                 #---------------------------------------------------------------
-                # Heart Rate Monitor inputs
+                # ChannelID - the info from a Master device on the network
                 #---------------------------------------------------------------
-                elif Channel == ant.channel_HRM:
-                    if id == ant.msgID_ChannelResponse:
-                        Channel, InitiatingMessageID, ResponseCode = ant.unmsg64_ChannelResponse(info)
-                        pass
+                elif id == ant.msgID_ChannelID:
+                    Channel, DeviceNumber, DeviceTypeID, TransmissionType = \
+                        ant.unmsg51_ChannelID(info)
 
-                    else: error = "Unknown message ID"
+                    if Channel == ant.channel_HRM and DeviceTypeID == ant.DeviceTypeID_HRM:
+                        logfile.Write('Heart Rate Monitor paired: %s' % DeviceNumber)
+                    else:
+                        logfile.Write('Unexpected device %s on channel %s' % (DeviceNumber, Channel))
+                        
 
                 #---------------------------------------------------------------
-                # Unknown channel
+                # Message ChannelResponse, acknowledges a message
                 #---------------------------------------------------------------
-                else: error="Unknown channel"
+                elif id == ant.msgID_ChannelResponse:
+                    Channel, InitiatingMessageID, ResponseCode = ant.unmsg64_ChannelResponse(info)
+                    pass
+
+                else: error = "Unknown message ID"
 
                 #---------------------------------------------------------------
                 # Unsupported channel, message or page can be silentedly ignored
@@ -728,15 +827,20 @@ def Tacx2Dongle(self):
                 #---------------------------------------------------------------
                 if error and (True or debug.on(debug.Data1)): logfile.Write(\
                     "Dongle error:%s: synch=%s, len=%2s, id=%s, check=%s, channel=%s, page=%s(%s) info=%s" % \
-                    (error, synch, length, id, checksum, Channel, DataPageNumber, hex(DataPageNumber), logfile.HexSpace(info)))
+                    (error, synch, length, hex(id), checksum, Channel, DataPageNumber, hex(DataPageNumber), logfile.HexSpace(info)))
 
-            #---------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # Broadcast Heartrate.
             # This appears as a separate ANT-device "on air"
             # Heartrate is filled if a HRM is detected by the trainer
-            #---------------------------------------------------------------------
-            if True and HeartRate > 0:
-                #-----------------------------------------------------------------
+            #
+            # 2020-02-09 clv.hrm is introduced
+            #            if NOT specified, old behaviour and HR is broadcasted
+            #            if specified, HR is received from other source and NOT
+            #            broadcasted
+            #-------------------------------------------------------------------
+            if clv.hrm == None and HeartRate > 0:
+                #---------------------------------------------------------------
                 # Check if heart beat has occurred as tacx only reports
                 # instantaneous heart rate data
                 # Last heart beat is at HeartBeatEventTime
@@ -752,7 +856,7 @@ def Tacx2Dongle(self):
                 #   times.
                 # To make this fit in the EventCounter cycle (0...255) I have 
                 # chosen blocks of 64 messages as below:
-                #-----------------------------------------------------------------
+                #---------------------------------------------------------------
                 if (time.time() - HeartBeatTime) >= (60 / float(HeartRate)):
                     HeartBeatCounter   += 1                                     # Increment heart beat count                     
                     HeartBeatEventTime += (60 / float(HeartRate))               # Reset last time of heart beat
@@ -792,21 +896,22 @@ def Tacx2Dongle(self):
                 if not (clv.manual or clv.manualGrade):
                     ant.SendToDongle([hrdata], devAntDongle, comment, False)
 
-            #---------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # Show progress
-            #---------------------------------------------------------------------
+            #-------------------------------------------------------------------
             TargetPower = round(TargetPower,0)
             SetValues(self, SpeedKmh, Cadence, round(CurrentPower,0), TargetMode, TargetPower, TargetGrade, Resistance, HeartRate)
                 
-            #---------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # WAIT        So we do not cycle faster than 4 x per second
-            #---------------------------------------------------------------------
+            #-------------------------------------------------------------------
             SleepTime = 0.25 - (time.time() - StartTime)
             if SleepTime > 0:
                 time.sleep(SleepTime)
                 if debug.on(debug.Data2): logfile.Write ("Sleep(%4.2f) to fill 0.25 seconds done." % (SleepTime) )
             else:
-                logfile.Write ("Processing longer than 0.25 seconds: %4.2f" % (SleepTime * -1) )
+                if SleepTime < -1:          # Avoid too many messages
+                    logfile.Write ("Processing longer than 0.25 seconds: %4.2f" % (SleepTime * -1) )
                 pass
 
             EventCounter += 1           # Increment and ...
