@@ -1,7 +1,14 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-01-25"
+__version__ = "2020-02-24"
+# 2020-02-24    added: trainer_types defined (tt_) and iMagic added
+#                      LegacyProtocol added
+#               todo:  firmware command to be executed to be provided
+#                      ReceiveFromTrainer() and SendToTrainer() defined according TotalReverse
+#                      BUT: note '# To be investigated' comments!
+#                      This version will not work bu I expect can be used
+#                      for interface testing and further development.
 # 2020-01-22    Error handling in GetTrainer() added (similar to GetDongle())
 # 2020-01-15    Grade2Resistance() option3 tested and OK
 # 2020-01-10    Test done at 200W and dropping cadence (100, 90...30)
@@ -23,6 +30,11 @@ import FortiusAntCommand as cmd
 # Globals
 #-------------------------------------------------------------------------------
 global trainer_type
+global LegacyProtocol
+tt_iMagic        = 0x1902
+tt_iFlow         = 0x1932
+tt_Fortius       = 0x1942
+tt_FortiusU      = 0xe6be    # Uninitialized fortius
 
 #-------------------------------------------------------------------------------
 # Constants
@@ -325,75 +337,91 @@ def PfietsNL(TargetGrade, UserAndBikeWeight, WheelSpeed):
 # returns   devTrainer, msg
 #-------------------------------------------------------------------------------
 def GetTrainer():
-  global trainer_type
+    global trainer_type
 
-  #---------------------------------------------------------------------------
-  # Initialize
-  #---------------------------------------------------------------------------
-  if debug.on(debug.Function):logfile.Write ("GetTrainer()")
-  trainer_type = 0
-  idpl = [0x1932, 0x1942, 0xe6be]       # iflow, fortius, uninitialised fortius
+    #---------------------------------------------------------------------------
+    # Initialize
+    #---------------------------------------------------------------------------
+    if debug.on(debug.Function):logfile.Write ("GetTrainer()")
+    trainer_type     = 0
+    LegacyProtocol   = False
 
-  #---------------------------------------------------------------------------
-  # Find supported trainer
-  #---------------------------------------------------------------------------
-  msg = "GetTrainer - No trainer found"
-  for idp in idpl:
-    try:
-        if debug.on(debug.Function): logfile.Write ("GetTrainer - Check for trainer %s" % (hex(idp)))
-        dev = usb.core.find(idVendor=0x3561, idProduct=idp)     # find trainer USB device
-        if dev != None:
-          msg = "GetTrainer - Trainer found: " + hex(idp)
-          if debug.on(debug.Function):
-            print (dev)
-          trainer_type = idp
-          break
-    except Exception as e:
-        if debug.on(debug.Function): logfile.Write ("GetTrainer - " + str(e))
+    #---------------------------------------------------------------------------
+    # Find supported trainer
+    #---------------------------------------------------------------------------
+    msg = "GetTrainer - No trainer found"
+    for idp in [tt_iMagic, tt_iFlow, tt_Fortius, tt_FortiusU]:
+        try:
+            if debug.on(debug.Function): logfile.Write ("GetTrainer - Check for trainer %s" % (hex(idp)))
+            dev = usb.core.find(idVendor=0x3561, idProduct=idp)     # find trainer USB device
+            if dev != None:
+                msg = "GetTrainer - Trainer found: " + hex(idp)
+                if debug.on(debug.Function):
+                    print (dev)
+                trainer_type = idp
+                break
+        except Exception as e:
+            if debug.on(debug.Function): logfile.Write ("GetTrainer - " + str(e))
 
-        if "AttributeError" in str(e):
-            msg = "GetTrainer - Could not find USB trainer: " + str(e)
-        elif "No backend" in str(e):
-            msg = "GetTrainer - No backend, check libusb: " + str(e)
-        else:
-            msg = "GetTrainer: " + str(e)
+            if "AttributeError" in str(e):
+                msg = "GetTrainer - Could not find USB trainer: " + str(e)
+            elif "No backend" in str(e):
+                msg = "GetTrainer - No backend, check libusb: " + str(e)
+            else:
+                msg = "GetTrainer: " + str(e)
     
-  #---------------------------------------------------------------------------
-  # Initialise trainer (if found)
-  #---------------------------------------------------------------------------
-  if trainer_type == 0:
-    dev = False
-  else:                                                                         # found trainer
     #---------------------------------------------------------------------------
-    # unintialised 1942 (not tested!!)
+    # Initialise trainer (if found)
     #---------------------------------------------------------------------------
-    if trainer_type == 0xe6be:                                                  
-      if debug.on(debug.Function): logfile.Write ("GetTrainer - Found uninitialised 1942 head unit")
-      try:
-        os.system("fxload-libusb.exe -I FortiusSWPID1942Renum.hex -t fx -vv")   # load firmware
-        if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
-        time.sleep(5)
-        dev = usb.core.find(idVendor=0x3561, idProduct=0x1942)
-        if dev != None:
-          msg = "GetTrainer - 1942 head unit initialised"
-          trainer_type = 0x1942
-        else:
-          msg = "GetTrainer - Unable to load firmware"
-          dev = False
-      except:                                                                   # not found
-        msg = "GetTrainer - Unable to initialise trainer"
+    if trainer_type == 0:
         dev = False
+    else:                                                        # found trainer
+        #-----------------------------------------------------------------------
+        # iMagic
+        #-----------------------------------------------------------------------
+        if trainer_type == tt_iMagic:
+            LegacyProtocol = True
+            if debug.on(debug.Function): logfile.Write ("GetTrainer - Found iMagic head unit")
+            try:
+#               os.system("command to be provided")              # load firmware
+                if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
+                time.sleep(5)
+                msg = "GetTrainer - iMagic head unit initialised"
+            except:                                                  # not found
+                msg = "GetTrainer - Unable to initialise trainer"
+                dev = False
+
+        #-----------------------------------------------------------------------
+        # unintialised Fortius (not tested!!)
+        #-----------------------------------------------------------------------
+        if trainer_type == tt_FortiusU:                                                  
+            if debug.on(debug.Function): logfile.Write ("GetTrainer - Found uninitialised 1942 head unit")
+            try:
+                os.system("fxload-libusb.exe -I FortiusSWPID1942Renum.hex -t fx -vv")   # load firmware
+                if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
+                time.sleep(5)
+                dev = usb.core.find(idVendor=0x3561, idProduct=tt_Fortius)
+                if dev != None:
+                    msg = "GetTrainer - 1942 head unit initialised"
+                    trainer_type = tt_Fortius
+                else:
+                    msg = "GetTrainer - Unable to load firmware"
+                    dev = False
+            except:                                                     # not found
+                msg = "GetTrainer - Unable to initialise trainer"
+                dev = False
       
+        #-----------------------------------------------------------------------
+        # Set configuration
+        #-----------------------------------------------------------------------
+        dev.set_configuration()
+        if trainer_type == tt_iMagic:   dev.set_interface_altsetting(0, 1)
     #---------------------------------------------------------------------------
-    # Set configuration
+    # Done
     #---------------------------------------------------------------------------
-    dev.set_configuration()
-  #---------------------------------------------------------------------------
-  # Done
-  #---------------------------------------------------------------------------
-  logfile.Write(msg)
-  if debug.on(debug.Function):logfile.Write ("GetTrainer() returns, trainertype=" + hex(trainer_type))
-  return dev, msg
+    logfile.Write(msg)
+    if debug.on(debug.Function):logfile.Write ("GetTrainer() returns, trainertype=" + hex(trainer_type))
+    return dev, msg
   
 #-------------------------------------------------------------------------------
 #  I n i t i a l i s e T r a i n e r
@@ -406,7 +434,6 @@ def InitialiseTrainer(dev):
         logfile.Write ("InitialiseTrainer data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
 
     dev.write(0x02,data)
-
 
 #-------------------------------------------------------------------------------
 # S e n d T o T r a i n e r
@@ -423,16 +450,33 @@ def InitialiseTrainer(dev):
 # returns   None
 #-------------------------------------------------------------------------------
 def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, PedalEcho, WheelSpeed, Cadence, Calibrate, SimulateTrainer):
-    if debug.on(debug.Function): logfile.Write ("SendToTrainer(%s, %s, %s, %s, %s, %s, %s)" % (TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, PedalEcho, WheelSpeed, Cadence))
-    
-    fControlCommand     = sc.unsigned_int       # 0...3
-    fTarget             = sc.short              # 4, 5      Resistance for Power=50...1000Watt
-    fPedalecho          = sc.unsigned_char      # 6
-    fFiller7            = sc.pad                # 7
-    fMode               = sc.unsigned_char      # 8         Idle=0, Ergo/Slope=2, Calibrate/speed=3
-    fWeight             = sc.unsigned_char      # 9         Ergo: 0x0a; Weight = ride + bike in kg
-    fCalibrate          = sc.unsigned_short     # 10, 11    Depends on mode
+    global LegacyProtocol # As filled in GetTrainer()
 
+    if debug.on(debug.Function): logfile.Write ("SendToTrainer(%s, %s, %s, %s, %s, %s, %s)" % (TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, PedalEcho, WheelSpeed, Cadence))
+
+    #---------------------------------------------------------------------------
+    # Data buffer depends on trainer_type
+    # Refer to TotalReverse; "Legacy protocol" or "Newer protocol"
+    #---------------------------------------------------------------------------
+    if LegacyProtocol == True:
+        fDesiredForceValue  = sc.unsigned_char      # 0         0x00-0xff
+                                                    #           0x80 = field switched off
+                                                    #           < 0x80 reduce brake force
+                                                    #           > 0x80 increase brake force
+        fStartStop          = sc.unsigned_char      # 1         0x01 = pause/start manual control
+                                                    #           0x02 = autopause if wheel < 20
+                                                    #           0x04 = autostart if wheel >= 20
+        fStopWatch          = sc.unsigned_int       # 2...5
+    else:
+        fControlCommand     = sc.unsigned_int       # 0...3
+        fTarget             = sc.short              # 4, 5      Resistance for Power=50...1000Watt
+        fPedalecho          = sc.unsigned_char      # 6
+        fFiller7            = sc.pad                # 7
+        fMode               = sc.unsigned_char      # 8         Idle=0, Ergo/Slope=2, Calibrate/speed=3
+        fWeight             = sc.unsigned_char      # 9         Ergo: 0x0a; Weight = ride + bike in kg
+        fCalibrate          = sc.unsigned_short     # 10, 11    Depends on mode
+
+    #---------------------------------------------------------------------------
     error = False
     if   Mode == modeStop:
         Calibrate   = 0
@@ -472,8 +516,13 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
     if error:
         logfile.Write(error)
     else:
-        format = sc.no_alignment + fControlCommand + fTarget +    fPedalecho + fFiller7 + fMode + fWeight + fCalibrate
-        data   = struct.pack (format, 0x00010801, int(Target),     PedalEcho,              Mode,   Weight,   Calibrate)
+        if LegacyProtocol == True:
+            DesiredForceValue + StartStop + StopWatch = 0,0,0                           # To be investigated
+            format = sc.no_alignment + fDesiredForceValue + fStartStop + fStopWatch
+            data   = struct.pack (format, DesiredForceValue + StartStop + StopWatch)
+        else:
+            format = sc.no_alignment + fControlCommand + fTarget +    fPedalecho + fFiller7 + fMode + fWeight + fCalibrate
+            data   = struct.pack (format, 0x00010801, int(Target),     PedalEcho,              Mode,   Weight,   Calibrate)
 
         if debug.on(debug.Data2):
             logfile.Write ("Trainer send data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
@@ -500,144 +549,221 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
 #               Caller must decide which one to use
 #-------------------------------------------------------------------------------
 def ReceiveFromTrainer(devTrainer):
-  global trainer_type
-  if debug.on(debug.Function):logfile.Write ("ReceiveFromTrainer()")
+    global trainer_type
+    if debug.on(debug.Function):logfile.Write ("ReceiveFromTrainer()")
 
-  Axis              = 0
-  Buttons           = 0
-  Cadence           = 0
-  CurrentPower      = 0
-  CurrentResistance = 0
-  HeartRate         = 0
-  PedalEcho         = 0
-  Speed             = 0
-  TargetResistance  = 0
-  WheelSpeed        = 0
+    Axis              = 0
+    Buttons           = 0
+    Cadence           = 0
+    CurrentPower      = 0
+    CurrentResistance = 0
+    HeartRate         = 0
+    PedalEcho         = 0
+    Speed             = 0
+    TargetResistance  = 0
+    WheelSpeed        = 0
 
-  #-----------------------------------------------------------------------------
-  #  Read from trainer
-  #-----------------------------------------------------------------------------
-  try:
-    data = devTrainer.read(0x82, 64, 30)
-  except Exception as e:
-    if "timeout error" in str(e):#trainer did not return any data
-      pass
-    else:
-      logfile.Write ("ReceiveFromTrainer: USB READ ERROR: " + str(e))
-    data = ""
-  if debug.on(debug.Data2):logfile.Write ("Trainer recv data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
+    #-----------------------------------------------------------------------------
+    #  Read from trainer
+    #-----------------------------------------------------------------------------
+    try:
+        data = devTrainer.read(0x82, 64, 30)
+    except Exception as e:
+        if "timeout error" in str(e):#trainer did not return any data
+            pass
+        else:
+            logfile.Write ("ReceiveFromTrainer: USB READ ERROR: " + str(e))
+        data = ""
+    if debug.on(debug.Data2):logfile.Write ("Trainer recv data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
 
-  #-----------------------------------------------------------------------------
-  #  Handle data when > 40 bytes                Will fail when less than struct.calcsize(format)
-  #-----------------------------------------------------------------------------
-  if len(data)>40:
-    #---------------------------------------------------------------------------
-    # Define buffer format
-    #---------------------------------------------------------------------------
-    nDeviceSerial       =  0                # 0...1
-    fDeviceSerial       = sc.unsigned_short
+    #-----------------------------------------------------------------------------
+    # Handle data when > 40 bytes                Will fail when less than struct.calcsize(format)
+    #-----------------------------------------------------------------------------
+    if len(data) > 40 and LegacyProtocol == False:
+        #---------------------------------------------------------------------------
+        # Define buffer format
+        #---------------------------------------------------------------------------
+        nDeviceSerial       =  0                # 0...1
+        fDeviceSerial       = sc.unsigned_short
 
-    fFiller2_7          = sc.pad * ( 7 - 1) # 2...7
+        fFiller2_7          = sc.pad * ( 7 - 1) # 2...7
 
-    nYearProduction     =  1                # 8
-    fYearProduction     = sc.unsigned_char
+        nYearProduction     =  1                # 8
+        fYearProduction     = sc.unsigned_char
 
-    fFiller9_11         = sc.pad * (11 - 8) # 9...11
+        fFiller9_11         = sc.pad * (11 - 8) # 9...11
 
-    nHeartRate          =  2                # 12
-    fHeartRate          = sc.unsigned_char
+        nHeartRate          =  2                # 12
+        fHeartRate          = sc.unsigned_char
 
-    nButtons            =  3                # 13
-    fButtons            = sc.unsigned_char
+        nButtons            =  3                # 13
+        fButtons            = sc.unsigned_char
 
-    nHeartDetect        =  4                # 14
-    fHeartDetect        = sc.unsigned_char
+        nHeartDetect        =  4                # 14
+        fHeartDetect        = sc.unsigned_char
 
-    nErrorCount         =  5                # 15
-    fErrorCount         = sc.unsigned_char
+        nErrorCount         =  5                # 15
+        fErrorCount         = sc.unsigned_char
 
-    nAxis0              =  6                # 16-17
-    fAxis0              = sc.unsigned_short
+        nAxis0              =  6                # 16-17
+        fAxis0              = sc.unsigned_short
 
-    nAxis1              =  7                # 18-19
-    fAxis1              = sc.unsigned_short
+        nAxis1              =  7                # 18-19
+        fAxis1              = sc.unsigned_short
 
-    nAxis2              =  8                # 20-21
-    fAxis2              = sc.unsigned_short
+        nAxis2              =  8                # 20-21
+        fAxis2              = sc.unsigned_short
 
-    nAxis3              =  9                # 22-23
-    fAxis3              = sc.unsigned_short
+        nAxis3              =  9                # 22-23
+        fAxis3              = sc.unsigned_short
 
-    nHeader             = 10                # 24-27
-    fHeader             = sc.unsigned_int
+        nHeader             = 10                # 24-27
+        fHeader             = sc.unsigned_int
 
-    nDistance           = 11                # 28-31
-    fDistance           = sc.unsigned_int
+        nDistance           = 11                # 28-31
+        fDistance           = sc.unsigned_int
 
-    nSpeed              = 12                # 32, 33            Wheel speed (Speed = WheelSpeed / SpeedScale in km/h)
-    fSpeed              = sc.unsigned_short
+        nSpeed              = 12                # 32, 33            Wheel speed (Speed = WheelSpeed / SpeedScale in km/h)
+        fSpeed              = sc.unsigned_short
 
-    fFiller34_35        = sc.pad * 2        # 34...35           Increases if you accellerate?
-    fFiller36_37        = sc.pad * 2        # 34...35           Average power?
+        fFiller34_35        = sc.pad * 2        # 34...35           Increases if you accellerate?
+        fFiller36_37        = sc.pad * 2        # 34...35           Average power?
 
-    nCurrentResistance  = 13                # 38, 39
-    fCurrentResistance  = sc.short
+        nCurrentResistance  = 13                # 38, 39
+        fCurrentResistance  = sc.short
 
-    nTargetResistance   = 14                # 40, 41
-    fTargetResistance   = sc.short
+        nTargetResistance   = 14                # 40, 41
+        fTargetResistance   = sc.short
 
-    nEvents             = 15                # 42
-    fEvents             = sc.unsigned_char
+        nEvents             = 15                # 42
+        fEvents             = sc.unsigned_char
 
-    fFiller43           = sc.pad            # 43
+        fFiller43           = sc.pad            # 43
 
-    nCadence            = 16                # 44
-    fCadence            = sc.unsigned_char
+        nCadence            = 16                # 44
+        fCadence            = sc.unsigned_char
 
-    fFiller45           = sc.pad            # 45
+        fFiller45           = sc.pad            # 45
 
-    nModeEcho           = 17                # 46
-    fModeEcho           = sc.unsigned_char
+        nModeEcho           = 17                # 46
+        fModeEcho           = sc.unsigned_char
 
-    nChecksumLSB        = 18                # 47
-    fChecksumLSB        = sc.unsigned_char
+        nChecksumLSB        = 18                # 47
+        fChecksumLSB        = sc.unsigned_char
 
-    nChecksumMSB        = 19                # 48
-    fChecksumMSB        = sc.unsigned_char
+        nChecksumMSB        = 19                # 48
+        fChecksumMSB        = sc.unsigned_char
 
-    fFiller49_63        = sc.pad * (63 - 48)# 49...63
+        fFiller49_63        = sc.pad * (63 - 48)# 49...63
+            
+        format = sc.no_alignment + fDeviceSerial + fFiller2_7 + fYearProduction + \
+                 fFiller9_11 + fHeartRate + fButtons + fHeartDetect + fErrorCount + \
+                 fAxis0 + fAxis1 + fAxis2 + fAxis3 + fHeader + fDistance + fSpeed + \
+                 fFiller34_35 + fFiller36_37 + fCurrentResistance + fTargetResistance + \
+                 fEvents + fFiller43 + fCadence + fFiller45 + fModeEcho + \
+                 fChecksumLSB + fChecksumMSB + fFiller49_63
+        #---------------------------------------------------------------------------
+        # Parse buffer
+        #---------------------------------------------------------------------------
+        tuple = struct.unpack (format, data)
+        if debug.on(debug.Data2):
+          logfile.Write ("ReceiveFromTrainer: TargetResistance=%s hr=%s sp=%s CurrentResistance=%s pe=%s cad=%s axis=%s %s %s %s" % \
+                        (tuple[nTargetResistance], tuple[nHeartRate], tuple[nSpeed],      \
+                        tuple[nCurrentResistance], hex(tuple[nEvents]), tuple[nCadence], \
+                        tuple[nAxis0], tuple[nAxis1], tuple[nAxis2], tuple[nAxis3]  \
+                        ))
+
+        WheelSpeed          = tuple[nSpeed]
+
+        Cadence             = tuple[nCadence]
+        CurrentPower        = Resistance2Power(tuple[nCurrentResistance], WheelSpeed)
+        HeartRate           = tuple[nHeartRate]
+        PedalEcho           = tuple[nEvents]
+        TargetResistance    = tuple[nTargetResistance]
+        CurrentResistance   = tuple[nCurrentResistance]
+        Speed               = Wheel2Speed(tuple[nSpeed])
         
-    format = sc.no_alignment + fDeviceSerial + fFiller2_7 + fYearProduction + \
-             fFiller9_11 + fHeartRate + fButtons + fHeartDetect + fErrorCount + \
-             fAxis0 + fAxis1 + fAxis2 + fAxis3 + fHeader + fDistance + fSpeed + \
-             fFiller34_35 + fFiller36_37 + fCurrentResistance + fTargetResistance + \
-             fEvents + fFiller43 + fCadence + fFiller45 + fModeEcho + \
-             fChecksumLSB + fChecksumMSB + fFiller49_63
-    #---------------------------------------------------------------------------
-    # Parse buffer
-    #---------------------------------------------------------------------------
-    tuple = struct.unpack (format, data)
-    if debug.on(debug.Data2):
-      logfile.Write ("ReceiveFromTrainer: TargetResistance=%s hr=%s sp=%s CurrentResistance=%s pe=%s cad=%s axis=%s %s %s %s" % \
-                    (tuple[nTargetResistance], tuple[nHeartRate], tuple[nSpeed],      \
-                    tuple[nCurrentResistance], hex(tuple[nEvents]), tuple[nCadence], \
-                    tuple[nAxis0], tuple[nAxis1], tuple[nAxis2], tuple[nAxis3]  \
-                    ))
+        Buttons             = tuple[nButtons]
+        Axis                = tuple[nAxis1]
 
-    WheelSpeed          = tuple[nSpeed]
+    elif LegacyProtocol == True:
+        #---------------------------------------------------------------------------
+        # Define buffer format
+        #---------------------------------------------------------------------------
+        nStatusAndCursors   = 0                 # 0
+        fStatusAndCursors   = sc.unsigned_char
 
-    Cadence             = tuple[nCadence]
-    CurrentPower        = Resistance2Power(tuple[nCurrentResistance], WheelSpeed)
-    HeartRate           = tuple[nHeartRate]
-    PedalEcho           = tuple[nEvents]
-    TargetResistance    = tuple[nTargetResistance]
-    CurrentResistance   = tuple[nCurrentResistance]
-    Speed               = Wheel2Speed(tuple[nSpeed])
-    
-    Buttons             = tuple[nButtons]
-    Axis                = tuple[nAxis1]
+        nSpeed              = 1                 # 1, 2      Wheel speed (Speed = WheelSpeed / SpeedScale in km/h)
+        fSpeed              = sc.unsigned_short
 
-  else:
-    Speed = "Not Found"
+        nCadence            = 2                 # 3
+        fCadence            = sc.unsigned_char
 
-  return Speed, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis
+        nHeartRate          = 3                 # 4
+        fHeartRate          = sc.unsigned_char
+        
+        nStopWatch          = 4
+        fStopWatch          = sc.unsigned_int   # 5,6,7,8
+        
+        nCurrentResistance  = 5                 # 9
+        fCurrentResistance  = sc.unsigned_char
+
+        nPedalSensor        = 6                 # 10
+        fPedalSensor        = sc.unsigned_char
+
+        nAxis0              = 7                 # 11
+        fAxis0              = sc.unsigned_char
+
+        nAxis1              = 8                 # 12
+        fAxis1              = sc.unsigned_char
+
+        nAxis2              = 9                 # 13
+        fAxis2              = sc.unsigned_char
+
+        nAxis3              = 10                # 14
+        fAxis3              = sc.unsigned_char
+
+        nCounter            = 11                # 15
+        fCounter            = sc.unsigned_char
+
+        nWheelCount         = 12                # 16
+        fWheelCount         = sc.unsigned_char
+
+        nYearProduction     = 13                # 17
+        fYearProduction     = sc.unsigned_char
+
+        nDeviceSerial       = 14                # 18, 19
+        fDeviceSerial       = sc.unsigned_short
+
+        nFirmwareVersion    = 15                # 20
+        fFirmwareVersion    = sc.unsigned_char
+        
+        #---------------------------------------------------------------------------
+        # Parse buffer
+        #---------------------------------------------------------------------------
+        format = fStatusAndCursors + fSpeed + fCadence + fHeartRate + fStopWatch + fCurrentResistance + \
+                 fPedalSensor + fAxis0 + fAxis1 + fAxis2 + fAxis3 + fCounter + fWheelCount + \
+                 fYearProduction + fDeviceSerial + fFirmwareVersion
+        tuple = struct.unpack (format, data)
+
+        WheelSpeed          = tuple[nSpeed]
+        Cadence             = tuple[nCadence]
+        CurrentPower        = 0                             # To be investigated
+        HeartRate           = tuple[nHeartRate]
+        PedalEcho           = tuple[nPedalSensor]
+        TargetResistance    = 0                             # Unknown
+        CurrentResistance   = tuple[nCurrentResistance]
+        Speed               = Wheel2Speed(tuple[nSpeed])
+        Buttons             = tuple[nStatusAndCursors] & 0x0f
+        Axis                = tuple[nAxis1]
+
+        if debug.on(debug.Data2):
+          logfile.Write ("ReceiveFromTrainer: hr=%s sp=%s CurrentResistance=%s pe=%s cad=%s axis=%s %s %s %s" % \
+                        (HeartRate, WheelSpeed, CurrentResistance, hex(PedalEcho), Cadence, \
+                        tuple[nAxis0], tuple[nAxis1], tuple[nAxis2], tuple[nAxis3]  \
+                        ))
+
+    else:
+        Speed = "Not Found"
+
+    return Speed, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis
