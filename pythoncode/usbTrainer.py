@@ -462,7 +462,6 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
     # Refer to TotalReverse; "Legacy protocol" or "Newer protocol"
     #---------------------------------------------------------------------------
     if LegacyProtocol == True:
-        logfile.Write ("DETECTED LEGACY PROTOCOL")
         fDesiredForceValue  = sc.unsigned_char      # 0         0x00-0xff
                                                     #           0x80 = field switched off
                                                     #           < 0x80 reduce brake force
@@ -745,7 +744,7 @@ def ReceiveFromTrainer(devTrainer):
         #---------------------------------------------------------------------------
         # Parse buffer
         #---------------------------------------------------------------------------
-        format = fStatusAndCursors + fSpeed + fCadence + fHeartRate + fStopWatch + fCurrentResistance + \
+        format = sc.no_alignment + fStatusAndCursors + fSpeed + fCadence + fHeartRate + fStopWatch + fCurrentResistance + \
                  fPedalSensor + fAxis0 + fAxis1 + fAxis2 + fAxis3 + fCounter + fWheelCount + \
                  fYearProduction + fDeviceSerial + fFirmwareVersion
         tuple = struct.unpack (format, data)
