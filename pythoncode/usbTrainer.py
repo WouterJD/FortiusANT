@@ -757,7 +757,7 @@ def ReceiveFromTrainer(devTrainer):
         TargetResistance    = 0                             # Unknown
         CurrentResistance   = tuple[nCurrentResistance]
         Speed               = Wheel2Speed(tuple[nSpeed])
-        Buttons             = tuple[nStatusAndCursors] & 0x0f
+        Buttons             = ((tuple[nStatusAndCursors] & 0xf0) >> 4) ^ 0x0f
         Axis                = tuple[nAxis1]
 
         if debug.on(debug.Data2):
