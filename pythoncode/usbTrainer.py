@@ -19,6 +19,7 @@ __version__ = "2020-02-24"
 import usb.core
 import os
 import struct
+import time
 
 import debug
 import logfile
@@ -338,6 +339,7 @@ def PfietsNL(TargetGrade, UserAndBikeWeight, WheelSpeed):
 #-------------------------------------------------------------------------------
 def GetTrainer():
     global trainer_type
+    global LegacyProtocol
 
     #---------------------------------------------------------------------------
     # Initialize
@@ -414,8 +416,9 @@ def GetTrainer():
         #-----------------------------------------------------------------------
         # Set configuration
         #-----------------------------------------------------------------------
-        dev.set_configuration()
-        if trainer_type == tt_iMagic:   dev.set_interface_altsetting(0, 1)
+        if dev != False:
+            dev.set_configuration()
+            if trainer_type == tt_iMagic:   dev.set_interface_altsetting(0, 1)
     #---------------------------------------------------------------------------
     # Done
     #---------------------------------------------------------------------------
@@ -459,6 +462,7 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
     # Refer to TotalReverse; "Legacy protocol" or "Newer protocol"
     #---------------------------------------------------------------------------
     if LegacyProtocol == True:
+        logfile.Write ("DETECTED LEGACY PROTOCOL")
         fDesiredForceValue  = sc.unsigned_char      # 0         0x00-0xff
                                                     #           0x80 = field switched off
                                                     #           < 0x80 reduce brake force
@@ -517,9 +521,9 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
         logfile.Write(error)
     else:
         if LegacyProtocol == True:
-            DesiredForceValue + StartStop + StopWatch = 0,0,0                           # To be investigated
+            DesiredForceValue , StartStop , StopWatch = 0,0,0                           # To be investigated
             format = sc.no_alignment + fDesiredForceValue + fStartStop + fStopWatch
-            data   = struct.pack (format, DesiredForceValue + StartStop + StopWatch)
+            data   = struct.pack (format, DesiredForceValue , StartStop , StopWatch)
         else:
             format = sc.no_alignment + fControlCommand + fTarget +    fPedalecho + fFiller7 + fMode + fWeight + fCalibrate
             data   = struct.pack (format, 0x00010801, int(Target),     PedalEcho,              Mode,   Weight,   Calibrate)
