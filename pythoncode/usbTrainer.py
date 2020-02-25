@@ -1,7 +1,12 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-24"
+__version__ = "2020-02-25"
+# 2020-02-25    feedback from fritz-hh implemented
+# 2020-02-25    added:   idVendor_Tacx (I do not like constants in code)
+#               changed: firmware command to be executed to be confirmed (fxload...)
+#                        struct-definition: 'sc.no_alignment + ' added
+#               
 # 2020-02-24    added: trainer_types defined (tt_) and iMagic added
 #                      LegacyProtocol added
 #               todo:  firmware command to be executed to be provided
@@ -19,6 +24,7 @@ __version__ = "2020-02-24"
 import usb.core
 import os
 import struct
+import time
 
 import debug
 import logfile
@@ -35,6 +41,8 @@ tt_iMagic        = 0x1902
 tt_iFlow         = 0x1932
 tt_Fortius       = 0x1942
 tt_FortiusU      = 0xe6be    # Uninitialized fortius
+
+idVendor_Tacx    = 0x3561
 
 #-------------------------------------------------------------------------------
 # Constants
@@ -353,7 +361,7 @@ def GetTrainer():
     for idp in [tt_iMagic, tt_iFlow, tt_Fortius, tt_FortiusU]:
         try:
             if debug.on(debug.Function): logfile.Write ("GetTrainer - Check for trainer %s" % (hex(idp)))
-            dev = usb.core.find(idVendor=0x3561, idProduct=idp)     # find trainer USB device
+            dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=idp)     # find trainer USB device
             if dev != None:
                 msg = "GetTrainer - Trainer found: " + hex(idp)
                 if debug.on(debug.Function):
@@ -377,13 +385,13 @@ def GetTrainer():
         dev = False
     else:                                                        # found trainer
         #-----------------------------------------------------------------------
-        # iMagic
+        # iMagic            As defined together with fritz-hh and jegorvin)
         #-----------------------------------------------------------------------
         if trainer_type == tt_iMagic:
             LegacyProtocol = True
             if debug.on(debug.Function): logfile.Write ("GetTrainer - Found iMagic head unit")
             try:
-#               os.system("command to be provided")              # load firmware
+                os.system("fxload -I tacximagic.hex -d 3561:1902 -t fx -vv")    #load firmware
                 if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
                 time.sleep(5)
                 msg = "GetTrainer - iMagic head unit initialised"
@@ -392,17 +400,17 @@ def GetTrainer():
                 dev = False
 
         #-----------------------------------------------------------------------
-        # unintialised Fortius (not tested!!)
+        # unintialised Fortius (as provided by antifier original code)
         #-----------------------------------------------------------------------
         if trainer_type == tt_FortiusU:                                                  
-            if debug.on(debug.Function): logfile.Write ("GetTrainer - Found uninitialised 1942 head unit")
+            if debug.on(debug.Function): logfile.Write ("GetTrainer - Found uninitialised Fortius head unit")
             try:
                 os.system("fxload-libusb.exe -I FortiusSWPID1942Renum.hex -t fx -vv")   # load firmware
                 if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
                 time.sleep(5)
-                dev = usb.core.find(idVendor=0x3561, idProduct=tt_Fortius)
+                dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=tt_Fortius)
                 if dev != None:
-                    msg = "GetTrainer - 1942 head unit initialised"
+                    msg = "GetTrainer - Fortius head unit initialised"
                     trainer_type = tt_Fortius
                 else:
                     msg = "GetTrainer - Unable to load firmware"
@@ -414,8 +422,9 @@ def GetTrainer():
         #-----------------------------------------------------------------------
         # Set configuration
         #-----------------------------------------------------------------------
-        dev.set_configuration()
-        if trainer_type == tt_iMagic:   dev.set_interface_altsetting(0, 1)
+        if dev != False:
+            dev.set_configuration()
+            if trainer_type == tt_iMagic:   dev.set_interface_altsetting(0, 1)
     #---------------------------------------------------------------------------
     # Done
     #---------------------------------------------------------------------------
@@ -517,9 +526,9 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
         logfile.Write(error)
     else:
         if LegacyProtocol == True:
-            DesiredForceValue + StartStop + StopWatch = 0,0,0                           # To be investigated
+            DesiredForceValue, StartStop, StopWatch = 0,0,0                           # To be investigated
             format = sc.no_alignment + fDesiredForceValue + fStartStop + fStopWatch
-            data   = struct.pack (format, DesiredForceValue + StartStop + StopWatch)
+            data   = struct.pack (format, DesiredForceValue, StartStop, StopWatch)
         else:
             format = sc.no_alignment + fControlCommand + fTarget +    fPedalecho + fFiller7 + fMode + fWeight + fCalibrate
             data   = struct.pack (format, 0x00010801, int(Target),     PedalEcho,              Mode,   Weight,   Calibrate)
@@ -741,7 +750,7 @@ def ReceiveFromTrainer(devTrainer):
         #---------------------------------------------------------------------------
         # Parse buffer
         #---------------------------------------------------------------------------
-        format = fStatusAndCursors + fSpeed + fCadence + fHeartRate + fStopWatch + fCurrentResistance + \
+        format = sc.no_alignment + fStatusAndCursors + fSpeed + fCadence + fHeartRate + fStopWatch + fCurrentResistance + \
                  fPedalSensor + fAxis0 + fAxis1 + fAxis2 + fAxis3 + fCounter + fWheelCount + \
                  fYearProduction + fDeviceSerial + fFirmwareVersion
         tuple = struct.unpack (format, data)
@@ -754,7 +763,7 @@ def ReceiveFromTrainer(devTrainer):
         TargetResistance    = 0                             # Unknown
         CurrentResistance   = tuple[nCurrentResistance]
         Speed               = Wheel2Speed(tuple[nSpeed])
-        Buttons             = tuple[nStatusAndCursors] & 0x0f
+        Buttons             = (tuple[nStatusAndCursors] & 0xf0) >> 4
         Axis                = tuple[nAxis1]
 
         if debug.on(debug.Data2):
