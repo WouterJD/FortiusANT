@@ -749,6 +749,8 @@ def ReceiveFromTrainer(devTrainer):
         
         #---------------------------------------------------------------------------
         # Parse buffer
+        # Note that the button-bits have an inversed logic: 
+        #   1=not pushed, 0=pushed. Hence the xor.
         #---------------------------------------------------------------------------
         format = sc.no_alignment + fStatusAndCursors + fSpeed + fCadence + fHeartRate + fStopWatch + fCurrentResistance + \
                  fPedalSensor + fAxis0 + fAxis1 + fAxis2 + fAxis3 + fCounter + fWheelCount + \
@@ -763,7 +765,7 @@ def ReceiveFromTrainer(devTrainer):
         TargetResistance    = 0                             # Unknown
         CurrentResistance   = tuple[nCurrentResistance]
         Speed               = Wheel2Speed(tuple[nSpeed])
-        Buttons             = (tuple[nStatusAndCursors] & 0xf0) >> 4
+        Buttons             = ((tuple[nStatusAndCursors] & 0xf0) >> 4) ^ 0x0f
         Axis                = tuple[nAxis1]
 
         if debug.on(debug.Data2):
