@@ -1,7 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-25"
+__version__ = "2020-02-27"
+# 2020-02-27    GoldenCheetah calculations for LegacyProtocol used
+# 2020-02-26    CalibrateSupported() added
+#               For LegacyProtocol (iMagic) only modeResistance supported
+#               trainer_types corrected (ref TotalReverse)
 # 2020-02-25    feedback from fritz-hh implemented
 # 2020-02-25    added:   idVendor_Tacx (I do not like constants in code)
 #               changed: firmware command to be executed to be confirmed (fxload...)
@@ -35,12 +39,14 @@ import FortiusAntCommand as cmd
 #-------------------------------------------------------------------------------
 # Globals
 #-------------------------------------------------------------------------------
-global trainer_type
-global LegacyProtocol
-tt_iMagic        = 0x1902
-tt_iFlow         = 0x1932
-tt_Fortius       = 0x1942
-tt_FortiusU      = 0xe6be    # Uninitialized fortius
+global trainer_type;    trainer_type     = 0
+global LegacyProtocol;  LegacyProtocol   = False
+
+tt_iMagic        = 0x1902    # Old "solid green" iMagic headunit (with or without firmware)
+tt_iMagicWG      = 0x1904    # New "white green" iMagic headunit (firmware inside)
+tt_Fortius       = 0x1932    # New "white blue" Fortius headunit (firmware inside)
+tt_FortiusSB     = 0x1942    # Old "solid blue" Fortius (firmware inside)
+tt_FortiusSB_nfw = 0xe6be    # Old "solid blue" Fortius (without firmware)
 
 idVendor_Tacx    = 0x3561
 
@@ -87,16 +93,43 @@ modeCalibrate   = 3
 #    Conclusion: for rider with ftp=250 (or more) who wants to do low-speed, 
 #       low-cadence (MTB) training, this is not the machine!
 #-------------------------------------------------------------------------------
-PowerResistanceFactor = 128866 
+# legacyResistance2Power and vv for iMagic, using legacy protocol
+# Thanks to GoldenCheetah / GoldenCheetah / master / src / Train / Imagic.cpp
+#-------------------------------------------------------------------------------
+PowerResistanceFactor = 128866                  # TotalReverse
+legacyPowerResistanceFactor = (1 / 0.0036)      # GoldenCheetah ~= 277.778
+
 def Resistance2Power(Resistance, WheelSpeed):
-    return round(Resistance / PowerResistanceFactor * WheelSpeed, 1)
+    global LegacyProtocol
+
+    if LegacyProtocol:
+        # GoldenCheetay: curPower = ((curResistance * 0.0036f) + 0.2f) * curSpeedInternal;
+        return round(((Resistance / legacyPowerResistanceFactor) + 0.2) * WheelSpeed, 1)
+    else:
+        return round(Resistance / PowerResistanceFactor * WheelSpeed, 1)
 
 def Power2Resistance(PowerInWatt, WheelSpeed, Cadence):
-    if WheelSpeed > 0:
-        rtn = PowerInWatt * PowerResistanceFactor / WheelSpeed
-        rtn = ResistanceAtLowSpeed(WheelSpeed, rtn)
+    global LegacyProtocol
+
+    if LegacyProtocol:
+        rtn = 0
+        if WheelSpeed > 0:
+            # instead of brakeCalibrationFactor use PowerFactor -p
+            # GoldenCheetay: setResistance = (((load  / curSpeedInternal) - 0.2f) / 0.0036f)
+            #                setResistance *= brakeCalibrationFactor
+            rtn = ((PowerInWatt / WheelSpeed) - 0.2) * legacyPowerResistanceFactor
+
+        # Check bounds
+        rtn = int(min(226, rtn)) # Maximum value; as defined by Golden Cheetah
+        rtn = int(max( 30, rtn)) # Minimum value
+
     else:
-        rtn = ResistanceAtLowSpeed(WheelSpeed, 6666)
+        if WheelSpeed > 0:
+            rtn = PowerInWatt * PowerResistanceFactor / WheelSpeed
+            rtn = ResistanceAtLowSpeed(WheelSpeed, rtn)
+        else:
+            rtn = ResistanceAtLowSpeed(WheelSpeed, 6666)
+
     return rtn
 
 # Limit Resistance
@@ -152,8 +185,10 @@ def Speed2Wheel(Speed):
 #          where zwift grade does not seem to match the definition
 #-------------------------------------------------------------------------------
 def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
+    global LegacyProtocol
+
     if TargetGrade < -20 or TargetGrade > 30:
-        logfile.Write("SendToTrainer; TargetGrade (%s) out of bounds!" % (TargetGrade))
+        logfile.Write("Grade2Resistance; TargetGrade (%s) out of bounds!" % (TargetGrade))
 
     if UserAndBikeWeight == 0: UserAndBikeWeight = 80
 
@@ -180,6 +215,11 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
         SlopeScale  = 137 * 9.81 / 100         # To be multiplied with UserAndBikeWeight
         SlopeOffset = -0.4
         rtn = int ( (TargetGrade - SlopeOffset) * SlopeScale * UserAndBikeWeight )
+        
+        if LegacyProtocol:
+            # Resistance is calculated for new interface, convert to Legacy
+            p   = Resistance2Power(rtn, WheelSpeed)
+            rtn = Power2Resistance(p, WheelSpeed, Cadence)
 
         if limit:
             MaxRes = Power2Resistance(clv.ftp * 1.25, WheelSpeed, Cadence)
@@ -358,7 +398,7 @@ def GetTrainer():
     # Find supported trainer
     #---------------------------------------------------------------------------
     msg = "GetTrainer - No trainer found"
-    for idp in [tt_iMagic, tt_iFlow, tt_Fortius, tt_FortiusU]:
+    for idp in [tt_iMagic, tt_iMagicWG, tt_Fortius, tt_FortiusSB, tt_FortiusSB_nfw]:
         try:
             if debug.on(debug.Function): logfile.Write ("GetTrainer - Check for trainer %s" % (hex(idp)))
             dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=idp)     # find trainer USB device
@@ -402,16 +442,16 @@ def GetTrainer():
         #-----------------------------------------------------------------------
         # unintialised Fortius (as provided by antifier original code)
         #-----------------------------------------------------------------------
-        if trainer_type == tt_FortiusU:                                                  
+        if trainer_type == tt_FortiusSB_nfw:                                                  
             if debug.on(debug.Function): logfile.Write ("GetTrainer - Found uninitialised Fortius head unit")
             try:
                 os.system("fxload-libusb.exe -I FortiusSWPID1942Renum.hex -t fx -vv")   # load firmware
                 if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
                 time.sleep(5)
-                dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=tt_Fortius)
+                dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=tt_FortiusB)
                 if dev != None:
                     msg = "GetTrainer - Fortius head unit initialised"
-                    trainer_type = tt_Fortius
+                    trainer_type = tt_FortiusSB
                 else:
                     msg = "GetTrainer - Unable to load firmware"
                     dev = False
@@ -453,6 +493,7 @@ def InitialiseTrainer(dev):
 #           PedalEcho   - must be echoed
 #           Calibrate   - Resistance during calibration is specified
 #                         If =zero default is calculated
+#           LegacyProtocol (for iMagic)
 #
 # function  Set trainer to calculated resistance (TargetPower) or Grade
 #
@@ -486,6 +527,8 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
         fCalibrate          = sc.unsigned_short     # 10, 11    Depends on mode
 
     #---------------------------------------------------------------------------
+    # Prepare parameters to be sent to trainer
+    #---------------------------------------------------------------------------
     error = False
     if   Mode == modeStop:
         Calibrate   = 0
@@ -495,21 +538,21 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
         pass
 
     elif Mode == modeResistance:
-        if Calibrate == 0:                              # Use old formula:
-            Calibrate   = 0                             # may be -8...+8
-            Calibrate   = ( Calibrate + 8 ) * 130       # 0x0410
+        if Calibrate == 0:                                  # Use old formula:
+            Calibrate   = 0                                 # may be -8...+8
+            Calibrate   = ( Calibrate + 8 ) * 130           # 0x0410
 
         if TargetMode == gui.mode_Power:
-            Target      = Power2Resistance(TargetPower, WheelSpeed, Cadence)
-            if Target < Calibrate: Target = Calibrate   # Avoid motor-function for low TargetPower
-            Weight      = 0x0a                          # weight=0x0a is a good fly-wheel value
-                                                        # UserAndBikeWeight is not used!
+            Target = Power2Resistance(TargetPower, WheelSpeed, Cadence)
+            if LegacyProtocol == False and Target < Calibrate:
+                Target = Calibrate                          # Avoid motor-function for low TargetPower
+            Weight = 0x0a                                   # weight=0x0a is a good fly-wheel value
+                                                            # UserAndBikeWeight is not used!
         elif TargetMode == gui.mode_Grade:
-            Target      = Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence)
-########    if Target < Calibrate: Target = Calibrate   # Avoid motor-function for descends
-            Weight      = 0x0a                          # weight=0x0a is a good fly-wheel value
-                                                        # UserAndBikeWeight is not used!    
-                                                        #       an 100kg flywheels gives undesired behaviour :-)
+            Target = Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence)
+            Weight = 0x0a                                   # weight=0x0a is a good fly-wheel value
+                                                            # UserAndBikeWeight is not used!        
+                                                            #       an 100kg flywheels gives undesired behaviour :-)
         else:
             error = "SendToTrainer; Unsupported TargetMode %s" % TargetMode
 
@@ -525,20 +568,33 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
     if error:
         logfile.Write(error)
     else:
+        #-----------------------------------------------------------------------
+        # Build data buffer to be sent to trainer (legacy or new)
+        #-----------------------------------------------------------------------
         if LegacyProtocol == True:
-            DesiredForceValue, StartStop, StopWatch = 0,0,0                           # To be investigated
-            format = sc.no_alignment + fDesiredForceValue + fStartStop + fStopWatch
-            data   = struct.pack (format, DesiredForceValue, StartStop, StopWatch)
+            if Mode == modeResistance:
+                DesiredForceValue = Target
+                StartStop, StopWatch = 0,0  # GoldenCheetah sends 2-byte data
+                                            #    in sendRunCommand() with
+                                            #    StartStop always zero
+                                            # so we should be good like this                                            
+                format = sc.no_alignment + fDesiredForceValue + fStartStop + fStopWatch
+                data   = struct.pack (format, DesiredForceValue, StartStop, StopWatch)
+            else:
+                data   = False
         else:
             format = sc.no_alignment + fControlCommand + fTarget +    fPedalecho + fFiller7 + fMode + fWeight + fCalibrate
             data   = struct.pack (format, 0x00010801, int(Target),     PedalEcho,              Mode,   Weight,   Calibrate)
 
-        if debug.on(debug.Data2):
-            logfile.Write ("Trainer send data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
-            logfile.Write ("                  target=%s pe=%s mode=%s weight=%s cal=%s" % \
-                                         (int(Target), PedalEcho, Mode, Weight, Calibrate))
+        #-----------------------------------------------------------------------
+        # Send buffer to trainer
+        #-----------------------------------------------------------------------
+        if not SimulateTrainer and data != False:
+            if debug.on(debug.Data2):
+                logfile.Write ("Trainer send data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
+                logfile.Write ("                  target=%s pe=%s mode=%s weight=%s cal=%s" % \
+                                             (int(Target), PedalEcho, Mode, Weight, Calibrate))
 
-        if not SimulateTrainer:
             try:
                 devTrainer.write(0x02, data, 30)                             # send data to device
             except Exception as e:
@@ -759,14 +815,16 @@ def ReceiveFromTrainer(devTrainer):
 
         WheelSpeed          = tuple[nSpeed]
         Cadence             = tuple[nCadence]
-        CurrentPower        = 0                             # To be investigated
         HeartRate           = tuple[nHeartRate]
         PedalEcho           = tuple[nPedalSensor]
-        TargetResistance    = 0                             # Unknown
         CurrentResistance   = tuple[nCurrentResistance]
+        TargetResistance    = CurrentResistance         # Is not separately returned
+                                                        # is displayed by FortiusANT!
         Speed               = Wheel2Speed(tuple[nSpeed])
         Buttons             = ((tuple[nStatusAndCursors] & 0xf0) >> 4) ^ 0x0f
         Axis                = tuple[nAxis1]
+
+        CurrentPower        = legacyResistance2Power(CurrentResistance, WheelSpeed)
 
         if debug.on(debug.Data2):
           logfile.Write ("ReceiveFromTrainer: hr=%s sp=%s CurrentResistance=%s pe=%s cad=%s axis=%s %s %s %s" % \
@@ -778,3 +836,19 @@ def ReceiveFromTrainer(devTrainer):
         Speed = "Not Found"
 
     return Speed, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis
+
+#-------------------------------------------------------------------------------
+# C a l i b r a t e S u p p o r t e d
+#-------------------------------------------------------------------------------
+# input     trainer_type
+#
+# function  Return whether this trainer support calibration
+#
+# returns   True/False
+#-------------------------------------------------------------------------------
+def CalibrateSupported():
+    global trainer_type
+    if trainer_type == tt_Fortius:              # And perhaps others as well
+        return True
+    else:
+        return False

@@ -1,7 +1,21 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-10"
+__version__ = "2020-02-26"
+# 2020-02-26    Implementation restriction:
+#               When two same ANT dongles are in the system, always the first
+#               is found and can be used (or is in use). Should be changed.
+# 2020-02-26    msgID_BurstData added (restricted implementation)
+# 2020-02-25    Tacx Neo constants used, trying to get Tacx Desktop App to pair
+#               with ExplorAnt(simulating) or FortiusAnt. No luck yet.
+# 2020-02-13    msgPage80_ManufacturerInfo and msgPage81_ProductInformation
+#                   now expect parameters in stead of using fixed constants 
+#               todo: msgPage82_BatteryStatus
+# 2020-02-12    Different channels used for HRM and HRM_s (SCS and SCS_s)
+#               so that ExplorANT can use both simultaneously
+#               ResetDongle() used for reset + 500ms wait after reset before
+#                   next actions, seems to imrpove pairing behaviour
+#               Calibrate() changed with respect to reset-dongle
 # 2020-02-10    SCS added (example code, not tested)
 # 2020-02-02    Function EnumerateAll() added, GetDongle() has optional input
 #               Function SlaveTrainer_ChannelConfig(), SlaveHRM_ChannelConfig()
@@ -31,13 +45,37 @@ import FortiusAntCommand    as cmd
 
 #-------------------------------------------------------------------------------
 # Our own choice what channels are used
+#
+# A different channel is used for HRM as HRM_d, even though usually a device 
+# will be either one or the other. ExplorANT can be both.
 #-------------------------------------------------------------------------------
-channel_FE       = 1        # ANT+ channel for Fitness Equipment
-channel_HRM      = 2        # ANT+ channel for Heart Rate Monitor
-channel_SCS      = 3        # ANT+ Channel for Speed Cadence Sensor
+channel_FE          = 1        # ANT+ channel for Fitness Equipment
+channel_HRM         = 2        # ANT+ channel for Heart Rate Monitor
+channel_SCS         = 3        # ANT+ Channel for Speed Cadence Sensor
 
-DeviceNumber_FE  = 57591    # These are the device-numbers FortiusANT uses and
-DeviceNumber_HRM = 57592    # slaves (TrainerRoad, Zwift, ExplorANT) will find.
+channel_FE_s        = 4        # ANT+ channel for Fitness Equipment    (slave=Cycle Training Program)
+channel_HRM_s       = 5        # ANT+ channel for Heart Rate Monitor   (slave=display)
+channel_SCS_s       = 6        # ANT+ Channel for Speed Cadence Sensor (slave=display)
+
+DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
+DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT uses and
+DeviceNumber_HRM    = 57592    #       slaves (TrainerRoad, Zwift, ExplorANT) will find.
+
+ModelNumber_FE      = 2875     # short antifier-value=0x8385, Tacx Neo=2875
+SerialNumber_FE     = 19590705 # int   1959-7-5
+HWrevision_FE       = 1        # char
+SWrevisionMain_FE   = 1        # char
+SWrevisionSupp_FE   = 1        # char
+
+ModelNumber_HRM     = 0x33     # char  antifier-value
+SerialNumber_HRM    = 5975     # short 1959-7-5
+HWrevision_HRM      = 1        # char
+SWversion_HRM       = 1        # char
+
+if False:                      # Tacx Neo Erik OT; perhaps relevant for Tacx Desktop App
+                               # because TDA does not want to pair with FortiusAnt...
+    DeviceNumber_FE = 48365
+    SerialNumber_FE = 48365
 
 #-------------------------------------------------------------------------------
 # D00000652_ANT_Message_Protocol_and_Usage_Rev_5.1.pdf
@@ -75,6 +113,8 @@ msgID_ChannelTransmitPower              = 0x60
 
 msgID_StartUp                           = 0x6f
 
+msgID_BurstData                         = 0x50
+
 # profile.xlsx: antplus_device_type
 DeviceTypeID_antfs                      =  1
 DeviceTypeID_bike_power                 = 11
@@ -100,6 +140,13 @@ DeviceTypeID_bike_speed_cadence         =121
 DeviceTypeID_bike_cadence               =122
 DeviceTypeID_bike_speed                 =123
 DeviceTypeID_stride_speed_distance      =124
+
+# Manufacturer ID       see FitSDKRelease_21.20.00 profile.xlsx
+Manufacturer_garmin                     =  1
+Manufacturer_dynastream	                = 15
+Manufacturer_tacx                       = 89
+Manufacturer_trainer_road	            =281
+
 
 DeviceTypeID_FE         = DeviceTypeID_fitness_equipment
 DeviceTypeID_HRM        = DeviceTypeID_heart_rate
@@ -147,9 +194,12 @@ def CalcChecksum (message):
 #-------------------------------------------------------------------------------
 def Calibrate(devAntDongle):
   if debug.on(debug.Data1): logfile.Write ("Calibrate()")
+  
+  ResetDongle(devAntDongle)
+  
   messages=[
     msg4D_RequestMessage        (0, msgID_Capabilities),   # request max channels
-    msg4A_ResetSystem           (),
+#   msg4A_ResetSystem           (),
     msg4D_RequestMessage        (0, msgID_ANTversion),     # request ant version
     msg46_SetNetworkKey         ()
   ]
@@ -182,13 +232,13 @@ def Trainer_ChannelConfig(devAntDongle):
 def SlaveTrainer_ChannelConfig(devAntDongle, DeviceNumber):
   if debug.on(debug.Data1): logfile.Write ("SlaveTrainer_ChannelConfig()")
   messages=[
-    msg42_AssignChannel         (channel_FE, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
-    msg51_ChannelID             (channel_FE, DeviceNumber, DeviceTypeID_FE, TransmissionType_IC_GDP),
-    msg45_ChannelRfFrequency    (channel_FE, RfFrequency_2457Mhz), 
-    msg43_ChannelPeriod         (channel_FE, ChannelPeriod=0x2000),                                     # 4 Hz
-    msg60_ChannelTransmitPower  (channel_FE, TransmitPower_0dBm),
-    msg4B_OpenChannel           (channel_FE),
-    msg4D_RequestMessage        (channel_FE, msgID_ChannelID) # Note that answer may be in logfile only
+    msg42_AssignChannel         (channel_FE_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
+    msg51_ChannelID             (channel_FE_s, DeviceNumber, DeviceTypeID_FE, TransmissionType_IC_GDP),
+    msg45_ChannelRfFrequency    (channel_FE_s, RfFrequency_2457Mhz), 
+    msg43_ChannelPeriod         (channel_FE_s, ChannelPeriod=0x2000),                                     # 4 Hz
+    msg60_ChannelTransmitPower  (channel_FE_s, TransmitPower_0dBm),
+    msg4B_OpenChannel           (channel_FE_s),
+#   msg4D_RequestMessage        (channel_FE_s, msgID_ChannelID) # Note that answer may be in logfile only
   ]
   SendToDongle(messages, devAntDongle, '')
 
@@ -207,26 +257,26 @@ def HRM_ChannelConfig(devAntDongle):
 def SlaveHRM_ChannelConfig(devAntDongle, DeviceNumber):
   if debug.on(debug.Data1): logfile.Write ("SlaveHRM_ChannelConfig()")
   messages=[
-    msg42_AssignChannel         (channel_HRM, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
-    msg51_ChannelID             (channel_HRM, DeviceNumber, DeviceTypeID_HRM, TransmissionType_IC),
-    msg45_ChannelRfFrequency    (channel_HRM, RfFrequency_2457Mhz), 
-    msg43_ChannelPeriod         (channel_HRM, ChannelPeriod=0x1f86),
-    msg60_ChannelTransmitPower  (channel_HRM, TransmitPower_0dBm),
-    msg4B_OpenChannel           (channel_HRM),
-    msg4D_RequestMessage        (channel_HRM, msgID_ChannelID) # Note that answer may be in logfile only
+    msg42_AssignChannel         (channel_HRM_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
+    msg51_ChannelID             (channel_HRM_s, DeviceNumber, DeviceTypeID_HRM, TransmissionType_IC),
+    msg45_ChannelRfFrequency    (channel_HRM_s, RfFrequency_2457Mhz), 
+    msg43_ChannelPeriod         (channel_HRM_s, ChannelPeriod=0x1f86),
+    msg60_ChannelTransmitPower  (channel_HRM_s, TransmitPower_0dBm),
+    msg4B_OpenChannel           (channel_HRM_s),
+#   msg4D_RequestMessage        (channel_HRM_s, msgID_ChannelID) # Note that answer may be in logfile only
   ]
   SendToDongle(messages, devAntDongle, '')
 
 def SlaveSCS_ChannelConfig(devAntDongle, DeviceNumber):                     # Note: not tested!!!
   if debug.on(debug.Data1): logfile.Write ("SlaveSCS_ChannelConfig()")
   messages=[
-    msg42_AssignChannel         (channel_SCS, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
-    msg51_ChannelID             (channel_SCS, DeviceNumber, DeviceTypeID_SCS, TransmissionType_IC),
-    msg45_ChannelRfFrequency    (channel_SCS, RfFrequency_2457Mhz), 
-    msg43_ChannelPeriod         (channel_SCS, ChannelPeriod=0x1f86),
-    msg60_ChannelTransmitPower  (channel_SCS, TransmitPower_0dBm),
-    msg4B_OpenChannel           (channel_SCS),
-    msg4D_RequestMessage        (channel_SCS, msgID_ChannelID) # Note that answer may be in logfile only
+    msg42_AssignChannel         (channel_SCS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
+    msg51_ChannelID             (channel_SCS_s, DeviceNumber, DeviceTypeID_SCS, TransmissionType_IC),
+    msg45_ChannelRfFrequency    (channel_SCS_s, RfFrequency_2457Mhz), 
+    msg43_ChannelPeriod         (channel_SCS_s, ChannelPeriod=0x1f86),
+    msg60_ChannelTransmitPower  (channel_SCS_s, TransmitPower_0dBm),
+    msg4B_OpenChannel           (channel_SCS_s),
+#   msg4D_RequestMessage        (channel_SCS_s, msgID_ChannelID) # Note that answer may be in logfile only
   ]
   SendToDongle(messages, devAntDongle, '')
 
@@ -250,7 +300,9 @@ def ResetDongle(devAntDongle):
   messages=[
     msg4A_ResetSystem(),
   ]
-  return SendToDongle(messages, devAntDongle, '')
+  rtn = SendToDongle(messages, devAntDongle, '', False)
+  time.sleep(0.500)                           # After Reset, 500ms before next action
+  return rtn
 
 #-------------------------------------------------------------------------------
 # E n u m e r a t e A l l
@@ -319,6 +371,7 @@ def GetDongle(p=None):
                                                                         # done here to have explicit error-handling.
                             if debug.on(debug.Function): logfile.Write ("GetDongle - Send reset string to dongle")
                             devAntDongle.write(0x01, reset_string)
+                            time.sleep(0.500)                             # after reset, 500ms before next action
 
                             if debug.on(debug.Function): logfile.Write ("GetDongle - Read answer")
                             reply = ReadFromDongle(devAntDongle, False)
@@ -565,6 +618,15 @@ def DecomposeMessage(d):
     if length >= 1: Channel         = d[3]
     if length >= 2: DataPageNumber  = d[4]
 
+    #---------------------------------------------------------------------------
+    # Special treatment for Burst data
+    # Note that SequenceNumber is not returned and therefore lost, which is to
+    #      be implemented as soon as we will use msgID_BurstData
+    #---------------------------------------------------------------------------
+    if id == msgID_BurstData:
+        SequenceNumber = (Channel & 0b11100000) >> 5 # Upper 3 bits
+        Channel        =  Channel & 0b00011111       # Lower 5 bits
+
     return synch, length, id, info, checksum, rest, Channel, DataPageNumber
 
 #-------------------------------------------------------------------------------
@@ -585,6 +647,7 @@ def DecomposeMessage(d):
 def DongleDebugMessage(text, d):
     if debug.on(debug.Data1): 
         synch, length, id, info, checksum, rest, Channel, p = DecomposeMessage(d)
+        
         #-----------------------------------------------------------------------
         # info_ is the payload of the message
         # Channel and p are filled, but only valid for some messages
@@ -825,7 +888,7 @@ def unmsg64_ChannelResponse(info):
 # ------------------------------------------------------------------------------
 def msgPage16_GeneralFEdata (Channel, ElapsedTime, DistanceTravelled, Speed, HeartRate):
     DataPageNumber      = 16
-    EquipmentType       = 0x19
+    EquipmentType       = 0x19      # Trainer
     ElapsedTime         = int(min(  0xff, ElapsedTime       ))
     DistanceTravelled   = int(min(  0xff, DistanceTravelled ))
     Speed               = int(min(0xffff, Speed             ))
@@ -1099,7 +1162,7 @@ def msgUnpage70_RequestDataPage(info):
 # D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
 # Common Data Page 80: (0x50) Manufacturers Information          
 # ------------------------------------------------------------------------------
-def msgPage80_ManufacturerInfo(Channel):
+def msgPage80_ManufacturerInfo(Channel, Reserved1, Reserved2, HWrevision, ManufacturerID, ModelNumber):
     DataPageNumber      = 80
 
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
@@ -1110,8 +1173,15 @@ def msgPage80_ManufacturerInfo(Channel):
     fManufacturerID     = sc.unsigned_short
     fModelNumber        = sc.unsigned_short
 
+    # page 28 byte 4,5,6,7- 15=dynastream, 89=tacx
+    # antifier used 15 : "a4 09 4e 00 50 ff ff 01 0f 00 85 83 bb"
+    # we use 89 (tacx) with the same ModelNumber
+    #
+    # Should be variable and caller-supplied; perhaps it influences pairing
+    # when trainer-software wants a specific device?
+    #
     format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fReserved2 + fHWrevision + fManufacturerID + fModelNumber
-    info  = struct.pack (format,  Channel,   DataPageNumber,   0xff,        0xff,        0x01,         0x0059,          0x8385)
+    info  = struct.pack (format,  Channel,   DataPageNumber,   Reserved1,   Reserved2,   HWrevision,   ManufacturerID,   ModelNumber)
     
     return info
 
@@ -1136,7 +1206,7 @@ def msgUnpage80_ManufacturerInfo(info):
 # D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
 # Common Data Page 81: (0x51) Product Information          
 # ------------------------------------------------------------------------------
-def msgPage81_ProductInformation(Channel):
+def msgPage81_ProductInformation(Channel, Reserved1, SWrevisionSupp, SWrevisionMain, SerialNumber):
     DataPageNumber      = 81
 
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
@@ -1147,7 +1217,7 @@ def msgPage81_ProductInformation(Channel):
     fSerialNumber       = sc.unsigned_int
 
     format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fSWrevisionSupp + fSWrevisionMain + fSerialNumber
-    info  = struct.pack (format,  Channel,   DataPageNumber,   0xff,        0xff,             0x01,             0x19590705)
+    info  = struct.pack (format,  Channel,   DataPageNumber,   Reserved1,   SWrevisionSupp,   SWrevisionMain,   SerialNumber)
     
     return info
 

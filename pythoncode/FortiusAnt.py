@@ -1,8 +1,19 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-10"
+__version__ = "2020-02-26"
 WindowTitle = "Fortius Antifier v2.2"
+# 2020-02-27    FE data page 252 ignored
+#               PrintWarnings added for documentation
+# 2020-02-26    msgID_BurstData ignored
+#               usbTrainer.CalibrateSupported() used to skip calibration on iMagic
+# 2020-02-18    Calibrate can be stopped with Ctrl-C
+# 2020-02-18    Module antHRM.py and antFE.py created
+# 2020-02-12    HRM display data pages 89, 95 implemented...
+# 2020-02-12    if SpeedKmh == "Not Found"; required not to crash...
+#               something to be changed in usbTrainer some day...
+# 2020-02-12    Different channel used for HRM and HRM_d
+#               msgPage80_ManufacturerInfo() was never sent
 # 2020-02-10    clv.scs added (example code, not tested)
 # 2020-02-09    id / channel handling improved
 #                   (channel was checked before checking id)
@@ -110,12 +121,16 @@ import wx
 from datetime import datetime
 
 import antDongle         as ant
+import antHRM            as hrm
+import antFE             as fe
 import debug
 import FortiusAntCommand as cmd
 import FortiusAntGui     as gui
 import logfile
 import structConstants   as sc
 import usbTrainer
+
+PrintWarnings = True                # Print warnings even when logging = off
 
 #-------------------------------------------------------------------------------
 # constants
@@ -412,46 +427,50 @@ def Tacx2Dongle(self):
     CountDown       = 120 * 4 # 8 minutes; 120 is the max on the cadence meter
     ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for running everage
     Calibrate       = 0
-    if not clv.SimulateTrainer:
+    if not clv.SimulateTrainer and usbTrainer.CalibrateSupported():
         SetTacxMsg(self, "* * * * * C A L I B R A T I N G * * * * *")
-    while self.RunningSwitch == True and not clv.SimulateTrainer and clv.calibrate \
-          and not Buttons == usbTrainer.CancelButton and Calibrate == 0:
-        StartTime = time.time()
-        #-------------------------------------------------------------------------
-        # Receive / Send trainer
-        #-------------------------------------------------------------------------
-        usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeCalibrate, \
-                    False, False, False, False, False, False, False, False, False)
-        SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, Resistance, Buttons, Axis = \
-                    usbTrainer.ReceiveFromTrainer(devTrainer)
+    try:
+        while self.RunningSwitch == True and not clv.SimulateTrainer and clv.calibrate \
+              and not Buttons == usbTrainer.CancelButton and Calibrate == 0 \
+              and usbTrainer.CalibrateSupported():
+            StartTime = time.time()
+            #-------------------------------------------------------------------------
+            # Receive / Send trainer
+            #-------------------------------------------------------------------------
+            usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeCalibrate, \
+                        False, False, False, False, False, False, False, False, False)
+            SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, Resistance, Buttons, Axis = \
+                        usbTrainer.ReceiveFromTrainer(devTrainer)
+            if SpeedKmh == "Not Found": SpeedKmh = 0
+            #-------------------------------------------------------------------------
+            # Show progress
+            #-------------------------------------------------------------------------
+            if clv.gui: SetTacxMsg(self, "* * * * * C A L I B R A T I N G * * * * *")
+            SetValues(self, SpeedKmh, int(CountDown/4), round(CurrentPower * -1,0), gui.mode_Power, 0, 0, Resistance * -1, 0)
 
-        #-------------------------------------------------------------------------
-        # Show progress
-        #-------------------------------------------------------------------------
-        if clv.gui: SetTacxMsg(self, "* * * * * C A L I B R A T I N G * * * * *")
-        SetValues(self, SpeedKmh, int(CountDown/4), round(CurrentPower * -1,0), gui.mode_Power, 0, 0, Resistance * -1, 0)
+            # ----------------------------------------------------------------------
+            # Average power over the last 20 readings
+            # Stop if difference between min/max is below threshold (30)
+            # At least 30 seconds but not longer than the countdown time (8 minutes)
+            # Note that the limits are empiracally established.
+            # ----------------------------------------------------------------------
+            if Resistance < 0 and  WheelSpeed > 0:    # Calibration is started (with pedal kick)
+                ResistanceArray = numpy.append(ResistanceArray, Resistance * -1) # Add new value to array
+                ResistanceArray = numpy.delete(ResistanceArray, 0)               # Remove oldest from array
+                
+                if CountDown < (120 * 4 - 30) and numpy.min(ResistanceArray) > 0:
+                    if (numpy.max(ResistanceArray) - numpy.min(ResistanceArray) ) < 30 or CountDown <= 0:
+                        Calibrate = Resistance * -1
 
-        # ----------------------------------------------------------------------
-        # Average power over the last 20 readings
-        # Stop if difference between min/max is below threshold (30)
-        # At least 30 seconds but not longer than the countdown time (8 minutes)
-        # Note that the limits are empiracally established.
-        # ----------------------------------------------------------------------
-        if Resistance < 0 and  WheelSpeed > 0:    # Calibration is started (with pedal kick)
-            ResistanceArray = numpy.append(ResistanceArray, Resistance * -1) # Add new value to array
-            ResistanceArray = numpy.delete(ResistanceArray, 0)               # Remove oldest from array
-            
-            if CountDown < (120 * 4 - 30) and numpy.min(ResistanceArray) > 0:
-                if (numpy.max(ResistanceArray) - numpy.min(ResistanceArray) ) < 30 or CountDown <= 0:
-                    Calibrate = Resistance * -1
-
-            CountDown -= 0.25                   # If not started, no count down!
-            
-        #-------------------------------------------------------------------------
-        # WAIT        So we do not cycle faster than 4 x per second
-        #-------------------------------------------------------------------------
-        SleepTime = 0.25 - (time.time() - StartTime)
-        if SleepTime > 0: time.sleep(SleepTime)
+                CountDown -= 0.25                   # If not started, no count down!
+                
+            #-------------------------------------------------------------------------
+            # WAIT        So we do not cycle faster than 4 x per second
+            #-------------------------------------------------------------------------
+            SleepTime = 0.25 - (time.time() - StartTime)
+            if SleepTime > 0: time.sleep(SleepTime)
+    except KeyboardInterrupt:
+        logfile.Write ("Stopped")
     #---------------------------------------------------------------------------
     # Stop trainer
     #---------------------------------------------------------------------------
@@ -478,21 +497,10 @@ def Tacx2Dongle(self):
     WheelSpeed              = 0
     
     #---------------------------------------------------------------------------
-    # Trainer variables and counters
+    # Initialize antHRM and antFE module
     #---------------------------------------------------------------------------
-    AccumulatedPower        = 0
-    AccumulatedTimeCounter  = 0
-    AccumulatedTime         = 0
-    AccumulatedLastTime     = time.time()
-    DistanceTravelled       = 0
-    
-    #---------------------------------------------------------------------------
-    # Heart Rate
-    #---------------------------------------------------------------------------
-    HeartBeatCounter        = 0
-    HeartBeatEventTime      = 0
-    HeartBeatTime           = 0
-    PageChangeToggle        = 0
+    hrm.Initialize()
+    fe.Initialize()
     
     try:
         while self.RunningSwitch == True:
@@ -514,6 +522,7 @@ def Tacx2Dongle(self):
                 # Show results
                 #---------------------------------------------------------------
                 if SpeedKmh == "Not Found":
+                    SpeedKmh = 0 # resolve antifier legacy (error-message in numeric)
                     SpeedKmhT, WheelSpeedT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0, 0, 0
                     SetTacxMsg(self, 'Cannot read from trainer')
                 else:
@@ -585,70 +594,25 @@ def Tacx2Dongle(self):
                     PedalEcho, WheelSpeed, Cadence, Calibrate, clv.SimulateTrainer)    # testWeight
 
             #-------------------------------------------------------------------
-            # Prepare data to be sent to ANT+
+            # Broadcast Heartrate message
             #-------------------------------------------------------------------
-            CurrentPower = max(   0, CurrentPower)      # Not negative
-            CurrentPower = min(4093, CurrentPower)      # Limit to 4093
-            Cadence      = min( 253, Cadence)           # Limit to 253
-            
-            AccumulatedPower += CurrentPower
-            if AccumulatedPower >= 65536: AccumulatedPower = 0
+            messages = []
+            if clv.hrm == None and HeartRate > 0 and not (clv.manual or clv.manualGrade):
+                messages.append(hrm.BroadcastHeartrateMessage(devAntDongle, HeartRate))
 
-            if   EventCounter % 64 in (30, 31):     # After 10 blocks of three messages, then 2 = 32 messages
-                #---------------------------------------------------------------
-                # Send first and second manufacturer's info packet
-                #      FitSDKRelease_20.50.00.zip
-                #      profile.xlsx 
-                #      D00001198_-_ANT+_Common_Data_Pages_Rev_3.1%20.pdf 
-                #      page 28 byte 4,5,6,7- 15=dynastream, 89=tacx
-                #---------------------------------------------------------------
-                comment = "(Manufacturer's info packet)"
-                info    = ant.msgPage80_ManufacturerInfo(ant.channel_FE)
-                newdata = ant.ComposeMessage (ant.msgID_BroadcastData, info)
-                
-            if   EventCounter % 64 in (62, 63):     # After 10 blocks of three messages, then 2 = 32 messages
-                #---------------------------------------------------------------
-                # Send first and second product info packet
-                #---------------------------------------------------------------
-                comment = "(Product info packet)"
-                info    = ant.msgPage81_ProductInformation(ant.channel_FE)
-                newdata = ant.ComposeMessage (ant.msgID_BroadcastData, info)
-            
-            elif EventCounter % 3 == 0:                                                                             
-                #---------------------------------------------------------------
-                # Send general fe data every 3 packets
-                #---------------------------------------------------------------
-                AccumulatedTimeCounter += 1
-                AccumulatedTime         = int(time.time() - AccumulatedLastTime)    # time since start
-                Distance                = AccumulatedTime * SpeedKmh * 1000/3600    # SpeedKmh reported in kmh- convert to m/s
-                DistanceTravelled      += Distance
-                
-                if AccumulatedTimeCounter >= 256 or  DistanceTravelled >= 256:      # rollover at 64 seconds (256 quarter secs)
-                    AccumulatedTimeCounter  = 0
-                    AccumulatedLastTime     = time.time()                           # Reset last loop time
-                    DistanceTravelled       = 0
-
-                comment = "(General fe data)"
-                # Note: AccumulatedTimeCounter as first parameter,
-                #       To be checked whether it should be AccumulatedTime (in 0.25 s)
-                info    = ant.msgPage16_GeneralFEdata (ant.channel_FE, AccumulatedTimeCounter, DistanceTravelled, SpeedKmh*1000*1000/3600, HeartRate)
-                newdata = ant.ComposeMessage (ant.msgID_BroadcastData, info)
-
-            else:
-                #---------------------------------------------------------------
-                # Send specific trainer data
-                #---------------------------------------------------------------
-                comment = "(Specific trainer data)"
-                info    = ant.msgPage25_TrainerData(ant.channel_FE, EventCounter, Cadence, AccumulatedPower, CurrentPower)
-                newdata = ant.ComposeMessage (ant.msgID_BroadcastData, info)
-            
             #-------------------------------------------------------------------
-            # Broadcast and receive ANT+ data
+            # Broadcast TrainerData message
             #-------------------------------------------------------------------
             if clv.manual or clv.manualGrade:
                 data = []
             else:
-                data = ant.SendToDongle([newdata], devAntDongle, comment, True, False)
+                messages.append(fe.BroadcastTrainerDataMessage (devAntDongle, Cadence, CurrentPower, SpeedKmh, HeartRate))
+                
+            #-------------------------------------------------------------------
+            # Broadcast and receive ANT+ responses
+            #-------------------------------------------------------------------
+            if len(messages) > 0:
+                data = ant.SendToDongle(messages, devAntDongle, '', True, False)
 
             #-------------------------------------------------------------------
             # Here all response from the ANT dongle are processed (receive=True)
@@ -713,10 +677,12 @@ def Tacx2Dongle(self):
                             
                             info = False
                             if   RequestedPageNumber == 80:
-                                info = ant.msgPage80_ManufacturerInfo(ant.channel_FE)
+                                info = ant.msgPage80_ManufacturerInfo(ant.channel_FE, 0xff, 0xff, \
+                                    ant.HWrevision_FE, ant.Manufacturer_tacx, ant.ModelNumber_FE)
                                 comment = "(Manufactorer info)"
                             elif RequestedPageNumber == 81:
-                                info = ant.msgPage81_ProductInformation(ant.channel_FE)
+                                info = ant.msgPage81_ProductInformation(ant.channel_FE, 0xff, \
+                                    ant.SWrevisionSupp_FE, ant.SWrevisionMain_FE, ant.SerialNumber_FE)
                                 comment = "(Product info)"
                             elif RequestedPageNumber == 82:
                                 info = ant.msgPage82_BatteryStatus(ant.channel_FE)
@@ -730,6 +696,13 @@ def Tacx2Dongle(self):
                                     data.append(d)
                                     NrTimes -= 1
                                 ant.SendToDongle(data, devAntDongle, comment, False)
+
+                        #-------------------------------------------------------
+                        # Data page 252 ????
+                        #-------------------------------------------------------
+                        elif DataPageNumber == 252 and (PrintWarnings or debug.on(debug.Data1)):
+                            logfile.Write('FE data page 252 ignored. info=%' % logfile.HexSpace(info))
+                            pass
                             
                         #-------------------------------------------------------
                         # Other data pages
@@ -745,12 +718,12 @@ def Tacx2Dongle(self):
                     #-----------------------------------------------------------
                     # Heart Rate Monitor inputs
                     #-----------------------------------------------------------
-                    if Channel == ant.channel_HRM:
+                    if Channel == ant.channel_HRM_s:
                         #-------------------------------------------------------
                         # Data page 0...4 HRM data
                         # Only expected when -H flag specified
                         #-------------------------------------------------------
-                        if DataPageNumber & 0x7f in (0,1,2,3,4,5,6,7,89):
+                        if DataPageNumber & 0x7f in (0,1,2,3,4,5,6,7,89,95):
                             if clv.hrm >= 0:
                                 Channel, DataPageNumber, Spec1, Spec2, Spec3, \
                                     HeartBeatEventTime, HeartBeatCount, HeartRate = \
@@ -759,10 +732,10 @@ def Tacx2Dongle(self):
                                 pass                            # Ignore it
                                 
                         #-------------------------------------------------------
-                        # Data page 89   ??????????????????????????????
-                        #   Added to previous section and it appears to work...
+                        # Data page 89 (HRM strap Garmin#3), 95(HRM strap Garmin#4)
+                        # Added to previous set, provides HR info
                         #-------------------------------------------------------
-                        elif DataPageNumber == 89:
+                        elif DataPageNumber in (89, 95):
                             pass                                # Ignore it
 
                         #-------------------------------------------------------
@@ -806,7 +779,7 @@ def Tacx2Dongle(self):
                     Channel, DeviceNumber, DeviceTypeID, TransmissionType = \
                         ant.unmsg51_ChannelID(info)
 
-                    if Channel == ant.channel_HRM and DeviceTypeID == ant.DeviceTypeID_HRM:
+                    if Channel == ant.channel_HRM_s and DeviceTypeID == ant.DeviceTypeID_HRM:
                         logfile.Write('Heart Rate Monitor paired: %s' % DeviceNumber)
                     else:
                         logfile.Write('Unexpected device %s on channel %s' % (DeviceNumber, Channel))
@@ -818,6 +791,12 @@ def Tacx2Dongle(self):
                 elif id == ant.msgID_ChannelResponse:
                     Channel, InitiatingMessageID, ResponseCode = ant.unmsg64_ChannelResponse(info)
                     pass
+                    
+                #---------------------------------------------------------------
+                # Message BurstData, ignored
+                #---------------------------------------------------------------
+                elif id == ant.msgID_BurstData:
+                    pass
 
                 else: error = "Unknown message ID"
 
@@ -825,76 +804,9 @@ def Tacx2Dongle(self):
                 # Unsupported channel, message or page can be silentedly ignored
                 # Show WHAT we ignore, not to be blind for surprises!
                 #---------------------------------------------------------------
-                if error and (True or debug.on(debug.Data1)): logfile.Write(\
-                    "Dongle error:%s: synch=%s, len=%2s, id=%s, check=%s, channel=%s, page=%s(%s) info=%s" % \
+                if error and (PrintWarnings or debug.on(debug.Data1)): logfile.Write(\
+                    "ANT Dongle:%s: synch=%s, len=%2s, id=%s, check=%s, channel=%s, page=%s(%s) info=%s" % \
                     (error, synch, length, hex(id), checksum, Channel, DataPageNumber, hex(DataPageNumber), logfile.HexSpace(info)))
-
-            #-------------------------------------------------------------------
-            # Broadcast Heartrate.
-            # This appears as a separate ANT-device "on air"
-            # Heartrate is filled if a HRM is detected by the trainer
-            #
-            # 2020-02-09 clv.hrm is introduced
-            #            if NOT specified, old behaviour and HR is broadcasted
-            #            if specified, HR is received from other source and NOT
-            #            broadcasted
-            #-------------------------------------------------------------------
-            if clv.hrm == None and HeartRate > 0:
-                #---------------------------------------------------------------
-                # Check if heart beat has occurred as tacx only reports
-                # instantaneous heart rate data
-                # Last heart beat is at HeartBeatEventTime
-                # If now - HeartBeatEventTime > time taken for hr to occur, trigger beat.
-                #
-                # We pass here every 250ms.
-                # If one heart_beat occurred, increment counter and time.
-                # Ignore that multiple heart-beats could have occurred; increment
-                #   with one beat per cycle only.
-                #
-                # Page 0 is the main page and transmitted most often
-                # In every set of 64 data-pages, page 2 and 3 must be transmitted 4
-                #   times.
-                # To make this fit in the EventCounter cycle (0...255) I have 
-                # chosen blocks of 64 messages as below:
-                #---------------------------------------------------------------
-                if (time.time() - HeartBeatTime) >= (60 / float(HeartRate)):
-                    HeartBeatCounter   += 1                                     # Increment heart beat count                     
-                    HeartBeatEventTime += (60 / float(HeartRate))               # Reset last time of heart beat
-                    HeartBeatTime       = time.time()                           # Current time for next processing
-                    
-                    if HeartBeatEventTime >= 64 or HeartBeatCounter >= 256:     # Rollover at 64seconds
-                        HeartBeatCounter   = 0
-                        HeartBeatEventTime = 0
-                        HeartBeatTime      = 0
-
-                if EventCounter % 4 == 0: PageChangeToggle ^= 0x80              # toggle bit every 4 counts
-                
-                if   EventCounter % 64 <= 55:           # Transmit 56 times Page 0 = Main data page
-                    DataPageNumber  = 0
-                    Spec1           = 0xff              # Reserved
-                    Spec2           = 0xff              # Reserved
-                    Spec3           = 0xff              # Reserved
-                    comment         = "(HR data p0)"
-
-                elif EventCounter % 64 <= 59:           # Transmit 4 times (56, 57, 58, 59) Page 2 = Manufacturer info
-                    DataPageNumber  = 2
-                    Spec1           = 0x01              # Manufacturer ID LSB   1=garmin, 15=Dynastream, see FitSDKRelease_21.20.00 profile.xlsx
-                    Spec2           = 0x75              # Serial Number LSB
-                    Spec3           = 0x59              # Serial Number MSB     # 1959-07-05
-                    comment         = "(HR data p2)"
-
-                elif EventCounter % 64 <= 63:           # Transmit 4 times (60, 61, 62, 63) Page 3 = Product information
-                    DataPageNumber  = 3
-                    Spec1           = 0x01              # Hardware version      
-                    Spec2           = 0x01              # Software version
-                    Spec3           = 0x33              # Model number
-                    comment         = "(HR data p3)"
-                    
-                info   = ant.msgPage_Hrm (ant.channel_HRM, PageChangeToggle | DataPageNumber, Spec1, Spec2, Spec3, HeartBeatEventTime, HeartBeatCounter, HeartRate)
-                hrdata = ant.ComposeMessage (ant.msgID_BroadcastData, info)
-
-                if not (clv.manual or clv.manualGrade):
-                    ant.SendToDongle([hrdata], devAntDongle, comment, False)
 
             #-------------------------------------------------------------------
             # Show progress
@@ -990,71 +902,73 @@ def SimulateReceiveFromTrainer (TargetPower, CurrentPower):
     WheelSpeed = usbTrainer.Speed2Wheel(SpeedKmh)
     Resistance = usbTrainer.Power2Resistance(CurrentPower, WheelSpeed, Cadence)
 
-    return SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, 0, Buttons, Axis
-
+    return SpeedKmh, WheelSpeed, int(PedalEcho), int(HeartRate), int(CurrentPower), int(Cadence), int(Resistance), 0, int(Buttons), int(Axis)
 
 # ==============================================================================
 # Main program; Command line parameters
 # ==============================================================================
-global clv
+if __name__ == "__main__":
+    global clv
 
-debug.deactivate()
-clv = cmd.Create()
-debug.activate(clv.debug)
+    debug.deactivate()
+    clv = cmd.Create()
+    debug.activate(clv.debug)
 
-if True or debug.on(debug.Any):
-    logfile.Open()
-    logfile.Write("FortiusANT started")
-    clv.print()
-    logfile.Write("------------------")
+    if PrintWarnings or debug.on(debug.Any):
+        logfile.Open()
+        logfile.Write("FortiusANT started")
+        clv.print()
+        logfile.Write("------------------")
 
-#-------------------------------------------------------------------------------
-# Component info
-#-------------------------------------------------------------------------------
-if debug.on(debug.Any):
-    logfile.Write('Version info for the components' )
-    s = " %17s = %s"
-    logfile.Write(s % ('FortiusAnt',                   __version__ ))
-    logfile.Write(s % ('antDongle',                ant.__version__ ))
-    logfile.Write(s % ('debug',                  debug.__version__ ))
-    logfile.Write(s % ('FortiusAntCommand',        cmd.__version__ ))
-    logfile.Write(s % ('FortiusAntGui',            gui.__version__ ))
-    logfile.Write(s % ('logfile',              logfile.__version__ ))
-    logfile.Write(s % ('structConstants',           sc.__version__ ))
-    logfile.Write(s % ('usbTrainer',        usbTrainer.__version__ ))
+    #-------------------------------------------------------------------------------
+    # Component info
+    #-------------------------------------------------------------------------------
+    if debug.on(debug.Any):
+        logfile.Write('Version info for the components' )
+        s = " %17s = %s"
+        logfile.Write(s % ('FortiusAnt',                   __version__ ))
+        logfile.Write(s % ('antDongle',                ant.__version__ ))
+        logfile.Write(s % ('antHRM',                   hrm.__version__ ))
+        logfile.Write(s % ('antFE',                     fe.__version__ ))
+        logfile.Write(s % ('debug',                  debug.__version__ ))
+        logfile.Write(s % ('FortiusAntCommand',        cmd.__version__ ))
+        logfile.Write(s % ('FortiusAntGui',            gui.__version__ ))
+        logfile.Write(s % ('logfile',              logfile.__version__ ))
+        logfile.Write(s % ('structConstants',           sc.__version__ ))
+        logfile.Write(s % ('usbTrainer',        usbTrainer.__version__ ))
 
-    logfile.Write(s % ('argparse',            argparse.__version__ ))
-#   logfile.Write(s % ('binascii',            binascii.__version__ ))
-#   logfile.Write(s % ('math',                    math.__version__ ))
-    logfile.Write(s % ('numpy',                  numpy.__version__ ))
-#   logfile.Write(s % ('os',                        os.__version__ ))
-    logfile.Write(s % ('pickle',                pickle.format_version ))
-    logfile.Write(s % ('platform',            platform.__version__ ))
-#   logfile.Write(s % ('glob',                    glob.__version__ ))
-#   logfile.Write(s % ('random',                random.__version__ ))
-    logfile.Write(s % ('sys (python)',             sys.version ))
-#   logfile.Write(s % ('struct',                struct.__version__ ))
-#   logfile.Write(s % ('threading',          threading.__version__ ))
-#   logfile.Write(s % ('time',                    time.__version__ ))
-    logfile.Write(s % ('usb',                      usb.__version__ ))
-    logfile.Write(s % ('wx',                        wx.__version__ ))
+        logfile.Write(s % ('argparse',            argparse.__version__ ))
+    #   logfile.Write(s % ('binascii',            binascii.__version__ ))
+    #   logfile.Write(s % ('math',                    math.__version__ ))
+        logfile.Write(s % ('numpy',                  numpy.__version__ ))
+    #   logfile.Write(s % ('os',                        os.__version__ ))
+        logfile.Write(s % ('pickle',                pickle.format_version ))
+        logfile.Write(s % ('platform',            platform.__version__ ))
+    #   logfile.Write(s % ('glob',                    glob.__version__ ))
+    #   logfile.Write(s % ('random',                random.__version__ ))
+        logfile.Write(s % ('sys (python)',             sys.version ))
+    #   logfile.Write(s % ('struct',                struct.__version__ ))
+    #   logfile.Write(s % ('threading',          threading.__version__ ))
+    #   logfile.Write(s % ('time',                    time.__version__ ))
+        logfile.Write(s % ('usb',                      usb.__version__ ))
+        logfile.Write(s % ('wx',                        wx.__version__ ))
 
-#-------------------------------------------------------------------------------
-# Main program; and go!
-#-------------------------------------------------------------------------------
-devTrainer = False
-devAntDongle = False
-if clv.gui:
-    app = wx.App(0)
-    frame = frmFortiusAnt(None)
-    frame.SetTitle( WindowTitle )
-    app.SetTopWindow(frame)
-    SetFactorMsg(frame, clv.PowerFactor)
-    frame.Show()
-    if clv.autostart:
-        frame.Autostart()
-    app.MainLoop()
-else:
-    x = frmFortiusAntNoGui()
-    if LocateHW(x):
-        Tacx2Dongle(x)
+    #-------------------------------------------------------------------------------
+    # Main program; and go!
+    #-------------------------------------------------------------------------------
+    devTrainer = False
+    devAntDongle = False
+    if clv.gui:
+        app = wx.App(0)
+        frame = frmFortiusAnt(None)
+        frame.SetTitle( WindowTitle )
+        app.SetTopWindow(frame)
+        SetFactorMsg(frame, clv.PowerFactor)
+        frame.Show()
+        if clv.autostart:
+            frame.Autostart()
+        app.MainLoop()
+    else:
+        x = frmFortiusAntNoGui()
+        if LocateHW(x):
+            Tacx2Dongle(x)
