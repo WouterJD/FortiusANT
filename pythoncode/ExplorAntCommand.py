@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-01-29"
+__version__ = "2020-02-18"
+# 2020-02-18    -s added
 # 2020-01-29    first version
 #-------------------------------------------------------------------------------
 import argparse
@@ -32,6 +33,7 @@ class CommandLineVariables(object):
     dongle          = -1
     hrm             = -1
     fe              = -1
+    SimulateTrainer = False
 
     #---------------------------------------------------------------------------
     # Define and process command line
@@ -41,18 +43,20 @@ class CommandLineVariables(object):
         # Define and process command line
         #-----------------------------------------------------------------------
         parser = argparse.ArgumentParser(description='Program to explore ANT devices in the system')
-        parser.add_argument('-a','--autostart', help='Automatically start',             required=False, action='store_true')
-        parser.add_argument('-d','--debug',     help='Show debugging data',             required=False, default=False)
-        parser.add_argument('-D','--dongle',    help='Use this ANT dongle',             required=False, default=False)
-        parser.add_argument('-H','--hrm',       help='Use this Heart Rate Monitor',     required=False, default=False)
-        parser.add_argument('-F','--fe',        help='Use this Fitness Equipment',      required=False, default=False)
+        parser.add_argument('-a','--autostart', help='Automatically start',                 required=False, action='store_true')
+        parser.add_argument('-d','--debug',     help='Show debugging data',                 required=False, default=False)
+        parser.add_argument('-s','--simulate',  help='Simulate master HRM and FE-C',        required=False, action='store_true')
+        parser.add_argument('-D','--dongle',    help='Use this ANT dongle',                 required=False, default=False)
+        parser.add_argument('-H','--hrm',       help='Listen to this Heart Rate Monitor',   required=False, default=False)
+        parser.add_argument('-F','--fe',        help='Listen to this Fitness Equipment',    required=False, default=False)
         args                 = parser.parse_args()
         self.args            = args
 
         #-----------------------------------------------------------------------
         # Booleans; either True or False
         #-----------------------------------------------------------------------
-        self.autostart       = args.autostart
+        self.autostart         = args.autostart
+        self.SimulateTrainer   = args.simulate
 
         #-----------------------------------------------------------------------
         # Get debug-flags, used in debug module
@@ -91,6 +95,7 @@ class CommandLineVariables(object):
     def print(self):
         try:
             if self.autostart:          logfile.Write ("-a")
+            if self.simulate:           logfile.Write ("-s")
             if self.args.debug:         logfile.Write ("-d %s (%s)" % (self.debug,  bin(self.debug  ) ) )
             if self.args.dongle:        logfile.Write ("-D %s (%s)" % (self.dongle, hex(self.dongle ) ) )
             if self.args.hrm:           logfile.Write ("-H %s (%s)" % (self.hrm,    hex(self.hrm    ) ) )
