@@ -219,10 +219,10 @@ def IdleFunction(self):
     global devTrainer, devAntDongle
     if devTrainer != False:
         TargetPower = 100
-        SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis = \
+        SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis = \
             usbTrainer.ReceiveFromTrainer(devTrainer)
         usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeResistance, \
-            gui.mode_Power, TargetPower, False, -1, PedalEcho, WheelSpeed, Cadence, 0, False)
+            gui.mode_Power, TargetPower, False, -1, PedalEcho, SpeedKmh, Cadence, 0, False)
 
         if   Buttons == usbTrainer.EnterButton: self.Navigate_Enter()
         elif Buttons == usbTrainer.DownButton:  self.Navigate_Down()
@@ -316,7 +316,7 @@ def Runoff(self):
         #-----------------------------------------------------------------------
         # Get data from trainer
         #-----------------------------------------------------------------------
-        SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
+        SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
             usbTrainer.ReceiveFromTrainer(devTrainer)
         if   Buttons == usbTrainer.EnterButton:     pass
         elif Buttons == usbTrainer.DownButton:      TargetPower -= 50          # Subtract 50 Watts for calibration test
@@ -344,7 +344,7 @@ def Runoff(self):
             # Send data to trainer
             #---------------------------------------------------------------------
             usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeResistance, \
-                            TargetMode, TargetPower, False, -1, PedalEcho, WheelSpeed, Cadence, Calibrate, False)
+                            TargetMode, TargetPower, False, -1, PedalEcho, SpeedKmh, Cadence, Calibrate, False)
 
             #---------------------------------------------------------------------
             # SpeedKmh up to 40 km/h and then rolldown
@@ -439,7 +439,7 @@ def Tacx2Dongle(self):
             #-------------------------------------------------------------------------
             usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeCalibrate, \
                         False, False, False, False, False, False, False, False, False)
-            SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, Resistance, Buttons, Axis = \
+            SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, Resistance, Buttons, Axis = \
                         usbTrainer.ReceiveFromTrainer(devTrainer)
             if SpeedKmh == "Not Found": SpeedKmh = 0
             #-------------------------------------------------------------------------
@@ -454,7 +454,7 @@ def Tacx2Dongle(self):
             # At least 30 seconds but not longer than the countdown time (8 minutes)
             # Note that the limits are empiracally established.
             # ----------------------------------------------------------------------
-            if Resistance < 0 and  WheelSpeed > 0:    # Calibration is started (with pedal kick)
+            if Resistance < 0 and  SpeedKmh > 0:    # Calibration is started (with pedal kick)
                 ResistanceArray = numpy.append(ResistanceArray, Resistance * -1) # Add new value to array
                 ResistanceArray = numpy.delete(ResistanceArray, 0)               # Remove oldest from array
                 
@@ -494,7 +494,6 @@ def Tacx2Dongle(self):
     PedalEcho               = 0
     Resistance              = 0
     SpeedKmh                = 0
-    WheelSpeed              = 0
     
     #---------------------------------------------------------------------------
     # Initialize antHRM and antFE module
@@ -510,10 +509,10 @@ def Tacx2Dongle(self):
             # TRAINER- SHOULD WRITE THEN READ 70MS LATER REALLY
             #-------------------------------------------------------------------
             if clv.SimulateTrainer:
-                SpeedKmh, WheelSpeed, PedalEcho, HeartRateT, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
+                SpeedKmh, PedalEcho, HeartRateT, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
                     SimulateReceiveFromTrainer (TargetPower, CurrentPower)
             else:
-                SpeedKmhT, WheelSpeedT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, CurrentResistance, Buttons, Axis = \
+                SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, CurrentResistance, Buttons, Axis = \
                     usbTrainer.ReceiveFromTrainer(devTrainer)
                 if CurrentPower < 0: CurrentPower = 0       # No negative value defined for ANT message Page25 (#)
                 
@@ -523,7 +522,7 @@ def Tacx2Dongle(self):
                 #---------------------------------------------------------------
                 if SpeedKmh == "Not Found":
                     SpeedKmh = 0 # resolve antifier legacy (error-message in numeric)
-                    SpeedKmhT, WheelSpeedT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0, 0, 0
+                    SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0, 0, 0
                     SetTacxMsg(self, 'Cannot read from trainer')
                 else:
                     if clv.gui: SetTacxMsg(self, "Trainer detected")
@@ -533,7 +532,6 @@ def Tacx2Dongle(self):
                 #---------------------------------------------------------------
                 if clv.scs == None:
                     SpeedKmh   = SpeedKmhT  
-                    WheelSpeed = WheelSpeedT
                     Cadence    = CadenceT
 
             #-------------------------------------------------------------------
@@ -566,8 +564,8 @@ def Tacx2Dongle(self):
                 # Translate "grade" to TargetPower for display purpose only
                 # The trainer will only use Grade, because of TargetMode
                 #--------------------------------------------------------------
-                r = usbTrainer.Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence)
-                TargetPower = usbTrainer.Resistance2Power(r, WheelSpeed)
+                r = usbTrainer.Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence)
+                TargetPower = usbTrainer.Resistance2Power(r, SpeedKmh)
             else:
                 if   Buttons == usbTrainer.EnterButton:     pass
                 elif Buttons == usbTrainer.DownButton:      pass
@@ -591,7 +589,7 @@ def Tacx2Dongle(self):
             #-------------------------------------------------------------------
             usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeResistance, \
                     TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, \
-                    PedalEcho, WheelSpeed, Cadence, Calibrate, clv.SimulateTrainer)    # testWeight
+                    PedalEcho, SpeedKmh, Cadence, Calibrate, clv.SimulateTrainer)    # testWeight
 
             #-------------------------------------------------------------------
             # Broadcast Heartrate message
@@ -658,8 +656,8 @@ def Tacx2Dongle(self):
                             # display purpose on the console only
                             # The trainer will only use Grade, because of TargetMode
                             #-------------------------------------------------------
-                            r = usbTrainer.Grade2Resistance(TargetGradeFromDongle, UserAndBikeWeight, WheelSpeed, Cadence)
-                            TargetPowerFromDongle = usbTrainer.Resistance2Power(r, WheelSpeed)
+                            r = usbTrainer.Grade2Resistance(TargetGradeFromDongle, UserAndBikeWeight, SpeedKmh, Cadence)
+                            TargetPowerFromDongle = usbTrainer.Resistance2Power(r, SpeedKmh)
                             
                         #-------------------------------------------------------
                         # Data page 55 User configuration
@@ -759,7 +757,6 @@ def Tacx2Dongle(self):
 #scs                            CumulativeSpeedRevolutionCount = \
 #scs                            ant.msgUnpage0_CombinedSpeedCadence(info) 
 #scs                        SpeedKmh   = ...
-#scs                        WheelSpeed = ...
 #scs                        Cadence    = ...
 
                         #-------------------------------------------------------
@@ -899,10 +896,9 @@ def SimulateReceiveFromTrainer (TargetPower, CurrentPower):
         if HeartRate > HRmax:       HeartRate = HRmax       # maximize HR
         HeartRate    += random.randint(-5,5)                # Variation of heartrate by 5 beats
 
-    WheelSpeed = usbTrainer.Speed2Wheel(SpeedKmh)
-    Resistance = usbTrainer.Power2Resistance(CurrentPower, WheelSpeed, Cadence)
+    Resistance = usbTrainer.Power2Resistance(CurrentPower, SpeedKmh, Cadence)
 
-    return SpeedKmh, WheelSpeed, int(PedalEcho), int(HeartRate), int(CurrentPower), int(Cadence), int(Resistance), 0, int(Buttons), int(Axis)
+    return SpeedKmh, int(PedalEcho), int(HeartRate), int(CurrentPower), int(Cadence), int(Resistance), 0, int(Buttons), int(Axis)
 
 # ==============================================================================
 # Main program; Command line parameters
