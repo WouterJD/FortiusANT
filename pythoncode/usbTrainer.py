@@ -159,9 +159,9 @@ def Wheel2Speed(WheelSpeed):
     global LegacyProtocol
     
     if LegacyProtocol:
-        return round(WheelSpeed / SpeedScale_Legacy, 1)
+        return round(WheelSpeed / SpeedScale_Legacy, 2)
     else:
-        return round(WheelSpeed / SpeedScale, 1)
+        return round(WheelSpeed / SpeedScale, 2)
 
 def Speed2Wheel(Speed):
     global LegacyProtocol
