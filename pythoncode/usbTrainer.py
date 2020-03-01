@@ -156,12 +156,16 @@ def ResistanceAtLowSpeed(SpeedKmh, Resistance):
 SpeedScale = 301							        # TotalReverse: 289.75
 SpeedScale_Legacy = 11.9                            # GoldenCheetah: curSpeed = curSpeedInternal / (1.19f * 10.0f);
 def Wheel2Speed(WheelSpeed):
+    global LegacyProtocol
+    
     if LegacyProtocol:
         return round(WheelSpeed / SpeedScale_Legacy, 1)
     else:
         return round(WheelSpeed / SpeedScale, 1)
 
 def Speed2Wheel(Speed):
+    global LegacyProtocol
+    
     if LegacyProtocol:
         return round(Speed * SpeedScale_Legacy, 0)        
     else:
