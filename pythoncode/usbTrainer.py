@@ -1,9 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-27"
-# 2020-03-02    InitialiseTrainer() code moved into GetTrainer(); new interface
-#               only
+__version__ = "2020-03-02"
+# 2020-03-02    Speed = km/hr and only where required WheelSPeed is used.
 # 2020-02-27    GoldenCheetah calculations for LegacyProtocol used
 # 2020-02-26    CalibrateSupported() added
 #               For LegacyProtocol (iMagic) only modeResistance supported
@@ -12,7 +11,7 @@ __version__ = "2020-02-27"
 # 2020-02-25    added:   idVendor_Tacx (I do not like constants in code)
 #               changed: firmware command to be executed to be confirmed (fxload...)
 #                        struct-definition: 'sc.no_alignment + ' added
-#
+#               
 # 2020-02-24    added: trainer_types defined (tt_) and iMagic added
 #                      LegacyProtocol added
 #               todo:  firmware command to be executed to be provided
@@ -37,7 +36,6 @@ import logfile
 import structConstants   as sc
 import FortiusAntGui     as gui
 import FortiusAntCommand as cmd
-import fxload
 
 #-------------------------------------------------------------------------------
 # Globals
@@ -66,18 +64,11 @@ modeResistance  = 2
 modeCalibrate   = 3
 
 #-------------------------------------------------------------------------------
-# path to firmware files
-#-------------------------------------------------------------------------------
-dirname = os.path.dirname(__file__)
-imagic_fw = os.path.join(dirname, '../supportfiles/tacximagic_1902_firmware.hex')
-fortius_fw = os.path.join(dirname, '../supportfiles/tacxfortius_1942_firmware.hex')
-
-#-------------------------------------------------------------------------------
 # Convert Power (Watt) <--> Resistance (presumably Nm)
 #
 #            Power = Torque (Nm) * Speed (rad/s)
-# <==>       Power = Resistance * WheelSpeed / factor
-# and   Resistance = Power / WheelSpeed * factor
+# <==>       Power = Resistance * Speed / factor 
+# and   Resistance = Power / Speed * factor
 #
 # We assume resistance is something like Nm
 #    know   WheelSpeed is mm/s
@@ -91,16 +82,16 @@ fortius_fw = os.path.join(dirname, '../supportfiles/tacxfortius_1942_firmware.he
 # ad c. 200 W and 10 km/hr
 #       R = 200 * 128866 / (10 * 301) = 8562
 #
-#       Tacx Fortius is said to have a range of 50...1000Watt,
+#       Tacx Fortius is said to have a range of 50...1000Watt, 
 #           let's calculate at 50km/hr:
 #       R = 1000 * 128866 / (50 * 301) = 8562
 #           I leave it to you to test whether you can go over this resistance at
 #           high speeds :-)
 #
-#    My personal experience already showed that the Tacx Fortius works well
+#    My personal experience already showed that the Tacx Fortius works well 
 #       at higher speeds and here is the explanation!
 #
-#    Conclusion: for rider with ftp=250 (or more) who wants to do low-speed,
+#    Conclusion: for rider with ftp=250 (or more) who wants to do low-speed, 
 #       low-cadence (MTB) training, this is not the machine!
 #-------------------------------------------------------------------------------
 # legacyResistance2Power and vv for iMagic, using legacy protocol
@@ -109,8 +100,10 @@ fortius_fw = os.path.join(dirname, '../supportfiles/tacxfortius_1942_firmware.he
 PowerResistanceFactor = 128866                  # TotalReverse
 legacyPowerResistanceFactor = (1 / 0.0036)      # GoldenCheetah ~= 277.778
 
-def Resistance2Power(Resistance, WheelSpeed):
+def Resistance2Power(Resistance, SpeedKmh):
     global LegacyProtocol
+
+    WheelSpeed = Speed2Wheel(SpeedKmh)
 
     if LegacyProtocol:
         # GoldenCheetay: curPower = ((curResistance * 0.0036f) + 0.2f) * curSpeedInternal;
@@ -118,8 +111,10 @@ def Resistance2Power(Resistance, WheelSpeed):
     else:
         return round(Resistance / PowerResistanceFactor * WheelSpeed, 1)
 
-def Power2Resistance(PowerInWatt, WheelSpeed, Cadence):
+def Power2Resistance(PowerInWatt, SpeedKmh, Cadence):
     global LegacyProtocol
+
+    WheelSpeed = Speed2Wheel(SpeedKmh)
 
     if LegacyProtocol:
         rtn = 0
@@ -136,9 +131,9 @@ def Power2Resistance(PowerInWatt, WheelSpeed, Cadence):
     else:
         if WheelSpeed > 0:
             rtn = PowerInWatt * PowerResistanceFactor / WheelSpeed
-            rtn = ResistanceAtLowSpeed(WheelSpeed, rtn)
+            rtn = ResistanceAtLowSpeed(SpeedKmh, rtn)
         else:
-            rtn = ResistanceAtLowSpeed(WheelSpeed, 6666)
+            rtn = ResistanceAtLowSpeed(SpeedKmh, 6666)
 
     return rtn
 
@@ -146,25 +141,36 @@ def Power2Resistance(PowerInWatt, WheelSpeed, Cadence):
 # (interface maximum = 0x7fff = 32767)
 # at low speed, Fortius does not manage higher resistance
 # at high speed, the rider does not
-def ResistanceAtLowSpeed(WheelSpeed, Resistance):
-    if Wheel2Speed(WheelSpeed) <= 15 and Resistance >= 6000:
-        Resistance = int(max(1000, Wheel2Speed(WheelSpeed) / 15 * 6000))
+def ResistanceAtLowSpeed(SpeedKmh, Resistance):
+    if SpeedKmh <= 15 and Resistance >= 6000:
+        Resistance = int(max(1000, SpeedKmh / 15 * 6000))
     return Resistance
 
 #-------------------------------------------------------------------------------
 # Convert WheelSpeed --> Speed in km/hr
 # WheelSpeed = 1 mm/sec <==> 1.000.000 / 3600 km/hr = 1/278 km/hr
 # TotalReverse: Other implementations are using values between 1/277 and 1/360.
-# A practical test shows that Cadence=92 gives 40km/hr at a given ratio
+# A practical test shows that Cadence=92 gives 40km/hr at a given ratio 
 #		factor 289.75 gives a slightly higher speed
 #		factor 301 would be good (8-11-2019)
 #-------------------------------------------------------------------------------
 SpeedScale = 301							        # TotalReverse: 289.75
+SpeedScale_Legacy = 11.9                            # GoldenCheetah: curSpeed = curSpeedInternal / (1.19f * 10.0f);
 def Wheel2Speed(WheelSpeed):
-    return round(WheelSpeed / SpeedScale, 1)
+    global LegacyProtocol
+    
+    if LegacyProtocol:
+        return round(WheelSpeed / SpeedScale_Legacy, 2)
+    else:
+        return round(WheelSpeed / SpeedScale, 2)
 
 def Speed2Wheel(Speed):
-    return round(Speed * SpeedScale, 0)
+    global LegacyProtocol
+    
+    if LegacyProtocol:
+        return round(Speed * SpeedScale_Legacy, 0)        
+    else:
+        return round(Speed * SpeedScale, 0)
 
 #-------------------------------------------------------------------------------
 # Convert Grade (slope) to resistance
@@ -173,7 +179,7 @@ def Speed2Wheel(Speed):
 #   documents:      LOAD ~= (slope (in %) - 0.4) * 650
 #   ttyT1941.py:    SlopeScale =  2 * 5 * 130    = 1300
 #                   commented  = 13 * 5 * 10 * 5 = 3250
-#
+# 
 # TotalReverse, Issue #2:
 # ANT+ describes a simple physical model:
 #   Total resistance [N] = Gravitational Resistance + Rolling Resistance + Wind Resistance
@@ -183,7 +189,7 @@ def Speed2Wheel(Speed):
 # Load = Force [N] * 137 (the result of a fitting in ergo mode) one get:
 #
 # Load = 137 * 80 * 9.81 * slope_in_percent / 100
-#
+# 
 # SlopeScale = 137 * 80 * 9.81 / 100 = 1075
 #
 # Tests:
@@ -194,7 +200,7 @@ def Speed2Wheel(Speed):
 # Refer to ANT msgUnpage51_TrackResistance()
 #          where zwift grade does not seem to match the definition
 #-------------------------------------------------------------------------------
-def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
+def Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence):
     global LegacyProtocol
 
     if TargetGrade < -20 or TargetGrade > 30:
@@ -225,21 +231,21 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
         SlopeScale  = 137 * 9.81 / 100         # To be multiplied with UserAndBikeWeight
         SlopeOffset = -0.4
         rtn = int ( (TargetGrade - SlopeOffset) * SlopeScale * UserAndBikeWeight )
-
+        
         if LegacyProtocol:
             # Resistance is calculated for new interface, convert to Legacy
-            p   = Resistance2Power(rtn, WheelSpeed)
-            rtn = Power2Resistance(p, WheelSpeed, Cadence)
+            p   = Resistance2Power(rtn, SpeedKmh)
+            rtn = Power2Resistance(p, SpeedKmh, Cadence)
 
         if limit:
-            MaxRes = Power2Resistance(clv.ftp * 1.25, WheelSpeed, Cadence)
+            MaxRes = Power2Resistance(clv.ftp * 1.25, SpeedKmh, Cadence)
             rtn = int(min(MaxRes, rtn))       # Limit resistance to my max
             rtn = int(max(     0, rtn))       # No negative target resistance
 
     elif option == 2:
         #-----------------------------------------------------------------------
         # TargetGrade ftp-based ergo mode
-        # Resistance depends on the TargetGrade and the current WheelSpeed
+        # Resistance depends on the TargetGrade and the current speed
         # Power is lineair between -10% and 10%, independant on speed
         #-----------------------------------------------------------------------
         P_max = clv.ftp * 1.50                                              # Power at grade =  10%
@@ -250,16 +256,16 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
             P = max( 0.5  * clv.ftp, P)                                     # Minimum value
             P = min( 1.25 * clv.ftp, P)                                     # Maximum value
         P = int(P)
-        rtn   = Power2Resistance(P, WheelSpeed, Cadence)
-
+        rtn   = Power2Resistance(P, SpeedKmh, Cadence)
+        
         if debug.on(debug.Application):
             logfile.Write ("2: Grade=%4.1f, max=%3s, min=%3s, power=%3s, resistance=%5s" % (TargetGrade, P_max, P_min, P, rtn) )
 
     elif option == 3:
         #-----------------------------------------------------------------------
-        # TargetGrade ftp-based resistance mode;
-        #   I ride all in highest gear to get maximum WheelSpeed (best for Fortius)
-        #   Adjusting cadence (wheelspeed) influences required power.
+        # TargetGrade ftp-based resistance mode; 
+        #   I ride all in highest gear to get maximum speed (best for Fortius)
+        #   Adjusting cadence (speed) influences required power.
         #   No nead to change gears, although you are free to do so!
         #
         # Resistance depends on the TargetGrade (not the current speed)
@@ -290,22 +296,22 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
         # rL    = 15  # 25                        # teeth    cassette back / large
         # rS    = 15                              # teeth    cassette back / small
 
-
+        
         #------------------------------ Calculation for +20%, low cadence, 1.5 ftp
         up    = 20                              # %        slope gradient
         rpm   = 50                              # /min     low cadence
         d     = clv.tyre * clv.fS / clv.rL      # m        distance for one pedal-revolution
-        w     = Speed2Wheel(d * rpm * 60 / 1000)# mm/sec   WheelSpeed
+        s     = d * rpm * 60 / 1000             # km/hr    speed
         P_max = clv.ftp * clv.ResistanceH / 100 # Watt     higher power
-        R_max = Power2Resistance(P_max, w, rpm) # Resistance for this WheelSpeed at 50 rpm
+        R_max = Power2Resistance(P_max, s, rpm) # Resistance for this speed at 50 rpm
 
         #------------------------------ Calculation for -20%, high cadence, 1 ftp
         down  = -20                             # %        slope gradient
         rpm   = 100                             # /min     high cadence
         d     = clv.tyre * clv.fL / clv.rS      # m        distance for one pedal-revolution
-        w     = Speed2Wheel(d * rpm * 60 / 1000)# mm/sec   WheelSpeed
+        s     = d * rpm * 60 / 1000             # km/hr    speed
         P_min = clv.ftp * clv.ResistanceL / 100 # Watt     lower power
-        R_min = Power2Resistance(P_min, w, rpm) # Resistance for this WheelSpeed at 100 rpm
+        R_min = Power2Resistance(P_min, s, rpm) # Resistance for this speed at 100 rpm
 
         #--------------------------------------- Calculation for TargetGrade
         rtn   = int(R_min + ( (R_max - R_min) / (up - down) * (TargetGrade - down) ) )
@@ -320,7 +326,7 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
         # But target resistance at steep slopes (8%...20%) cannot be done and
         #       you must gear down seriously.
         #-----------------------------------------------------------------------
-        P       = PfietsNL(TargetGrade, UserAndBikeWeight, WheelSpeed)
+        P       = PfietsNL(TargetGrade, UserAndBikeWeight, SpeedKmh)
 
         #-----------------------------------------------------------------------
         # Initial versions limitted P to 1.50ftp
@@ -338,7 +344,7 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
         w       = d * rpm / 60 * 1000     # mm/sec   WheelSpeed
         P_max   = clv.ftp * 1.50          # Watt     higher power
 
-        P_fiets = PfietsNL(10, UserAndBikeWeight, w)         # Power at 10%up at 50 rpm in highest gear
+        P_fiets = PfietsNL(10, UserAndBikeWeight, Wheel2Speed(w))         # Power at 10%up at 50 rpm in highest gear
         factor  = min(1, P_max / P_fiets) # Reduction factor; <= 1
         if TargetGrade < 0: factor = 1
 
@@ -349,20 +355,20 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
         Px      = P * factor
 
         #-----------------------------------------------------------------------
-        # Translate power to resistance at the current wheelspeed
+        # Translate power to resistance at the current speed
         # Note that Power2Resistance() has its own limitations
         #-----------------------------------------------------------------------
-        rtn     = Power2Resistance(Px, WheelSpeed, Cadence)
-
+        rtn     = Power2Resistance(Px, SpeedKmh, Cadence)
+            
         if debug.on(debug.Application):
             logfile.Write ("%4.1f%%, P=%3.0fW(%3.0fW), R=%4.0f f=%4.2f" % \
                      (TargetGrade, P,     Px,        rtn,  factor) )
 
-    rtn = ResistanceAtLowSpeed(WheelSpeed, rtn)
+    rtn = ResistanceAtLowSpeed(SpeedKmh, rtn)
 
     return rtn
 
-def PfietsNL(TargetGrade, UserAndBikeWeight, WheelSpeed):
+def PfietsNL(TargetGrade, UserAndBikeWeight, SpeedKmh):
         #-----------------------------------------------------------------------
         # Thanks to https://www.fiets.nl/2016/05/02/de-natuurkunde-van-het-fietsen/
         # Required power = roll + air + slope + mechanical
@@ -370,20 +376,20 @@ def PfietsNL(TargetGrade, UserAndBikeWeight, WheelSpeed):
         c     = 0.004                           # roll-resistance constant
         m     = UserAndBikeWeight               # kg
         g     = 9.81                            # m/s2
-        v     = Wheel2Speed(WheelSpeed) / 3.6   # m/s       km/hr * 1000 / 3600
+        v     = SpeedKmh / 3.6                  # m/s       km/hr * 1000 / 3600
         Proll = c * m * g * v                   # Watt
-
+        
         p     = 1.205                           # air-density
         cdA   = 0.3                             # resistance factor
         w     =  0                              # wind-speed
         Pair  = 0.5 * p * cdA * (v+w)*(v+w)* v  # Watt
-
+        
         i     = TargetGrade
         Pslope= i/100 * m * g * v               # Watt
-
+        
         Pbike = 37
-
-        return Proll + Pair + Pslope + Pbike
+        
+        return Proll + Pair + Pslope + Pbike 
 
 #-------------------------------------------------------------------------------
 # G e t T r a i n e r
@@ -427,7 +433,7 @@ def GetTrainer():
                 msg = "GetTrainer - No backend, check libusb: " + str(e)
             else:
                 msg = "GetTrainer: " + str(e)
-
+    
     #---------------------------------------------------------------------------
     # Initialise trainer (if found)
     #---------------------------------------------------------------------------
@@ -441,7 +447,7 @@ def GetTrainer():
             LegacyProtocol = True
             if debug.on(debug.Function): logfile.Write ("GetTrainer - Found iMagic head unit")
             try:
-                fxload.loadHexFirmware(dev, imagic_fw)
+                os.system("fxload -I tacximagic.hex -d 3561:1902 -t fx -vv")    #load firmware
                 if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
                 time.sleep(5)
                 msg = "GetTrainer - iMagic head unit initialised"
@@ -452,10 +458,10 @@ def GetTrainer():
         #-----------------------------------------------------------------------
         # unintialised Fortius (as provided by antifier original code)
         #-----------------------------------------------------------------------
-        if trainer_type == tt_FortiusSB_nfw:
+        if trainer_type == tt_FortiusSB_nfw:                                                  
             if debug.on(debug.Function): logfile.Write ("GetTrainer - Found uninitialised Fortius head unit")
             try:
-                fxload.loadHexFirmware(dev, fortius_fw)
+                os.system("fxload-libusb.exe -I FortiusSWPID1942Renum.hex -t fx -vv")   # load firmware
                 if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
                 time.sleep(5)
                 dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=tt_FortiusB)
@@ -468,36 +474,38 @@ def GetTrainer():
             except:                                                     # not found
                 msg = "GetTrainer - Unable to initialise trainer"
                 dev = False
-
+      
         #-----------------------------------------------------------------------
         # Set configuration
         #-----------------------------------------------------------------------
         if dev != False:
             dev.set_configuration()
             if trainer_type == tt_iMagic:   dev.set_interface_altsetting(0, 1)
-            
-        #-----------------------------------------------------------------------
-        # InitialiseTrainer (will not read cadence until initialisation byte is sent)
-        #-----------------------------------------------------------------------
-        if dev != False && LegacyProtocol == False:
-            data = struct.pack (sc.unsigned_int, 0x00000002)
-            if debug.on(debug.Data2):
-                logfile.Write ("InitialiseTrainer data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
-            dev.write(0x02,data)
-
     #---------------------------------------------------------------------------
     # Done
     #---------------------------------------------------------------------------
     logfile.Write(msg)
     if debug.on(debug.Function):logfile.Write ("GetTrainer() returns, trainertype=" + hex(trainer_type))
     return dev, msg
+  
+#-------------------------------------------------------------------------------
+#  I n i t i a l i s e T r a i n e r
+#-------------------------------------------------------------------------------
+def InitialiseTrainer(dev):
+    # will not read cadence until initialisation byte is sent
+    data = struct.pack (sc.unsigned_int, 0x00000002)
+
+    if debug.on(debug.Data2):
+        logfile.Write ("InitialiseTrainer data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
+
+    dev.write(0x02,data)
 
 #-------------------------------------------------------------------------------
 # S e n d T o T r a i n e r
 #-------------------------------------------------------------------------------
 # input     devTrainer, Mode
 #           if Mode=modeResistance:  TargetPower or TargetGrade/Weight
-#                                    WheelSpeed and Cadence are reference for Power2Resistance
+#                                    Speed and Cadence are reference for Power2Resistance
 #           PedalEcho   - must be echoed
 #           Calibrate   - Resistance during calibration is specified
 #                         If =zero default is calculated
@@ -507,10 +515,10 @@ def GetTrainer():
 #
 # returns   None
 #-------------------------------------------------------------------------------
-def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, PedalEcho, WheelSpeed, Cadence, Calibrate, SimulateTrainer):
+def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, PedalEcho, SpeedKmh, Cadence, Calibrate, SimulateTrainer):
     global LegacyProtocol # As filled in GetTrainer()
 
-    if debug.on(debug.Function): logfile.Write ("SendToTrainer(%s, %s, %s, %s, %s, %s, %s)" % (TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, PedalEcho, WheelSpeed, Cadence))
+    if debug.on(debug.Function): logfile.Write ("SendToTrainer(%s, %s, %s, %s, %s, %s, %s)" % (TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, PedalEcho, SpeedKmh, Cadence))
 
     #---------------------------------------------------------------------------
     # Data buffer depends on trainer_type
@@ -551,15 +559,15 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
             Calibrate   = ( Calibrate + 8 ) * 130           # 0x0410
 
         if TargetMode == gui.mode_Power:
-            Target = Power2Resistance(TargetPower, WheelSpeed, Cadence)
+            Target = Power2Resistance(TargetPower, SpeedKmh, Cadence)
             if LegacyProtocol == False and Target < Calibrate:
                 Target = Calibrate                          # Avoid motor-function for low TargetPower
             Weight = 0x0a                                   # weight=0x0a is a good fly-wheel value
                                                             # UserAndBikeWeight is not used!
         elif TargetMode == gui.mode_Grade:
-            Target = Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence)
+            Target = Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence)
             Weight = 0x0a                                   # weight=0x0a is a good fly-wheel value
-                                                            # UserAndBikeWeight is not used!
+                                                            # UserAndBikeWeight is not used!        
                                                             #       an 100kg flywheels gives undesired behaviour :-)
         else:
             error = "SendToTrainer; Unsupported TargetMode %s" % TargetMode
@@ -585,7 +593,7 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
                 StartStop, StopWatch = 0,0  # GoldenCheetah sends 2-byte data
                                             #    in sendRunCommand() with
                                             #    StartStop always zero
-                                            # so we should be good like this
+                                            # so we should be good like this                                            
                 format = sc.no_alignment + fDesiredForceValue + fStartStop + fStopWatch
                 data   = struct.pack (format, DesiredForceValue, StartStop, StopWatch)
             else:
@@ -607,15 +615,15 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
                 devTrainer.write(0x02, data, 30)                             # send data to device
             except Exception as e:
                 logfile.Write ("SendToTrainer: USB WRITE ERROR " + str(e))
-
+  
 #-------------------------------------------------------------------------------
 # R e c e i v e F r o m T r a i n e r
 #-------------------------------------------------------------------------------
-# input     devTrainer
+# input     devTrainer     
 #
 # function  Read status from trainer
 #
-# returns   Speed, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
+# returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
 #
 # changes   2020-01-07 originally 'TargetResistance' was returned
 #                      for calibration, now CurrentResistance is also returned
@@ -634,7 +642,6 @@ def ReceiveFromTrainer(devTrainer):
     PedalEcho         = 0
     Speed             = 0
     TargetResistance  = 0
-    WheelSpeed        = 0
 
     #-----------------------------------------------------------------------------
     #  Read from trainer
@@ -728,7 +735,7 @@ def ReceiveFromTrainer(devTrainer):
         fChecksumMSB        = sc.unsigned_char
 
         fFiller49_63        = sc.pad * (63 - 48)# 49...63
-
+            
         format = sc.no_alignment + fDeviceSerial + fFiller2_7 + fYearProduction + \
                  fFiller9_11 + fHeartRate + fButtons + fHeartDetect + fErrorCount + \
                  fAxis0 + fAxis1 + fAxis2 + fAxis3 + fHeader + fDistance + fSpeed + \
@@ -746,16 +753,14 @@ def ReceiveFromTrainer(devTrainer):
                         tuple[nAxis0], tuple[nAxis1], tuple[nAxis2], tuple[nAxis3]  \
                         ))
 
-        WheelSpeed          = tuple[nSpeed]
-
         Cadence             = tuple[nCadence]
-        CurrentPower        = Resistance2Power(tuple[nCurrentResistance], WheelSpeed)
         HeartRate           = tuple[nHeartRate]
         PedalEcho           = tuple[nEvents]
         TargetResistance    = tuple[nTargetResistance]
         CurrentResistance   = tuple[nCurrentResistance]
         Speed               = Wheel2Speed(tuple[nSpeed])
-
+        CurrentPower        = Resistance2Power(tuple[nCurrentResistance], Speed)
+                
         Buttons             = tuple[nButtons]
         Axis                = tuple[nAxis1]
 
@@ -774,10 +779,10 @@ def ReceiveFromTrainer(devTrainer):
 
         nHeartRate          = 3                 # 4
         fHeartRate          = sc.unsigned_char
-
+        
         nStopWatch          = 4
         fStopWatch          = sc.unsigned_int   # 5,6,7,8
-
+        
         nCurrentResistance  = 5                 # 9
         fCurrentResistance  = sc.unsigned_char
 
@@ -810,10 +815,10 @@ def ReceiveFromTrainer(devTrainer):
 
         nFirmwareVersion    = 15                # 20
         fFirmwareVersion    = sc.unsigned_char
-
+        
         #---------------------------------------------------------------------------
         # Parse buffer
-        # Note that the button-bits have an inversed logic:
+        # Note that the button-bits have an inversed logic: 
         #   1=not pushed, 0=pushed. Hence the xor.
         #---------------------------------------------------------------------------
         format = sc.no_alignment + fStatusAndCursors + fSpeed + fCadence + fHeartRate + fStopWatch + fCurrentResistance + \
@@ -821,7 +826,6 @@ def ReceiveFromTrainer(devTrainer):
                  fYearProduction + fDeviceSerial + fFirmwareVersion
         tuple = struct.unpack (format, data)
 
-        WheelSpeed          = tuple[nSpeed]
         Cadence             = tuple[nCadence]
         HeartRate           = tuple[nHeartRate]
         PedalEcho           = tuple[nPedalSensor]
@@ -832,18 +836,18 @@ def ReceiveFromTrainer(devTrainer):
         Buttons             = ((tuple[nStatusAndCursors] & 0xf0) >> 4) ^ 0x0f
         Axis                = tuple[nAxis1]
 
-        CurrentPower        = Resistance2Power(CurrentResistance, WheelSpeed)
+        CurrentPower        = Resistance2Power(CurrentResistance, Speed)
 
         if debug.on(debug.Data2):
           logfile.Write ("ReceiveFromTrainer: hr=%s sp=%s CurrentResistance=%s pe=%s cad=%s axis=%s %s %s %s" % \
-                        (HeartRate, WheelSpeed, CurrentResistance, hex(PedalEcho), Cadence, \
+                        (HeartRate, Speed, CurrentResistance, hex(PedalEcho), Cadence, \
                         tuple[nAxis0], tuple[nAxis1], tuple[nAxis2], tuple[nAxis3]  \
                         ))
 
     else:
         Speed = "Not Found"
 
-    return Speed, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis
+    return Speed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis
 
 #-------------------------------------------------------------------------------
 # C a l i b r a t e S u p p o r t e d

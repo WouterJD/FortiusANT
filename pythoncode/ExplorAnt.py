@@ -313,7 +313,7 @@ if devAntDongle:
 
                 if clv.SimulateTrainer:
                     if True:
-                        SpeedKmh, WheelSpeed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
+                        SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
                             SimulateReceiveFromTrainer (TargetPower, CurrentPower)
                     else:
                         Cadence, CurrentPower, SpeedKmh, HeartRate = 98, 234, 35.6, 123
