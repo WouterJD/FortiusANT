@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-27"
+__version__ = "2020-03-02"
+# 2020-03-02    Speed = km/hr and only where required WheelSPeed is used.
 # 2020-02-27    GoldenCheetah calculations for LegacyProtocol used
 # 2020-02-26    CalibrateSupported() added
 #               For LegacyProtocol (iMagic) only modeResistance supported
