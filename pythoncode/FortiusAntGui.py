@@ -48,12 +48,12 @@ class staticVariables:
     LastFields = 0
     LastHeart  = 0
     IdleDone   = 0
-    SpeedMeter = 0 
+    SpeedMeter = 0
 
 # ------------------------------------------------------------------------------
 # Create the FortiusAnt frame
 # ------------------------------------------------------------------------------
-# Execute:      If this file is executed as main, the user-interface can be 
+# Execute:      If this file is executed as main, the user-interface can be
 #                   tested without the program functionality
 #               If this file is included, the following functions must be defined:
 #
@@ -61,8 +61,8 @@ class staticVariables:
 #               SetValues, ResetValues
 #               SetMessages
 #
-# Three functions to be provided: 
-#               callIdleFunction(self)     
+# Three functions to be provided:
+#               callIdleFunction(self)
 #               callLocateHW(self)          returns True/False
 #               callRunoff(self)
 #               callTacx2Dongle(self)
@@ -73,20 +73,20 @@ class frmFortiusAntGui(wx.Frame):
 		# Images are either in directory of the .py or embedded in .exe
         # ----------------------------------------------------------------------
         if getattr(sys, 'frozen', False):
-            FortiusAnt_ico = os.path.join(sys._MEIPASS, "FortiusAnt.ico")
-            FortiusAnt_jpg = os.path.join(sys._MEIPASS, "FortiusAnt.jpg")
-            Heart_jpg      = os.path.join(sys._MEIPASS, "Heart.jpg"     )
+            dirname = sys._MEIPASS
         else:
-            FortiusAnt_ico = "FortiusAnt.ico"
-            FortiusAnt_jpg = "FortiusAnt.jpg"
-            Heart_jpg      = "Heart.jpg"
+            dirname = os.path.dirname(__file__)
+
+        FortiusAnt_ico = os.path.join(dirname, "FortiusAnt.ico")
+        FortiusAnt_jpg = os.path.join(dirname, "FortiusAnt.jpg")
+        Heart_jpg      = os.path.join(dirname, "Heart.jpg"     )
 
         # ----------------------------------------------------------------------
 		# Default initial actions, bind functions to frame
         # ----------------------------------------------------------------------
         wx.Frame.__init__(self, parent, -1, WindowTitle, \
                style = wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
-        
+
         try:
             ico = wx.Icon(FortiusAnt_ico, wx.BITMAP_TYPE_ICO)
             self.SetIcon(ico)
@@ -106,13 +106,13 @@ class frmFortiusAntGui(wx.Frame):
             self.timer = wx.Timer(self, TIMER_ID)
             self.Bind(wx.EVT_TIMER, self.OnTimer)
             self.timer.Start(250)
-        
+
         # ----------------------------------------------------------------------
 		# Thread handling
         # ----------------------------------------------------------------------
         self.RunningSwitch = False
         self.CloseButtonPressed = False
-    
+
         # ----------------------------------------------------------------------
 		# Load Background image
         # ----------------------------------------------------------------------
@@ -149,17 +149,17 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# Calculate Width and X
         # ----------------------------------------------------------------------
-        # 
+        #
         # x [button] x [speed] x [revs] x [power] x
         #
         Margin  = 4
         ButtonX = Margin
         ButtonW = 80
-        
+
         SpeedWH     = int((BitmapW - ButtonW - 5 * Margin) / 3) # width/height equal (square)
         RevsWH      = SpeedWH
         PowerWH     = SpeedWH
-        
+
         SpeedX      = ButtonX + ButtonW + Margin
         RevsX       = SpeedX  + SpeedWH + Margin
         PowerX      = RevsX   + RevsWH  + Margin
@@ -167,10 +167,10 @@ class frmFortiusAntGui(wx.Frame):
         SpeedY      = Margin
         RevsY       = Margin
         PowerY      = Margin
-        
+
         BitmapX     = 0
         BitmapY     = 0
-        
+
         self.SetSize (BitmapX + BitmapW + 15, BitmapY + BitmapH)
 
         # ----------------------------------------------------------------------
@@ -180,7 +180,7 @@ class frmFortiusAntGui(wx.Frame):
         TicksFontSize       = 10
         bg                  = wx.Colour(220,220,220) # Background colour for self.Speedometers
         colorTacxFortius    = wx.Colour(120,1940,227)
-        
+
         # ----------------------------------------------------------------------
 		# self.Speedometer
         # ----------------------------------------------------------------------
@@ -191,7 +191,7 @@ class frmFortiusAntGui(wx.Frame):
             self.Speed.SetSpeedBackground(bg)
             self.Speed.SetFirstGradientColour(colorTacxFortius)             # Colours for SM_DRAW_GRADIENT
             self.Speed.SetSecondGradientColour(wx.WHITE)
-            self.Speed.DrawExternalArc(True)                                # Do (Not) Draw The External (Container) Arc. 
+            self.Speed.DrawExternalArc(True)                                # Do (Not) Draw The External (Container) Arc.
             self.Speed.SetArcColour(wx.BLACK)
 
             self.Speed.SetAngleRange(-math.pi / 6, 7 * math.pi / 6)         # Set The Region Of Existence Of self.SpeedMeter (Always In Radians!!!!)
@@ -243,7 +243,7 @@ class frmFortiusAntGui(wx.Frame):
             self.Revs.SetSpeedBackground(bg)
             self.Revs.SetFirstGradientColour(wx.BLUE)                       # Colours for SM_DRAW_GRADIENT
             self.Revs.SetSecondGradientColour(wx.WHITE)
-            self.Revs.DrawExternalArc(True)                                 # Do (Not) Draw The External (Container) Arc. 
+            self.Revs.DrawExternalArc(True)                                 # Do (Not) Draw The External (Container) Arc.
             self.Revs.SetArcColour(wx.BLUE)
 
             self.Revs.SetAngleRange(-math.pi / 6, 7 * math.pi / 6)          # Set The Region Of Existence Of self.RevsMeter (Always In Radians!!!!)
@@ -263,7 +263,7 @@ class frmFortiusAntGui(wx.Frame):
             intervals = range(Min, Max+1, Step)                             # Create The Intervals That Will Divide Our self.SpeedMeter In Sectors
             self.Revs.SetIntervals(intervals)
 
-            colours = [wx.BLACK]                                            # Assign colours, per range 
+            colours = [wx.BLACK]                                            # Assign colours, per range
             i = 2
             while i <= NrIntervals:
                 if i * Step <= 40:                                          # <= 40 is special case for resistance calculation
@@ -278,7 +278,7 @@ class frmFortiusAntGui(wx.Frame):
                     colours.append(wx.RED)
                 i += 1
             self.Revs.SetIntervalColours(colours)
-            
+
             ticks = [str(interval) for interval in intervals]               # Assign The Ticks: Here They Are Simply The String Equivalent Of The Intervals
             self.Revs.SetTicks(ticks)
             self.Revs.SetTicksColour(wx.WHITE)                        		# Set The Ticks/Tick Markers Colour
@@ -297,7 +297,7 @@ class frmFortiusAntGui(wx.Frame):
             self.Power.SetSpeedBackground(bg)
             self.Power.SetFirstGradientColour(colorTacxFortius)             # Colours for SM_DRAW_GRADIENT
             self.Power.SetSecondGradientColour(wx.WHITE)
-            self.Power.DrawExternalArc(True)                                # Do (Not) Draw The External (Container) Arc. 
+            self.Power.DrawExternalArc(True)                                # Do (Not) Draw The External (Container) Arc.
             self.Power.SetArcColour(wx.BLACK)
 
             self.Power.SetAngleRange(-math.pi / 6, 7 * math.pi / 6)         # Set The Region Of Existence Of self.PowerMeter (Always In Radians!!!!)
@@ -422,7 +422,7 @@ class frmFortiusAntGui(wx.Frame):
         self.btnLocateHW.SetPosition((ButtonX, self.btnLocateHW.Size[1]))
         self.btnLocateHW.SetFocus()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnLocateHW, self.btnLocateHW)
-        
+
         self.btnRunoff   = wx.Button(self, label="Runoff", size=(ButtonW, -1))
         self.btnRunoff.SetPosition((ButtonX, self.btnLocateHW.Position[1] + self.btnLocateHW.Size[1]))
         self.btnRunoff.Disable()
@@ -461,11 +461,11 @@ class frmFortiusAntGui(wx.Frame):
             print("callIdleFunction not defined by application class")
             staticVariables.IdleDone += 1
         return True
-    
+
     def callLocateHW(self):
         print("callLocateHW not defined by application class")
         return True
-        
+
     def callRunoff(self):
         print("callRunoff not defined by application class")
         f = 1
@@ -478,7 +478,7 @@ class frmFortiusAntGui(wx.Frame):
                 self.RunningSwitch == False
         self.ResetValues()
         return True
-        
+
     def callTacx2Dongle(self):
         print("callTacx2Dongle not defined by application class")
 #       tr = 255                                    # experimental purpose only
@@ -629,7 +629,7 @@ class frmFortiusAntGui(wx.Frame):
 
             elif iTargetMode == mode_Grade:
                 s = "%2.0f%%" % fTargetGrade
-                if iTargetPower > 0:                                            # 2020-01-22 
+                if iTargetPower > 0:                                            # 2020-01-22
                     s += "%iW" % iTargetPower                                   # Target power added for reference
                 self.txtTarget.SetValue(s + suffix)
 
@@ -644,7 +644,7 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
         # If there is a HeartRate, bounce the image
         # We pass here every 0.250 second = 400 times/minute
-        # Do not process more often than heartbeat 
+        # Do not process more often than heartbeat
         # ----------------------------------------------------------------------
         delta = time.time() - staticVariables.LastHeart # Delta time since previous
         if delta >= 60 / max(60, iHeartRate):           # At HeartRate, not slower than 1/second
@@ -678,7 +678,7 @@ class frmFortiusAntGui(wx.Frame):
                     self.HeartRateX  -= 2               # use the 40x40 area
                     self.HeartRateY  -= 2               # use the 40x40 area
                     self.Refresh()
-                    
+
             else:
                 self.txtHeartRate.Hide()
 
@@ -702,7 +702,7 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
         dc = wx.PaintDC(self)
         dc.DrawBitmap(self.BackgroundBitmap, 0, 0)          # LeftTop in pixels
-        
+
         # ----------------------------------------------------------------------
         # Draw HeartRate
         #       Image functions done once, instead of every OnPaint()
@@ -734,9 +734,9 @@ class frmFortiusAntGui(wx.Frame):
             # This is caused by setting focus from the thread, for which I did
             #   not find a proper solution
             if self.btnStop.HasFocus(): self.btnStart.SetFocus()
-            
+
             self.callIdleFunction()
-    
+
     # --------------------------------------------------------------------------
     # O n C l i c k _ b t n L o c a t e H W
     # --------------------------------------------------------------------------
@@ -779,8 +779,8 @@ class frmFortiusAntGui(wx.Frame):
         self.btnStop.SetFocus()
 
         if self.RunningSwitch == False:
-            thread = threading.Thread(target=self.OnClick_btnRunoff_Thread)  
-            thread.start() 
+            thread = threading.Thread(target=self.OnClick_btnRunoff_Thread)
+            thread.start()
 
     def OnClick_btnRunoff_Thread(self):
         if __name__ == "__main__": print ("OnClick_btnRunoff_Thread()")
@@ -791,7 +791,7 @@ class frmFortiusAntGui(wx.Frame):
         self.OnClick_btnStop()                  # Thread may stop for any reason
                                                 # Do GUI actions to enable the
                                                 # correct buttons.
-        
+
         if self.CloseButtonPressed == True:
             self.Close()
 
@@ -813,10 +813,10 @@ class frmFortiusAntGui(wx.Frame):
         self.btnStart.Disable()
         self.btnRunoff.Disable()
         self.btnStop.SetFocus()
-        
+
         if self.RunningSwitch == False:
-            thread = threading.Thread(target=self.OnClick_btnStart_Thread)  
-            thread.start() 
+            thread = threading.Thread(target=self.OnClick_btnStart_Thread)
+            thread.start()
 
     def OnClick_btnStart_Thread(self):
         if __name__ == "__main__": print ("OnClick_btnStart_Thread()")
@@ -827,7 +827,7 @@ class frmFortiusAntGui(wx.Frame):
         self.OnClick_btnStop()                  # Thread may stop for any reason
                                                 # Do GUI actions to enable the
                                                 # correct buttons.
-        
+
         if self.CloseButtonPressed == True:
             self.Close()
 
@@ -864,7 +864,7 @@ class frmFortiusAntGui(wx.Frame):
     # --------------------------------------------------------------------------
     def OnClose(self, event):
         if __name__ == "__main__": print("OnClose()")
-        
+
         if self.RunningSwitch == True:          # Thread is running
             self.RunningSwitch = False          # Stop the thread
             self.CloseButtonPressed = True      # Indicate to stop program
