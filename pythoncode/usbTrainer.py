@@ -2,6 +2,8 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-02-27"
+# 2020-03-02    InitialiseTrainer() code moved into GetTrainer(); new interface
+#               only
 # 2020-02-27    GoldenCheetah calculations for LegacyProtocol used
 # 2020-02-26    CalibrateSupported() added
 #               For LegacyProtocol (iMagic) only modeResistance supported
@@ -10,7 +12,7 @@ __version__ = "2020-02-27"
 # 2020-02-25    added:   idVendor_Tacx (I do not like constants in code)
 #               changed: firmware command to be executed to be confirmed (fxload...)
 #                        struct-definition: 'sc.no_alignment + ' added
-#               
+#
 # 2020-02-24    added: trainer_types defined (tt_) and iMagic added
 #                      LegacyProtocol added
 #               todo:  firmware command to be executed to be provided
@@ -35,6 +37,7 @@ import logfile
 import structConstants   as sc
 import FortiusAntGui     as gui
 import FortiusAntCommand as cmd
+import fxload
 
 #-------------------------------------------------------------------------------
 # Globals
@@ -63,10 +66,17 @@ modeResistance  = 2
 modeCalibrate   = 3
 
 #-------------------------------------------------------------------------------
+# path to firmware files
+#-------------------------------------------------------------------------------
+dirname = os.path.dirname(__file__)
+imagic_fw = os.path.join(dirname, '../supportfiles/tacximagic_1902_firmware.hex')
+fortius_fw = os.path.join(dirname, '../supportfiles/tacxfortius_1942_firmware.hex')
+
+#-------------------------------------------------------------------------------
 # Convert Power (Watt) <--> Resistance (presumably Nm)
 #
 #            Power = Torque (Nm) * Speed (rad/s)
-# <==>       Power = Resistance * WheelSpeed / factor 
+# <==>       Power = Resistance * WheelSpeed / factor
 # and   Resistance = Power / WheelSpeed * factor
 #
 # We assume resistance is something like Nm
@@ -81,16 +91,16 @@ modeCalibrate   = 3
 # ad c. 200 W and 10 km/hr
 #       R = 200 * 128866 / (10 * 301) = 8562
 #
-#       Tacx Fortius is said to have a range of 50...1000Watt, 
+#       Tacx Fortius is said to have a range of 50...1000Watt,
 #           let's calculate at 50km/hr:
 #       R = 1000 * 128866 / (50 * 301) = 8562
 #           I leave it to you to test whether you can go over this resistance at
 #           high speeds :-)
 #
-#    My personal experience already showed that the Tacx Fortius works well 
+#    My personal experience already showed that the Tacx Fortius works well
 #       at higher speeds and here is the explanation!
 #
-#    Conclusion: for rider with ftp=250 (or more) who wants to do low-speed, 
+#    Conclusion: for rider with ftp=250 (or more) who wants to do low-speed,
 #       low-cadence (MTB) training, this is not the machine!
 #-------------------------------------------------------------------------------
 # legacyResistance2Power and vv for iMagic, using legacy protocol
@@ -145,7 +155,7 @@ def ResistanceAtLowSpeed(WheelSpeed, Resistance):
 # Convert WheelSpeed --> Speed in km/hr
 # WheelSpeed = 1 mm/sec <==> 1.000.000 / 3600 km/hr = 1/278 km/hr
 # TotalReverse: Other implementations are using values between 1/277 and 1/360.
-# A practical test shows that Cadence=92 gives 40km/hr at a given ratio 
+# A practical test shows that Cadence=92 gives 40km/hr at a given ratio
 #		factor 289.75 gives a slightly higher speed
 #		factor 301 would be good (8-11-2019)
 #-------------------------------------------------------------------------------
@@ -163,7 +173,7 @@ def Speed2Wheel(Speed):
 #   documents:      LOAD ~= (slope (in %) - 0.4) * 650
 #   ttyT1941.py:    SlopeScale =  2 * 5 * 130    = 1300
 #                   commented  = 13 * 5 * 10 * 5 = 3250
-# 
+#
 # TotalReverse, Issue #2:
 # ANT+ describes a simple physical model:
 #   Total resistance [N] = Gravitational Resistance + Rolling Resistance + Wind Resistance
@@ -173,7 +183,7 @@ def Speed2Wheel(Speed):
 # Load = Force [N] * 137 (the result of a fitting in ergo mode) one get:
 #
 # Load = 137 * 80 * 9.81 * slope_in_percent / 100
-# 
+#
 # SlopeScale = 137 * 80 * 9.81 / 100 = 1075
 #
 # Tests:
@@ -215,7 +225,7 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
         SlopeScale  = 137 * 9.81 / 100         # To be multiplied with UserAndBikeWeight
         SlopeOffset = -0.4
         rtn = int ( (TargetGrade - SlopeOffset) * SlopeScale * UserAndBikeWeight )
-        
+
         if LegacyProtocol:
             # Resistance is calculated for new interface, convert to Legacy
             p   = Resistance2Power(rtn, WheelSpeed)
@@ -241,13 +251,13 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
             P = min( 1.25 * clv.ftp, P)                                     # Maximum value
         P = int(P)
         rtn   = Power2Resistance(P, WheelSpeed, Cadence)
-        
+
         if debug.on(debug.Application):
             logfile.Write ("2: Grade=%4.1f, max=%3s, min=%3s, power=%3s, resistance=%5s" % (TargetGrade, P_max, P_min, P, rtn) )
 
     elif option == 3:
         #-----------------------------------------------------------------------
-        # TargetGrade ftp-based resistance mode; 
+        # TargetGrade ftp-based resistance mode;
         #   I ride all in highest gear to get maximum WheelSpeed (best for Fortius)
         #   Adjusting cadence (wheelspeed) influences required power.
         #   No nead to change gears, although you are free to do so!
@@ -280,7 +290,7 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
         # rL    = 15  # 25                        # teeth    cassette back / large
         # rS    = 15                              # teeth    cassette back / small
 
-        
+
         #------------------------------ Calculation for +20%, low cadence, 1.5 ftp
         up    = 20                              # %        slope gradient
         rpm   = 50                              # /min     low cadence
@@ -343,7 +353,7 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence):
         # Note that Power2Resistance() has its own limitations
         #-----------------------------------------------------------------------
         rtn     = Power2Resistance(Px, WheelSpeed, Cadence)
-            
+
         if debug.on(debug.Application):
             logfile.Write ("%4.1f%%, P=%3.0fW(%3.0fW), R=%4.0f f=%4.2f" % \
                      (TargetGrade, P,     Px,        rtn,  factor) )
@@ -362,18 +372,18 @@ def PfietsNL(TargetGrade, UserAndBikeWeight, WheelSpeed):
         g     = 9.81                            # m/s2
         v     = Wheel2Speed(WheelSpeed) / 3.6   # m/s       km/hr * 1000 / 3600
         Proll = c * m * g * v                   # Watt
-        
+
         p     = 1.205                           # air-density
         cdA   = 0.3                             # resistance factor
         w     =  0                              # wind-speed
         Pair  = 0.5 * p * cdA * (v+w)*(v+w)* v  # Watt
-        
+
         i     = TargetGrade
         Pslope= i/100 * m * g * v               # Watt
-        
+
         Pbike = 37
-        
-        return Proll + Pair + Pslope + Pbike 
+
+        return Proll + Pair + Pslope + Pbike
 
 #-------------------------------------------------------------------------------
 # G e t T r a i n e r
@@ -417,7 +427,7 @@ def GetTrainer():
                 msg = "GetTrainer - No backend, check libusb: " + str(e)
             else:
                 msg = "GetTrainer: " + str(e)
-    
+
     #---------------------------------------------------------------------------
     # Initialise trainer (if found)
     #---------------------------------------------------------------------------
@@ -431,7 +441,7 @@ def GetTrainer():
             LegacyProtocol = True
             if debug.on(debug.Function): logfile.Write ("GetTrainer - Found iMagic head unit")
             try:
-                os.system("fxload -I tacximagic.hex -d 3561:1902 -t fx -vv")    #load firmware
+                fxload.loadHexFirmware(dev, imagic_fw)
                 if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
                 time.sleep(5)
                 msg = "GetTrainer - iMagic head unit initialised"
@@ -442,10 +452,10 @@ def GetTrainer():
         #-----------------------------------------------------------------------
         # unintialised Fortius (as provided by antifier original code)
         #-----------------------------------------------------------------------
-        if trainer_type == tt_FortiusSB_nfw:                                                  
+        if trainer_type == tt_FortiusSB_nfw:
             if debug.on(debug.Function): logfile.Write ("GetTrainer - Found uninitialised Fortius head unit")
             try:
-                os.system("fxload-libusb.exe -I FortiusSWPID1942Renum.hex -t fx -vv")   # load firmware
+                fxload.loadHexFirmware(dev, fortius_fw)
                 if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
                 time.sleep(5)
                 dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=tt_FortiusB)
@@ -458,7 +468,7 @@ def GetTrainer():
             except:                                                     # not found
                 msg = "GetTrainer - Unable to initialise trainer"
                 dev = False
-      
+
         #-----------------------------------------------------------------------
         # Set configuration
         #-----------------------------------------------------------------------
@@ -466,10 +476,9 @@ def GetTrainer():
             dev.set_configuration()
             if trainer_type == tt_iMagic:   dev.set_interface_altsetting(0, 1)
             
-        #-------------------------------------------------------------------------------
-        #  I n i t i a l i s e T r a i n e r
-        # will not read cadence until initialisation byte is sent
-        #-------------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
+        # InitialiseTrainer (will not read cadence until initialisation byte is sent)
+        #-----------------------------------------------------------------------
         if dev != False && LegacyProtocol == False:
             data = struct.pack (sc.unsigned_int, 0x00000002)
             if debug.on(debug.Data2):
@@ -550,7 +559,7 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
         elif TargetMode == gui.mode_Grade:
             Target = Grade2Resistance(TargetGrade, UserAndBikeWeight, WheelSpeed, Cadence)
             Weight = 0x0a                                   # weight=0x0a is a good fly-wheel value
-                                                            # UserAndBikeWeight is not used!        
+                                                            # UserAndBikeWeight is not used!
                                                             #       an 100kg flywheels gives undesired behaviour :-)
         else:
             error = "SendToTrainer; Unsupported TargetMode %s" % TargetMode
@@ -576,7 +585,7 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
                 StartStop, StopWatch = 0,0  # GoldenCheetah sends 2-byte data
                                             #    in sendRunCommand() with
                                             #    StartStop always zero
-                                            # so we should be good like this                                            
+                                            # so we should be good like this
                 format = sc.no_alignment + fDesiredForceValue + fStartStop + fStopWatch
                 data   = struct.pack (format, DesiredForceValue, StartStop, StopWatch)
             else:
@@ -598,11 +607,11 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
                 devTrainer.write(0x02, data, 30)                             # send data to device
             except Exception as e:
                 logfile.Write ("SendToTrainer: USB WRITE ERROR " + str(e))
-  
+
 #-------------------------------------------------------------------------------
 # R e c e i v e F r o m T r a i n e r
 #-------------------------------------------------------------------------------
-# input     devTrainer     
+# input     devTrainer
 #
 # function  Read status from trainer
 #
@@ -719,7 +728,7 @@ def ReceiveFromTrainer(devTrainer):
         fChecksumMSB        = sc.unsigned_char
 
         fFiller49_63        = sc.pad * (63 - 48)# 49...63
-            
+
         format = sc.no_alignment + fDeviceSerial + fFiller2_7 + fYearProduction + \
                  fFiller9_11 + fHeartRate + fButtons + fHeartDetect + fErrorCount + \
                  fAxis0 + fAxis1 + fAxis2 + fAxis3 + fHeader + fDistance + fSpeed + \
@@ -746,7 +755,7 @@ def ReceiveFromTrainer(devTrainer):
         TargetResistance    = tuple[nTargetResistance]
         CurrentResistance   = tuple[nCurrentResistance]
         Speed               = Wheel2Speed(tuple[nSpeed])
-        
+
         Buttons             = tuple[nButtons]
         Axis                = tuple[nAxis1]
 
@@ -765,10 +774,10 @@ def ReceiveFromTrainer(devTrainer):
 
         nHeartRate          = 3                 # 4
         fHeartRate          = sc.unsigned_char
-        
+
         nStopWatch          = 4
         fStopWatch          = sc.unsigned_int   # 5,6,7,8
-        
+
         nCurrentResistance  = 5                 # 9
         fCurrentResistance  = sc.unsigned_char
 
@@ -801,10 +810,10 @@ def ReceiveFromTrainer(devTrainer):
 
         nFirmwareVersion    = 15                # 20
         fFirmwareVersion    = sc.unsigned_char
-        
+
         #---------------------------------------------------------------------------
         # Parse buffer
-        # Note that the button-bits have an inversed logic: 
+        # Note that the button-bits have an inversed logic:
         #   1=not pushed, 0=pushed. Hence the xor.
         #---------------------------------------------------------------------------
         format = sc.no_alignment + fStatusAndCursors + fSpeed + fCadence + fHeartRate + fStopWatch + fCurrentResistance + \
@@ -823,7 +832,7 @@ def ReceiveFromTrainer(devTrainer):
         Buttons             = ((tuple[nStatusAndCursors] & 0xf0) >> 4) ^ 0x0f
         Axis                = tuple[nAxis1]
 
-        CurrentPower        = legacyResistance2Power(CurrentResistance, WheelSpeed)
+        CurrentPower        = Resistance2Power(CurrentResistance, WheelSpeed)
 
         if debug.on(debug.Data2):
           logfile.Write ("ReceiveFromTrainer: hr=%s sp=%s CurrentResistance=%s pe=%s cad=%s axis=%s %s %s %s" % \
