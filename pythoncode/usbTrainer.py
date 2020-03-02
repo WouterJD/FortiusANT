@@ -300,7 +300,7 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence):
         up    = 20                              # %        slope gradient
         rpm   = 50                              # /min     low cadence
         d     = clv.tyre * clv.fS / clv.rL      # m        distance for one pedal-revolution
-        s     = d * rpm * 60 / 1000             # mm/sec   speed
+        s     = d * rpm * 60 / 1000             # km/hr    speed
         P_max = clv.ftp * clv.ResistanceH / 100 # Watt     higher power
         R_max = Power2Resistance(P_max, s, rpm) # Resistance for this speed at 50 rpm
 
@@ -308,7 +308,7 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence):
         down  = -20                             # %        slope gradient
         rpm   = 100                             # /min     high cadence
         d     = clv.tyre * clv.fL / clv.rS      # m        distance for one pedal-revolution
-        s     = d * rpm * 60 / 1000             # mm/sec   speed
+        s     = d * rpm * 60 / 1000             # km/hr    speed
         P_min = clv.ftp * clv.ResistanceL / 100 # Watt     lower power
         R_min = Power2Resistance(P_min, s, rpm) # Resistance for this speed at 100 rpm
 
