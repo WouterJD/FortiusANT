@@ -269,9 +269,6 @@ def LocateHW(self):
         else:
             devTrainer, msg = usbTrainer.GetTrainer()
             SetTacxMsg(self, msg)
-            if devTrainer:
-                SetTacxMsg(self, msg)
-                usbTrainer.InitialiseTrainer(devTrainer)     #initialise trainer
 
     #---------------------------------------------------------------------------
     # Done

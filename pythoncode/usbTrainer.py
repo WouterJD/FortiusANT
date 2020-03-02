@@ -2,6 +2,8 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-02-27"
+# 2020-03-02    InitialiseTrainer() code moved into GetTrainer(); new interface
+#               only
 # 2020-02-27    GoldenCheetah calculations for LegacyProtocol used
 # 2020-02-26    CalibrateSupported() added
 #               For LegacyProtocol (iMagic) only modeResistance supported
@@ -473,24 +475,22 @@ def GetTrainer():
         if dev != False:
             dev.set_configuration()
             if trainer_type == tt_iMagic:   dev.set_interface_altsetting(0, 1)
+            
+        #-----------------------------------------------------------------------
+        # InitialiseTrainer (will not read cadence until initialisation byte is sent)
+        #-----------------------------------------------------------------------
+        if dev != False && LegacyProtocol == False:
+            data = struct.pack (sc.unsigned_int, 0x00000002)
+            if debug.on(debug.Data2):
+                logfile.Write ("InitialiseTrainer data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
+            dev.write(0x02,data)
+
     #---------------------------------------------------------------------------
     # Done
     #---------------------------------------------------------------------------
     logfile.Write(msg)
     if debug.on(debug.Function):logfile.Write ("GetTrainer() returns, trainertype=" + hex(trainer_type))
     return dev, msg
-
-#-------------------------------------------------------------------------------
-#  I n i t i a l i s e T r a i n e r
-#-------------------------------------------------------------------------------
-def InitialiseTrainer(dev):
-    # will not read cadence until initialisation byte is sent
-    data = struct.pack (sc.unsigned_int, 0x00000002)
-
-    if debug.on(debug.Data2):
-        logfile.Write ("InitialiseTrainer data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
-
-    dev.write(0x02,data)
 
 #-------------------------------------------------------------------------------
 # S e n d T o T r a i n e r
