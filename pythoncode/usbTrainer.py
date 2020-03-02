@@ -832,7 +832,7 @@ def ReceiveFromTrainer(devTrainer):
         Buttons             = ((tuple[nStatusAndCursors] & 0xf0) >> 4) ^ 0x0f
         Axis                = tuple[nAxis1]
 
-        CurrentPower        = legacyResistance2Power(CurrentResistance, WheelSpeed)
+        CurrentPower        = Resistance2Power(CurrentResistance, WheelSpeed)
 
         if debug.on(debug.Data2):
           logfile.Write ("ReceiveFromTrainer: hr=%s sp=%s CurrentResistance=%s pe=%s cad=%s axis=%s %s %s %s" % \
