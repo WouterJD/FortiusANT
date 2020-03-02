@@ -3,6 +3,8 @@
 #-------------------------------------------------------------------------------
 __version__ = "2020-03-02"
 # 2020-03-02    Speed = km/hr and only where required WheelSPeed is used.
+# 2020-03-02    InitialiseTrainer() code moved into GetTrainer(); new interface
+#               only
 # 2020-02-27    GoldenCheetah calculations for LegacyProtocol used
 # 2020-02-26    CalibrateSupported() added
 #               For LegacyProtocol (iMagic) only modeResistance supported
@@ -36,6 +38,7 @@ import logfile
 import structConstants   as sc
 import FortiusAntGui     as gui
 import FortiusAntCommand as cmd
+import fxload
 
 #-------------------------------------------------------------------------------
 # Globals
@@ -62,6 +65,13 @@ CancelButton    = 8
 modeStop        = 0
 modeResistance  = 2
 modeCalibrate   = 3
+
+#-------------------------------------------------------------------------------
+# path to firmware files
+#-------------------------------------------------------------------------------
+dirname = os.path.dirname(__file__)
+imagic_fw = os.path.join(dirname, '../supportfiles/tacximagic_1902_firmware.hex')
+fortius_fw = os.path.join(dirname, '../supportfiles/tacxfortius_1942_firmware.hex')
 
 #-------------------------------------------------------------------------------
 # Convert Power (Watt) <--> Resistance (presumably Nm)
@@ -447,7 +457,7 @@ def GetTrainer():
             LegacyProtocol = True
             if debug.on(debug.Function): logfile.Write ("GetTrainer - Found iMagic head unit")
             try:
-                os.system("fxload -I tacximagic.hex -d 3561:1902 -t fx -vv")    #load firmware
+                fxload.loadHexFirmware(dev, imagic_fw)
                 if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
                 time.sleep(5)
                 msg = "GetTrainer - iMagic head unit initialised"
@@ -461,7 +471,7 @@ def GetTrainer():
         if trainer_type == tt_FortiusSB_nfw:                                                  
             if debug.on(debug.Function): logfile.Write ("GetTrainer - Found uninitialised Fortius head unit")
             try:
-                os.system("fxload-libusb.exe -I FortiusSWPID1942Renum.hex -t fx -vv")   # load firmware
+                fxload.loadHexFirmware(dev, fortius_fw)
                 if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
                 time.sleep(5)
                 dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=tt_FortiusB)
@@ -481,24 +491,23 @@ def GetTrainer():
         if dev != False:
             dev.set_configuration()
             if trainer_type == tt_iMagic:   dev.set_interface_altsetting(0, 1)
+
+        #-----------------------------------------------------------------------
+        # InitialiseTrainer (will not read cadence until initialisation byte is sent)
+        #-----------------------------------------------------------------------
+        if dev != False and LegacyProtocol == False:
+            data = struct.pack (sc.unsigned_int, 0x00000002)
+            if debug.on(debug.Data2):
+                logfile.Write ("InitialiseTrainer data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
+            dev.write(0x02,data)
+
     #---------------------------------------------------------------------------
     # Done
     #---------------------------------------------------------------------------
     logfile.Write(msg)
     if debug.on(debug.Function):logfile.Write ("GetTrainer() returns, trainertype=" + hex(trainer_type))
     return dev, msg
-  
-#-------------------------------------------------------------------------------
-#  I n i t i a l i s e T r a i n e r
-#-------------------------------------------------------------------------------
-def InitialiseTrainer(dev):
-    # will not read cadence until initialisation byte is sent
-    data = struct.pack (sc.unsigned_int, 0x00000002)
 
-    if debug.on(debug.Data2):
-        logfile.Write ("InitialiseTrainer data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
-
-    dev.write(0x02,data)
 
 #-------------------------------------------------------------------------------
 # S e n d T o T r a i n e r
