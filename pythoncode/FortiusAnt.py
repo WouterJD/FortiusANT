@@ -3,6 +3,7 @@
 #-------------------------------------------------------------------------------
 __version__ = "2020-03-02"
 WindowTitle = "Fortius Antifier v2.3"
+# 2020-03-03    Format error resolved
 # 2020-03-02    iMagic supported, thanks to Julian Pfefferkorn
 # 2020-02-27    FE data page 252 ignored
 #               PrintWarnings added for documentation
@@ -697,7 +698,7 @@ def Tacx2Dongle(self):
                         # Data page 252 ????
                         #-------------------------------------------------------
                         elif DataPageNumber == 252 and (PrintWarnings or debug.on(debug.Data1)):
-                            logfile.Write('FE data page 252 ignored. info=%' % logfile.HexSpace(info))
+                            logfile.Write('FE data page 252 ignored. info=%s' % logfile.HexSpace(info))
                             pass
                             
                         #-------------------------------------------------------
