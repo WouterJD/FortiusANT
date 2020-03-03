@@ -164,8 +164,8 @@ def ResistanceAtLowSpeed(SpeedKmh, Resistance):
 #		factor 289.75 gives a slightly higher speed
 #		factor 301 would be good (8-11-2019)
 #-------------------------------------------------------------------------------
-SpeedScale = 301							        # TotalReverse: 289.75
-SpeedScale_Legacy = 11.9                            # GoldenCheetah: curSpeed = curSpeedInternal / (1.19f * 10.0f);
+SpeedScale = 301         # TotalReverse: 289.75
+SpeedScale_Legacy = 11.9 # GoldenCheetah: curSpeed = curSpeedInternal / (1.19f * 10.0f);
 def Wheel2Speed(WheelSpeed):
     global LegacyProtocol
     
