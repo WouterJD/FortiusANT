@@ -2,7 +2,7 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-03-02"
-# 2020-03-02    Speed = km/hr and only where required WheelSPeed is used.
+# 2020-03-02    Speed = km/hr and only where required WheelSpeed is used.
 # 2020-03-02    InitialiseTrainer() code moved into GetTrainer(); new interface
 #               only
 # 2020-02-27    GoldenCheetah calculations for LegacyProtocol used
@@ -116,7 +116,7 @@ def Resistance2Power(Resistance, SpeedKmh):
     WheelSpeed = Speed2Wheel(SpeedKmh)
 
     if LegacyProtocol:
-        # GoldenCheetay: curPower = ((curResistance * 0.0036f) + 0.2f) * curSpeedInternal;
+        # GoldenCheetah: curPower = ((curResistance * 0.0036f) + 0.2f) * curSpeedInternal;
         return round(((Resistance / legacyPowerResistanceFactor) + 0.2) * WheelSpeed, 1)
     else:
         return round(Resistance / PowerResistanceFactor * WheelSpeed, 1)
@@ -130,7 +130,7 @@ def Power2Resistance(PowerInWatt, SpeedKmh, Cadence):
         rtn = 0
         if WheelSpeed > 0:
             # instead of brakeCalibrationFactor use PowerFactor -p
-            # GoldenCheetay: setResistance = (((load  / curSpeedInternal) - 0.2f) / 0.0036f)
+            # GoldenCheetah: setResistance = (((load  / curSpeedInternal) - 0.2f) / 0.0036f)
             #                setResistance *= brakeCalibrationFactor
             rtn = ((PowerInWatt / WheelSpeed) - 0.2) * legacyPowerResistanceFactor
 
