@@ -1,8 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-26"
-WindowTitle = "Fortius Antifier v2.2"
+__version__ = "2020-03-02"
+WindowTitle = "Fortius Antifier v2.3"
+# 2020-03-02    iMagic supported, thanks to Julian Pfefferkorn
 # 2020-02-27    FE data page 252 ignored
 #               PrintWarnings added for documentation
 # 2020-02-26    msgID_BurstData ignored
