@@ -1,8 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-02"
+__version__ = "2020-03-03"
 WindowTitle = "Fortius Antifier v2.3"
+# 2020-03-03    Conversion error in SpeedKmh when trainer USB returns an error
+#                   ReceiveFromTrainer() returns "Not found" in that case
 # 2020-03-03    Format error resolved
 # 2020-03-02    iMagic supported, thanks to Julian Pfefferkorn
 # 2020-02-27    FE data page 252 ignored
@@ -519,8 +521,7 @@ def Tacx2Dongle(self):
                 #---------------------------------------------------------------
                 # Show results
                 #---------------------------------------------------------------
-                if SpeedKmh == "Not Found":
-                    SpeedKmh = 0 # resolve antifier legacy (error-message in numeric)
+                if SpeedKmhT == "Not Found":
                     SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0, 0, 0
                     SetTacxMsg(self, 'Cannot read from trainer')
                 else:
