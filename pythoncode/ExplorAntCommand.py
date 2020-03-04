@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-18"
+__version__ = "2020-03-04"
+# 2020-03-04    Command-line variables with values printed when debugging
 # 2020-02-18    -s added
 # 2020-01-29    first version
 #-------------------------------------------------------------------------------
@@ -94,12 +95,13 @@ class CommandLineVariables(object):
 
     def print(self):
         try:
-            if self.autostart:          logfile.Write ("-a")
-            if self.simulate:           logfile.Write ("-s")
-            if self.args.debug:         logfile.Write ("-d %s (%s)" % (self.debug,  bin(self.debug  ) ) )
-            if self.args.dongle:        logfile.Write ("-D %s (%s)" % (self.dongle, hex(self.dongle ) ) )
-            if self.args.hrm:           logfile.Write ("-H %s (%s)" % (self.hrm,    hex(self.hrm    ) ) )
-            if self.args.fe:            logfile.Write ("-F %s (%s)" % (self.fe,     hex(self.fe     ) ) )
+            v = debug.on(debug.Any)     # Verbose: print all command-line variables with values
+            if      self.autostart:          logfile.Write ("-a")
+            if      self.SimulateTrainer:    logfile.Write ("-s")
+            if v or self.args.debug:         logfile.Write ("-d %s (%s)" % (self.debug,  bin(self.debug  ) ) )
+            if v or self.args.dongle:        logfile.Write ("-D %s (%s)" % (self.dongle, hex(self.dongle ) ) )
+            if v or self.args.hrm:           logfile.Write ("-H %s (%s)" % (self.hrm,    hex(self.hrm    ) ) )
+            if v or self.args.fe:            logfile.Write ("-F %s (%s)" % (self.fe,     hex(self.fe     ) ) )
         except:
             pass # May occur when incorrect command line parameters, error already given before
 

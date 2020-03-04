@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-09"
+__version__ = "2020-03-04"
+# 2020-03-04    Command-line variables with values printed when debugging
 # 2020-02-10    scs added for Alana, analoque to .hrm
 #               disabled (#scs) on command-line since not implemented
 # 2020-02-09    hrm added
@@ -229,19 +230,20 @@ class CommandLineVariables(object):
 
     def print(self):
         try:
-            if self.autostart:          logfile.Write ("-a")
-            if self.args.bicycle:       logfile.Write ("-b %s,%s/%s,%s/%s" % (self.tyre, self.fL, self.fS, self.rS, self.rL))
-            if self.args.debug:         logfile.Write ("-d %s (%s)" % (self.debug, bin(self.debug) ) )
-            if self.args.ftp:           logfile.Write ("-f %s" % self.ftp )
-            if self.gui:                logfile.Write ("-g")
-            if self.args.hrm:           logfile.Write ("-H %s" % self.hrm )
-            if self.manual:             logfile.Write ("-m")
-            if self.manualGrade:        logfile.Write ("-M")
-            if not self.args.calibrate: logfile.Write ("-n")
-            if self.args.factor:        logfile.Write ("-p %s" % self.PowerFactor )
-            if self.args.resistance:    logfile.Write ("-r %s/%s" % (self.ResistanceH, self.ResistanceL))
-            if self.args.simulate:      logfile.Write ("-s")
-#scs        if self.args.scs:           logfile.Write ("-S %s" % self.scs )
+            v = debug.on(debug.Any)     # Verbose: print all command-line variables with values
+            if      self.autostart:          logfile.Write ("-a")
+            if v or self.args.bicycle:       logfile.Write ("-b %s,%s/%s,%s/%s" % (self.tyre, self.fL, self.fS, self.rS, self.rL))
+            if v or self.args.debug:         logfile.Write ("-d %s (%s)" % (self.debug, bin(self.debug) ) )
+            if v or self.args.ftp:           logfile.Write ("-f %s" % self.ftp )
+            if      self.gui:                logfile.Write ("-g")
+            if v or self.args.hrm:           logfile.Write ("-H %s" % self.hrm )
+            if      self.manual:             logfile.Write ("-m")
+            if      self.manualGrade:        logfile.Write ("-M")
+            if      not self.args.calibrate: logfile.Write ("-n")
+            if v or self.args.factor:        logfile.Write ("-p %s" % self.PowerFactor )
+            if v or self.args.resistance:    logfile.Write ("-r %s/%s" % (self.ResistanceH, self.ResistanceL))
+            if      self.args.simulate:      logfile.Write ("-s")
+#scs        if      self.args.scs:           logfile.Write ("-S %s" % self.scs )
         except:
             pass # May occur when incorrect command line parameters, error already given before
 

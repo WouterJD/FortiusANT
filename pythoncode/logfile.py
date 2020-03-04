@@ -1,11 +1,14 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-02"
+__version__ = "2020-02-12"
+# 2020-02-12    Write() flushes stdout
+#               No error when fLogfile not opened (sometimes raised w/o reason)
 # 2020-02-02    Open() has optional parameter for logfile-prefix
 #-------------------------------------------------------------------------------
 import binascii
 import os
+import sys
 import time
 from datetime import datetime
 
@@ -45,7 +48,8 @@ def IsOpen():
 def Write (logText):
     logText = datetime.utcnow().strftime('%H:%M:%S,%f')[0:12] + ": " + logText
     print (logText)
-
+    sys.stdout.flush()
+    
     if debug.on():
         try:
             test = fLogfile
@@ -55,7 +59,8 @@ def Write (logText):
     try:
         if debug.on(): fLogfile.write(logText + "\n")         # \r\n
     except:
-        print ("logfile.Write (" + logText + ") called, but logfile is not opened.")
+#       print ("logfile.Write (" + logText + ") called, but logfile is not opened.")
+        pass
 
 #-------------------------------------------------------------------------------
 # C l o s e
