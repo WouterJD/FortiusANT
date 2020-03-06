@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-02"
+__version__ = "2020-03-06"
+# 2020-03-06    Resistance2Power implemented for iMagic, based upon Yegorvin's2
+#                   calibration work; inverse function to be done.
 # 2020-03-02    Speed = km/hr and only where required WheelSpeed is used.
 # 2020-03-02    InitialiseTrainer() code moved into GetTrainer(); new interface
 #               only
@@ -113,12 +115,12 @@ legacyPowerResistanceFactor = (1 / 0.0036)      # GoldenCheetah ~= 277.778
 def Resistance2Power(Resistance, SpeedKmh):
     global LegacyProtocol
 
-    WheelSpeed = Speed2Wheel(SpeedKmh)
-
     if LegacyProtocol:
         # GoldenCheetah: curPower = ((curResistance * 0.0036f) + 0.2f) * curSpeedInternal;
-        return round(((Resistance / legacyPowerResistanceFactor) + 0.2) * WheelSpeed, 1)
+        # return round(((Resistance / legacyPowerResistanceFactor) + 0.2) * WheelSpeed, 1)
+        return round(((Resistance * (SpeedKmh* SpeedKmh / 648 + SpeedKmh / 5411 + 0.1058) + 2.2 * SpeedKmh, 1)
     else:
+        WheelSpeed = Speed2Wheel(SpeedKmh)
         return round(Resistance / PowerResistanceFactor * WheelSpeed, 1)
 
 def Power2Resistance(PowerInWatt, SpeedKmh, Cadence):

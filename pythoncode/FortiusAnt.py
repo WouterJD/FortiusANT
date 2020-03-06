@@ -3,8 +3,11 @@
 #-------------------------------------------------------------------------------
 __version__ = "2020-03-03"
 WindowTitle = "Fortius Antifier v2.3"
-# 2020-03-03    Conversion error in SpeedKmh when trainer USB returns an error
+# 2020-03-04    Console message is displayed when debug.Application is set
+#                   (was debug.Any)
+#               Conversion error in SpeedKmh when trainer USB returns an error
 #                   ReceiveFromTrainer() returns "Not found" in that case
+#                   Correction of earlier solution.
 # 2020-03-03    Format error resolved
 # 2020-03-02    iMagic supported, thanks to Julian Pfefferkorn
 # 2020-02-27    FE data page 252 ignored
@@ -189,7 +192,7 @@ def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGra
     if clv.gui:
         self.SetValues(fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate)
 
-    if delta >= 1 and (not clv.gui or debug.on(debug.Any)):
+    if delta >= 1 and (not clv.gui or debug.on(debug.Application)):
         staticVariables.LastTime = time.time()           # Time in seconds
         
         if   iTargetMode == gui.mode_Power:
@@ -522,7 +525,7 @@ def Tacx2Dongle(self):
                 # Show results
                 #---------------------------------------------------------------
                 if SpeedKmhT == "Not Found":
-                    SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0, 0, 0
+                    SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0, 0
                     SetTacxMsg(self, 'Cannot read from trainer')
                 else:
                     if clv.gui: SetTacxMsg(self, "Trainer detected")
