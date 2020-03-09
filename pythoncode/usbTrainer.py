@@ -2,8 +2,8 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-03-06"
-# 2020-03-06    Resistance2Power implemented for iMagic, based upon Yegorvin's2
-#                   calibration work; inverse function to be done.
+# 2020-03-06    Resistance2Power and Power2Resistance 
+#                   implemented for iMagic, based upon Yegorvin's work.
 # 2020-03-02    Speed = km/hr and only where required WheelSpeed is used.
 # 2020-03-02    InitialiseTrainer() code moved into GetTrainer(); new interface
 #               only
@@ -118,7 +118,9 @@ def Resistance2Power(Resistance, SpeedKmh):
     if LegacyProtocol:
         # GoldenCheetah: curPower = ((curResistance * 0.0036f) + 0.2f) * curSpeedInternal;
         # return round(((Resistance / legacyPowerResistanceFactor) + 0.2) * WheelSpeed, 1)
-        return round(((Resistance * (SpeedKmh* SpeedKmh / 648 + SpeedKmh / 5411 + 0.1058) + 2.2 * SpeedKmh, 1)
+
+        # ref https://github.com/WouterJD/FortiusANT/wiki/Power-calibrated-with-power-meter-(iMagic)
+        return round(Resistance * (SpeedKmh* SpeedKmh / 648 + SpeedKmh / 5411 + 0.1058) + 2.2 * SpeedKmh, 1)
     else:
         WheelSpeed = Speed2Wheel(SpeedKmh)
         return round(Resistance / PowerResistanceFactor * WheelSpeed, 1)
@@ -134,7 +136,10 @@ def Power2Resistance(PowerInWatt, SpeedKmh, Cadence):
             # instead of brakeCalibrationFactor use PowerFactor -p
             # GoldenCheetah: setResistance = (((load  / curSpeedInternal) - 0.2f) / 0.0036f)
             #                setResistance *= brakeCalibrationFactor
-            rtn = ((PowerInWatt / WheelSpeed) - 0.2) * legacyPowerResistanceFactor
+            # rtn = ((PowerInWatt / WheelSpeed) - 0.2) * legacyPowerResistanceFactor
+            
+            # ref https://github.com/WouterJD/FortiusANT/wiki/Power-calibrated-with-power-meter-(iMagic)
+            rtn = (PowerInWatt - 2.2 * SpeedKmh) / (SpeedKmh * SpeedKmh / 648 + SpeedKmh / 5411 + 0.1058)
 
         # Check bounds
         rtn = int(min(226, rtn)) # Maximum value; as defined by Golden Cheetah
