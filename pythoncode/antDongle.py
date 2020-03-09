@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-26"
+__version__ = "2020-03-09"
+# 2020-03-09    GetDongle() improved; multiple dongles of same type supported
 # 2020-02-26    Implementation restriction:
 #               When two same ANT dongles are in the system, always the first
 #               is found and can be used (or is in use). Should be changed.
@@ -352,62 +353,85 @@ def GetDongle(p=None):
     #---------------------------------------------------------------------------
     # https://github.com/pyusb/pyusb/blob/master/docs/tutorial.rst
     #---------------------------------------------------------------------------
+    found_available_ant_stick = False
     if platform.system() in [ 'Windows', 'Darwin', 'Linux' ]:
-        found_available_ant_stick= False
-        for dongle in dongles:                                          # iterate through ant pids
+        #-----------------------------------------------------------------------
+        # Check the known (and supported) dongle types
+        #-----------------------------------------------------------------------
+        for dongle in dongles:
             ant_pid = dongle[0]
-            if not found_available_ant_stick:                           # if haven't found a working ANT dongle yet
-                if debug.on(debug.Function): logfile.Write ("GetDongle - Check for dongle %s %s" % (ant_pid, dongle[1]))
-                try:
-                    devAntDongle = usb.core.find(idProduct=ant_pid)     # get ANT+ stick (removed: idVendor=0x0fcf)
-                    if devAntDongle:                                    # No Exception when no ANT+ stick
-                        if debug.on(debug.Function): logfile.Write ("GetDongle - Dongle found")
+            if debug.on(debug.Function): logfile.Write ("GetDongle - Check for dongle %s %s" % (ant_pid, dongle[1]))
+            try:
+                #---------------------------------------------------------------
+                # Try the ANT-dongles of this type
+                # Note: filter on idVendor=0x0fcf is removed
+                #---------------------------------------------------------------
+                msg = "Could not find ANT-dongle"
+                devAntDongles = usb.core.find(find_all=True, idProduct=ant_pid)
+                for devAntDongle in devAntDongles:
+                    # print (devAntDongle)
+                    if debug.on(debug.Function): 
+                        s = "GetDongle - Dongle found: manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
+                            (devAntDongle.manufacturer, devAntDongle.product, \
+                            hex(devAntDongle.idVendor), hex(devAntDongle.idProduct), devAntDongle.idProduct) 
+                        logfile.Write (s.replace('\0',''))
 
-                        devAntDongle.set_configuration()                # set active configuration
+                    #-----------------------------------------------------------
+                    # Initialize the dongle
+                    #-----------------------------------------------------------
+                    devAntDongle.set_configuration()
 
-                        try:                                            # check if in use
-                            reset_string=msg4A_ResetSystem()            # reset string probe
-                                                                        # same as ResetDongle()
-                                                                        # done here to have explicit error-handling.
-                            if debug.on(debug.Function): logfile.Write ("GetDongle - Send reset string to dongle")
-                            devAntDongle.write(0x01, reset_string)
-                            time.sleep(0.500)                             # after reset, 500ms before next action
+                    try:                                            # check if in use
+                        reset_string=msg4A_ResetSystem()            # reset string probe
+                                                                    # same as ResetDongle()
+                                                                    # done here to have explicit error-handling.
+                        if debug.on(debug.Function): logfile.Write ("GetDongle - Send reset string to dongle")
+                        devAntDongle.write(0x01, reset_string)
+                        time.sleep(0.500)                           # after reset, 500ms before next action
 
-                            if debug.on(debug.Function): logfile.Write ("GetDongle - Read answer")
-                            reply = ReadFromDongle(devAntDongle, False)
+                        if debug.on(debug.Function): logfile.Write ("GetDongle - Read answer")
+                        reply = ReadFromDongle(devAntDongle, False)
 
-                            if debug.on(debug.Function): logfile.Write ("GetDongle - Check for an ANT+ reply")
+                        if debug.on(debug.Function): logfile.Write ("GetDongle - Check for an ANT+ reply")
 
-                            msg = "No expected reply from dongle"
-                            for s in reply:
-                                synch, length, id, info, checksum, rest, c, d = DecomposeMessage(s)
-                                if synch==0xa4 and length==0x01 and id==0x6f:
-                                    found_available_ant_stick = True
-                                    msg = "Using %s dongle" %  devAntDongle.manufacturer # dongle[1]
-                                    msg = msg.replace('\0','')            # .manufacturer is NULL-terminated
+                        msg = "No expected reply from dongle"
+                        for s in reply:
+                            synch, length, id, info, checksum, rest, c, d = DecomposeMessage(s)
+                            if synch==0xa4 and length==0x01 and id==0x6f:
+                                found_available_ant_stick = True
+                                msg = "Using %s dongle" %  devAntDongle.manufacturer # dongle[1]
+                                msg = msg.replace('\0','')          # .manufacturer is NULL-terminated
 
-                        except usb.core.USBError:                         # cannot write to ANT dongle
-                            msg = "GetDongle - ANT dongle in use"
-                            found_available_ant_stick = False
-                    else:
-                        msg = "Could not find ANT-dongle"
-                except Exception as e:
-                    if "AttributeError" in str(e):
-                        msg = "GetDongle - Could not find dongle: " + str(e)
-                    elif "No backend" in str(e):
-                        msg = "GetDongle - No backend, check libusb: " + str(e)
-                    else:
-                        msg = "GetDongle: " + str(e)
-                    found_available_ant_stick = False
+                    except usb.core.USBError:                       # cannot write to ANT dongle
+                        msg = "GetDongle - ANT dongle in use"
+                        
+                    #-----------------------------------------------------------
+                    # If found, don't try the next ANT-dongle of this type
+                    #-----------------------------------------------------------
+                    if found_available_ant_stick: break
+            
+            except Exception as e:
+                print ("Exception: %s" % e)
+                #---------------------------------------------------------------
+                # Handle exceptions on usb.core.find
+                #---------------------------------------------------------------
+                if "AttributeError" in str(e):
+                    msg = "GetDongle - Could not find dongle: " + str(e)
+                elif "No backend" in str(e):
+                    msg = "GetDongle - No backend, check libusb: " + str(e)
+                else:
+                    msg = "GetDongle: " + str(e)
 
-        if found_available_ant_stick == False:
-            devAntDongle = False 
+            #-------------------------------------------------------------------
+            # If found, don't try the next type
+            #-------------------------------------------------------------------
+            if found_available_ant_stick: break
+
     #---------------------------------------------------------------------------
-    # Linux, Posix     --    Find ANT+ USB stick on serial (Linux)
+    # Find ANT+ USB stick on serial (was ever used on Linux, Posix)
     #---------------------------------------------------------------------------
     elif False:
         print ('***** not tested; what platform needs this? *****')
-        found_available_ant_stick = False
         for p in glob.glob('/dev/ttyUSB*'):
             devAntDongle = serial.Serial(p, 19200, rtscts=True, dsrdtr=True)
 
@@ -425,23 +449,23 @@ def GetDongle(p=None):
             if not found_available_ant_stick:
                  devAntDongle.close()   #not correct reply to reset
 
-            if found_available_ant_stick == True  : break
+            if found_available_ant_stick == True: break
 
         if found_available_ant_stick == False:
             print ('Could not find ANT+ device. Check output of "lsusb | grep 0fcf" and "ls /dev/ttyUSB*"')
             #sys.exit()
-            devAntDongle = False
         
     #---------------------------------------------------------------------------
     # Other OS
     #---------------------------------------------------------------------------
     else:
         msg = "OS not Supported"
-        devAntDongle = False
   
     #---------------------------------------------------------------------------
     # Done
     #---------------------------------------------------------------------------
+    if found_available_ant_stick == False:
+        devAntDongle = False 
     if debug.on(debug.Function): logfile.Write ("GetDongle() returns: " + msg)
     return devAntDongle, msg
 
