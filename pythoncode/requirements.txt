@@ -2,6 +2,5 @@ keyboard
 pyusb
 pygame
 pynput
-usb
 wxPython
 wheel
