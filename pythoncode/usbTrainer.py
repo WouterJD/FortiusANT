@@ -116,11 +116,14 @@ def Resistance2Power(Resistance, SpeedKmh):
     global LegacyProtocol
 
     if LegacyProtocol:
-        # GoldenCheetah: curPower = ((curResistance * 0.0036f) + 0.2f) * curSpeedInternal;
-        # return round(((Resistance / legacyPowerResistanceFactor) + 0.2) * WheelSpeed, 1)
+        if SpeedKmh == 0:
+            return 0
+        else:
+            # GoldenCheetah: curPower = ((curResistance * 0.0036f) + 0.2f) * curSpeedInternal;
+            # return round(((Resistance / legacyPowerResistanceFactor) + 0.2) * WheelSpeed, 1)
 
-        # ref https://github.com/WouterJD/FortiusANT/wiki/Power-calibrated-with-power-meter-(iMagic)
-        return round(Resistance * (SpeedKmh* SpeedKmh / 648 + SpeedKmh / 5411 + 0.1058) + 2.2 * SpeedKmh, 1)
+            # ref https://github.com/WouterJD/FortiusANT/wiki/Power-calibrated-with-power-meter-(iMagic)
+            return round(Resistance * (SpeedKmh* SpeedKmh / 648 + SpeedKmh / 5411 + 0.1058) + 2.2 * SpeedKmh, 1)
     else:
         WheelSpeed = Speed2Wheel(SpeedKmh)
         return round(Resistance / PowerResistanceFactor * WheelSpeed, 1)
