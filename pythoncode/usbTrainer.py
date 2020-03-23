@@ -767,8 +767,8 @@ def ReceiveFromTrainer(devTrainer):
         # Buffer must be 64 characters (struct.calcsize(format)),
         # Note that tt_FortiusSB returns 48 bytes only; append with dummy
         #---------------------------------------------------------------------------
-        if len(data) < 64:
-            data += b'\00' * (64 - len(data))
+        for v in range( 64 - len(data) ):
+            data.append(0)
 
         #---------------------------------------------------------------------------
         # Parse buffer
