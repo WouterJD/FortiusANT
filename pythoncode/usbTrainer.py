@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-06"
+__version__ = "2020-03-23"
+# 2020-03-23    Short received buffer for tt_FortiusSB extended to 64 bytes
 # 2020-03-06    Resistance2Power and Power2Resistance 
 #                   implemented for iMagic, based upon Yegorvin's work.
 # 2020-03-02    Speed = km/hr and only where required WheelSpeed is used.
@@ -673,7 +674,7 @@ def ReceiveFromTrainer(devTrainer):
     if debug.on(debug.Data2):logfile.Write ("Trainer recv data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
 
     #-----------------------------------------------------------------------------
-    # Handle data when > 40 bytes                Will fail when less than struct.calcsize(format)
+    # Handle data when > 40 bytes (boundary as derived from antifier)
     #-----------------------------------------------------------------------------
     if len(data) > 40 and LegacyProtocol == False:
         #---------------------------------------------------------------------------
@@ -758,6 +759,14 @@ def ReceiveFromTrainer(devTrainer):
                  fFiller34_35 + fFiller36_37 + fCurrentResistance + fTargetResistance + \
                  fEvents + fFiller43 + fCadence + fFiller45 + fModeEcho + \
                  fChecksumLSB + fChecksumMSB + fFiller49_63
+
+        #---------------------------------------------------------------------------
+        # Buffer must be 64 characters (struct.calcsize(format)),
+        # Note that tt_FortiusSB returns 48 bytes only; append with dummy
+        #---------------------------------------------------------------------------
+        if len(data) < 64:
+            data += b'\00' * (64 - len(data))
+
         #---------------------------------------------------------------------------
         # Parse buffer
         #---------------------------------------------------------------------------
