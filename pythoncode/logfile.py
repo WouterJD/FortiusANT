@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-12"
+__version__ = "2020-03-24"
+# 2020-03-24    Resolve crash when non-bytes input to HexSpace()
 # 2020-02-12    Write() flushes stdout
 #               No error when fLogfile not opened (sometimes raised w/o reason)
 # 2020-02-02    Open() has optional parameter for logfile-prefix
@@ -81,12 +82,15 @@ def Close():
 # returns       string          e.g. "01 02 03 04"
 #-------------------------------------------------------------------------------
 def HexSpace(info):
-    str = binascii.hexlify(info).decode("utf-8")
-    rtn = '"'
-    for i in range (0, len(str) ):
-        if i > 0 and i % 2 == 0: rtn += " "
-        rtn += str[i]
-    rtn += '"'
+    if type(info) is bytes:
+        s = binascii.hexlify(info).decode("utf-8")
+        rtn = '"'
+        for i in range (0, len(s) ):
+            if i > 0 and i % 2 == 0: rtn += " "
+            rtn += s[i]
+        rtn += '"'
+    else:
+        rtn = '"' + str(info) + '"'        # Safeguard against non-bytes input
     return rtn
 
 def HexSpaceL(list):
@@ -108,5 +112,7 @@ if __name__ == "__main__":
     Close()                                                   # ..
     print ("Test of wdLogfile done")
     print (HexSpace(binascii.unhexlify("203031")))
+    print (HexSpace('False'))
+    print (HexSpace(False))
 else:
     pass                                # We're included so do not take action!
