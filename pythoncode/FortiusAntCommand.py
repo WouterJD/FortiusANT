@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-04"
+__version__ = "2020-03-25"
+# 2020-03-25    Typo's corrected on command line help
 # 2020-03-04    Command-line variables with values printed when debugging
 # 2020-02-10    scs added for Alana, analoque to .hrm
 #               disabled (#scs) on command-line since not implemented
@@ -73,8 +74,8 @@ class CommandLineVariables(object):
         parser.add_argument('-f','--ftp',       help='FTP of the rider, default=%s' % self.__ftp__,         required=False, default=False)
         parser.add_argument('-g','--gui',       help='Run with graphical user interface',                   required=False, action='store_true')
         parser.add_argument('-H','--hrm',       help='Use this Heart Rate Monitor (0: default, -1: none)',  required=False, default=False)
-        parser.add_argument('-m','--manual',    help='Run manual power (ignore target from usbDongle)',     required=False, action='store_true')
-        parser.add_argument('-M','--manualGrade',help='Run manual grade (ignore target from usbDongle)',    required=False, action='store_true')
+        parser.add_argument('-m','--manual',    help='Run manual power (ignore target from antDongle)',     required=False, action='store_true')
+        parser.add_argument('-M','--manualGrade',help='Run manual grade (ignore target from antDongle)',    required=False, action='store_true')
         parser.add_argument('-n','--calibrate', help='Do not calibrate before start',                       required=False, action='store_false')
         parser.add_argument('-p','--factor',    help='Adjust target Power by multiplying by this factor',   required=False, default=False)
         parser.add_argument('-r','--resistance',help='FTP percentages for resistance mode, default=150/100',required=False, default=False)
