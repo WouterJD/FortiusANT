@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-23"
+__version__ = "2020-03-29"
+# 2020-03-29    .hex files in same folder as .py or .exe and correct path used
 # 2020-03-23    Short received buffer for tt_FortiusSB extended to 64 bytes
 # 2020-03-06    Resistance2Power and Power2Resistance 
 #                   implemented for iMagic, based upon Yegorvin's work.
@@ -70,11 +71,15 @@ modeResistance  = 2
 modeCalibrate   = 3
 
 #-------------------------------------------------------------------------------
-# path to firmware files
+# path to firmware files; since 29-3-2020 in same folder as .py or .exe
 #-------------------------------------------------------------------------------
-dirname = os.path.dirname(__file__)
-imagic_fw = os.path.join(dirname, '../supportfiles/tacximagic_1902_firmware.hex')
-fortius_fw = os.path.join(dirname, '../supportfiles/tacxfortius_1942_firmware.hex')
+if getattr(sys, 'frozen', False):
+    dirname = sys._MEIPASS
+else:
+    dirname = os.path.dirname(__file__)
+
+imagic_fw  = os.path.join(dirname, 'tacximagic_1902_firmware.hex')
+fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 
 #-------------------------------------------------------------------------------
 # Convert Power (Watt) <--> Resistance (presumably Nm)
