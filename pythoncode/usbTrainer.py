@@ -1,7 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-23"
+__version__ = "2020-03-29"
+# 2020-03-29    ReceiveFromTrainer() returns Error="Not found"
+#                   I'm finally rid of text in Speed causing errors!
+# 2020-03-29    PowercurveFactor implemented to increment/decrement resistance
+# 2020-03-29    .hex files in same folder as .py or .exe and correct path used
 # 2020-03-23    Short received buffer for tt_FortiusSB extended to 64 bytes
 # 2020-03-06    Resistance2Power and Power2Resistance 
 #                   implemented for iMagic, based upon Yegorvin's work.
@@ -34,6 +38,7 @@ __version__ = "2020-03-23"
 import usb.core
 import os
 import struct
+import sys
 import time
 
 import debug
@@ -70,11 +75,15 @@ modeResistance  = 2
 modeCalibrate   = 3
 
 #-------------------------------------------------------------------------------
-# path to firmware files
+# path to firmware files; since 29-3-2020 in same folder as .py or .exe
 #-------------------------------------------------------------------------------
-dirname = os.path.dirname(__file__)
-imagic_fw = os.path.join(dirname, '../supportfiles/tacximagic_1902_firmware.hex')
-fortius_fw = os.path.join(dirname, '../supportfiles/tacxfortius_1942_firmware.hex')
+if getattr(sys, 'frozen', False):
+    dirname = sys._MEIPASS
+else:
+    dirname = os.path.dirname(__file__)
+
+imagic_fw  = os.path.join(dirname, 'tacximagic_1902_firmware.hex')
+fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 
 #-------------------------------------------------------------------------------
 # Convert Power (Watt) <--> Resistance (presumably Nm)
@@ -526,6 +535,7 @@ def GetTrainer():
 # input     devTrainer, Mode
 #           if Mode=modeResistance:  TargetPower or TargetGrade/Weight
 #                                    Speed and Cadence are reference for Power2Resistance
+#               in mode_Grade: PowercurveFactor increments/decrements resistance
 #           PedalEcho   - must be echoed
 #           Calibrate   - Resistance during calibration is specified
 #                         If =zero default is calculated
@@ -535,7 +545,9 @@ def GetTrainer():
 #
 # returns   None
 #-------------------------------------------------------------------------------
-def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, PedalEcho, SpeedKmh, Cadence, Calibrate, SimulateTrainer):
+def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, 
+                    PowercurveFactor, UserAndBikeWeight, \
+                    PedalEcho, SpeedKmh, Cadence, Calibrate, SimulateTrainer):
     global LegacyProtocol # As filled in GetTrainer()
 
     if debug.on(debug.Function): logfile.Write ("SendToTrainer(%s, %s, %s, %s, %s, %s, %s)" % (TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, PedalEcho, SpeedKmh, Cadence))
@@ -586,6 +598,7 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade, UserAn
                                                             # UserAndBikeWeight is not used!
         elif TargetMode == gui.mode_Grade:
             Target = Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence)
+            Target *= PowercurveFactor                      # manual adjustment of requested power
             Weight = 0x0a                                   # weight=0x0a is a good fly-wheel value
                                                             # UserAndBikeWeight is not used!        
                                                             #       an 100kg flywheels gives undesired behaviour :-)
@@ -658,6 +671,7 @@ def ReceiveFromTrainer(devTrainer):
     Cadence           = 0
     CurrentPower      = 0
     CurrentResistance = 0
+    Error             = ""
     HeartRate         = 0
     PedalEcho         = 0
     Speed             = 0
@@ -669,7 +683,7 @@ def ReceiveFromTrainer(devTrainer):
     try:
         data = devTrainer.read(0x82, 64, 30)
     except Exception as e:
-        if "timeout error" in str(e):#trainer did not return any data
+        if "timeout error" in str(e):            #trainer did not return any data
             pass
         else:
             logfile.Write ("ReceiveFromTrainer: USB READ ERROR: " + str(e))
@@ -873,9 +887,9 @@ def ReceiveFromTrainer(devTrainer):
                         ))
 
     else:
-        Speed = "Not Found"
+        Error = "Not Found"
 
-    return Speed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis
+    return Error, Speed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis
 
 #-------------------------------------------------------------------------------
 # C a l i b r a t e S u p p o r t e d

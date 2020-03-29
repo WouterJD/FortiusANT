@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-09"
+__version__ = "2020-03-29"
+# 2020-03-29    PowercurveFactor added to console
 # 2020-02-09    Suffix to refresh text-fields removed (?(
 # 2020-02-07    Text resized; as large as possible. Units abbreviated
 #               Heartrate positioned left
@@ -36,7 +37,7 @@ import logfile
 #-------------------------------------------------------------------------------
 # constants
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier GUI v2.2"
+WindowTitle = "Fortius Antifier GUI v2.4"
 
 LargeTexts  = True  # 2020-02-07
 
@@ -682,10 +683,13 @@ class frmFortiusAntGui(wx.Frame):
             else:
                 self.txtHeartRate.Hide()
 
-    def SetMessages(self, Tacx=None, Dongle=None, Factor=None):
+    def SetMessages(self, Tacx=None, Dongle=None, Factor=None, PowercurveFactor=1):
         if Tacx   != None: self.txtUsbTrainer.SetValue(Tacx)
         if Dongle != None: self.txtAntDongle.SetValue(Dongle)
-        if Factor != None: self.txtPowerFactor.SetValue("Power factor=%4.2f" % Factor)
+        if Factor != None:
+            s = ""
+            if PowercurveFactor != 1: s = ", Curve factor=%4.2f" % PowercurveFactor
+            self.txtPowerFactor.SetValue("Power factor=%4.2f%s" % (Factor, s) )
 
     # --------------------------------------------------------------------------
     # O n P a i n t

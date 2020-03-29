@@ -1,8 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-03"
-WindowTitle = "Fortius Antifier v2.3"
+__version__ = "2020-03-29"
+WindowTitle = "Fortius Antifier v2.4"
+# 2020-03-29    ReceiveFromTrainer() returns Error as extra parameter
+# 2020-03-29    PowercurveFactor implemented to increment/decrement resistance
+#               Also displayed on console
 # 2020-03-04    Console message is displayed when debug.Application is set
 #                   (was debug.Any)
 #               Conversion error in SpeedKmh when trainer USB returns an error
@@ -137,7 +140,7 @@ import logfile
 import structConstants   as sc
 import usbTrainer
 
-PrintWarnings = True                # Print warnings even when logging = off
+PrintWarnings = False                # Print warnings even when logging = off
 
 #-------------------------------------------------------------------------------
 # constants
@@ -177,7 +180,7 @@ def SetDongleMsg(self, msg):
     else: logfile.Write ("Dongle - " + msg)
 
 def SetFactorMsg(self, msg):
-    if clv.gui: self.SetMessages(Factor=msg)
+    if clv.gui: self.SetMessages(Factor=clv.PowerFactor, PowercurveFactor=msg)
 #   else: logfile.Write ("Factor - " + str(msg))        # Already at start
 
 def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate):
@@ -226,10 +229,11 @@ def IdleFunction(self):
     global devTrainer, devAntDongle
     if devTrainer != False:
         TargetPower = 100
-        SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis = \
+        Error, SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis = \
             usbTrainer.ReceiveFromTrainer(devTrainer)
         usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeResistance, \
-            gui.mode_Power, TargetPower, False, -1, PedalEcho, SpeedKmh, Cadence, 0, False)
+            gui.mode_Power, TargetPower, False, 1, -1, \
+            PedalEcho, SpeedKmh, Cadence, 0, False)
 
         if   Buttons == usbTrainer.EnterButton: self.Navigate_Enter()
         elif Buttons == usbTrainer.DownButton:  self.Navigate_Down()
@@ -320,7 +324,7 @@ def Runoff(self):
         #-----------------------------------------------------------------------
         # Get data from trainer
         #-----------------------------------------------------------------------
-        SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
+        Error, SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
             usbTrainer.ReceiveFromTrainer(devTrainer)
         if   Buttons == usbTrainer.EnterButton:     pass
         elif Buttons == usbTrainer.DownButton:      TargetPower -= 50          # Subtract 50 Watts for calibration test
@@ -334,7 +338,7 @@ def Runoff(self):
         if debug.on(debug.Application): logfile.Write ("Trainer runoff: SpeedKmh=%s PedalEcho=%s hr=%s CurrentPower=%s cad=%s res=%s" % \
             (SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetPower))
         
-        if SpeedKmh == "Not Found":
+        if Error == "Not Found":
             SetValues(self, 0, 0, 0, 0, 0, 0, 0, 0)
             SetTacxMsg(self, "Check if trainer is powered on")
         else:
@@ -348,7 +352,8 @@ def Runoff(self):
             # Send data to trainer
             #---------------------------------------------------------------------
             usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeResistance, \
-                            TargetMode, TargetPower, False, -1, PedalEcho, SpeedKmh, Cadence, Calibrate, False)
+                            TargetMode, TargetPower, False, 1, -1, \
+                            PedalEcho, SpeedKmh, Cadence, Calibrate, False)
 
             #---------------------------------------------------------------------
             # SpeedKmh up to 40 km/h and then rolldown
@@ -442,10 +447,9 @@ def Tacx2Dongle(self):
             # Receive / Send trainer
             #-------------------------------------------------------------------------
             usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeCalibrate, \
-                        False, False, False, False, False, False, False, False, False)
-            SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, Resistance, Buttons, Axis = \
+                        False, False, False, False, False, False, False, False, False, False)
+            Error, SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, Resistance, Buttons, Axis = \
                         usbTrainer.ReceiveFromTrainer(devTrainer)
-            if SpeedKmh == "Not Found": SpeedKmh = 0
             #-------------------------------------------------------------------------
             # Show progress
             #-------------------------------------------------------------------------
@@ -478,7 +482,8 @@ def Tacx2Dongle(self):
     #---------------------------------------------------------------------------
     # Stop trainer
     #---------------------------------------------------------------------------
-    usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeStop, 0, False, False, 0, 0, 0, 0, 0, clv.SimulateTrainer)
+    usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeStop, 0, False, False, \
+                                0, 0, 0, 0, 0, 0, clv.SimulateTrainer)
 
     #---------------------------------------------------------------------------
     # Initialize variables
@@ -487,6 +492,9 @@ def Tacx2Dongle(self):
     TargetGradeFromDongle   = 0
     TargetPowerFromDongle   = 100           # set initial Target Power
 
+    PowercurveFactor        = 1             # 1.1 causes higher load
+    SetFactorMsg(self, PowercurveFactor)    # 0.9 causes lower load
+    
     TargetGrade             = 0             # different sets used to implement
     TargetPower             = 100           #   manual mode
     UserAndBikeWeight       = 75 + 10       # defined according the standard (data page 51)
@@ -516,7 +524,7 @@ def Tacx2Dongle(self):
                 SpeedKmh, PedalEcho, HeartRateT, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
                     SimulateReceiveFromTrainer (TargetPower, CurrentPower)
             else:
-                SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, CurrentResistance, Buttons, Axis = \
+                Error, SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, CurrentResistance, Buttons, Axis = \
                     usbTrainer.ReceiveFromTrainer(devTrainer)
                 if CurrentPower < 0: CurrentPower = 0       # No negative value defined for ANT message Page25 (#)
                 
@@ -524,7 +532,7 @@ def Tacx2Dongle(self):
                 #---------------------------------------------------------------
                 # Show results
                 #---------------------------------------------------------------
-                if SpeedKmhT == "Not Found":
+                if Error == "Not Found":
                     SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0, 0
                     SetTacxMsg(self, 'Cannot read from trainer')
                 else:
@@ -571,8 +579,8 @@ def Tacx2Dongle(self):
                 TargetPower = usbTrainer.Resistance2Power(r, SpeedKmh)
             else:
                 if   Buttons == usbTrainer.EnterButton:     pass
-                elif Buttons == usbTrainer.DownButton:      pass
-                elif Buttons == usbTrainer.UpButton:        pass
+                elif Buttons == usbTrainer.DownButton:      PowercurveFactor /= 1.1; SetFactorMsg(self, PowercurveFactor)
+                elif Buttons == usbTrainer.UpButton:        PowercurveFactor *= 1.1; SetFactorMsg(self, PowercurveFactor)
                 elif Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
                 else:                                       pass
 
@@ -591,7 +599,8 @@ def Tacx2Dongle(self):
             # Send data to trainer (either power OR grade)
             #-------------------------------------------------------------------
             usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeResistance, \
-                    TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, \
+                    TargetMode, TargetPower, TargetGrade, PowercurveFactor, \
+                    UserAndBikeWeight, \
                     PedalEcho, SpeedKmh, Cadence, Calibrate, clv.SimulateTrainer)    # testWeight
 
             #-------------------------------------------------------------------
@@ -660,6 +669,7 @@ def Tacx2Dongle(self):
                             # The trainer will only use Grade, because of TargetMode
                             #-------------------------------------------------------
                             r = usbTrainer.Grade2Resistance(TargetGradeFromDongle, UserAndBikeWeight, SpeedKmh, Cadence)
+                            r *= PowercurveFactor
                             TargetPowerFromDongle = usbTrainer.Resistance2Power(r, SpeedKmh)
                             
                         #-------------------------------------------------------
@@ -838,7 +848,7 @@ def Tacx2Dongle(self):
     if not (clv.manual or clv.manualGrade):
         ant.ResetDongle(devAntDongle)
     usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeStop, 0, False, False, \
-                             0, 0, 0, 0, 0, clv.SimulateTrainer)
+                             0, 0, 0, 0, 0, 0, clv.SimulateTrainer)
 
     return True
 
@@ -962,7 +972,7 @@ if __name__ == "__main__":
         frame = frmFortiusAnt(None)
         frame.SetTitle( WindowTitle )
         app.SetTopWindow(frame)
-        SetFactorMsg(frame, clv.PowerFactor)
+        SetFactorMsg(frame, 1)
         frame.Show()
         if clv.autostart:
             frame.Autostart()

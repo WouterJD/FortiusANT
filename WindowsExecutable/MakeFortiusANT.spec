@@ -1,6 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 #
 # used with command: pyinstaller MakeFortiusANT.spec
+#
+# Version info
+# 2020-03-02    Firmware .hex added
 
 block_cipher = None
 
@@ -10,9 +13,11 @@ a = Analysis(['FortiusANT.py'],
                 ( 'C:\\Windows\\System32\\libusb0.dll', '.')
              ],
              datas=[
-                ( './FortiusAnt.ico', '.' ),
-                ( './FortiusAnt.jpg', '.' ),
-                ( './Heart.jpg', '.' )
+                ( './FortiusAnt.ico',                '.' ),
+                ( './FortiusAnt.jpg',                '.' ),
+                ( './Heart.jpg',                     '.' ),
+                ( './tacxfortius_1942_firmware.hex', '.' ),
+                ( './tacximagic_1902_firmware.hex',  '.' )
              ],
              hiddenimports=[],
              hookspath=[],
