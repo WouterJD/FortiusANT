@@ -41,9 +41,17 @@ def IsOpen():
     except:
         return False
 
-def Logfile():
+#-------------------------------------------------------------------------------
+# P r i n t   to   l o g f i l e
+#-------------------------------------------------------------------------------
+def Print(*objects, sep=' ', end='\n'):
     global fLogfile
-    return fLogfile
+    enc = fLogfile.encoding
+    if enc == 'UTF-8':
+        print(*objects, sep=sep, end=end, file=fLogfile)
+    else:
+        f = lambda obj: str(obj).encode(enc, errors='backslashreplace').decode(enc)
+        print(*map(f, objects), sep=sep, end=end, file=fLogfile)
 
 #-------------------------------------------------------------------------------
 # W r i t e

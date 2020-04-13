@@ -38,7 +38,6 @@ import re
 if platform.system() == 'False':
     import serial
 import struct
-import sys
 import usb.core
 import time
 
@@ -48,14 +47,6 @@ import structConstants      as sc
 
 import FortiusAntCommand    as cmd
 
-def uprint(*objects, sep=' ', end='\n', file=sys.stdout):
-    enc = file.encoding
-    if enc == 'UTF-8':
-        print(*objects, sep=sep, end=end, file=file)
-    else:
-        f = lambda obj: str(obj).encode(enc, errors='backslashreplace').decode(enc)
-        print(*map(f, objects), sep=sep, end=end, file=file)
-        
 #-------------------------------------------------------------------------------
 # Our own choice what channels are used
 #
@@ -388,7 +379,7 @@ def GetDongle(p=None):
                         logfile.Write (s.replace('\0',''))
 
                     if debug.on(debug.Data1 | debug.Function):
-                        uprint (devAntDongle, file=logfile.Logfile())
+                        logfile.Print (devAntDongle)
                         pass
 
                     #-----------------------------------------------------------
