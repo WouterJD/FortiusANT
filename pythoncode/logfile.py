@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-24"
+__version__ = "2020-04-13"
+# 2020-04-13    Logfile() added
 # 2020-03-24    Resolve crash when non-bytes input to HexSpace()
 # 2020-02-12    Write() flushes stdout
 #               No error when fLogfile not opened (sometimes raised w/o reason)
@@ -39,6 +40,10 @@ def IsOpen():
         return True
     except:
         return False
+
+def Logfile():
+    global fLogfile
+    return fLogfile
 
 #-------------------------------------------------------------------------------
 # W r i t e

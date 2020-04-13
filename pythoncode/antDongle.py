@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-09"
+__version__ = "2020-04-13"
+# 2020-04-13    Dongle printed to logfile
+# 2020-03-31    The grade as provided by Zwift or Rouvy was multiplied by 2.5
+#               resulting in far too steep slopes. Removed.
 # 2020-03-09    GetDongle() improved; multiple dongles of same type supported
 # 2020-02-26    Implementation restriction:
 #               When two same ANT dongles are in the system, always the first
@@ -369,9 +372,10 @@ def GetDongle(p=None):
                 msg = "Could not find ANT-dongle"
                 devAntDongles = usb.core.find(find_all=True, idProduct=ant_pid)
                 for devAntDongle in devAntDongles:
-                    # print (devAntDongle)
+                    if debug.on(debug.Data1 | debug.Function):
+                        print (devAntDongle, file=logfile.Logfile())
                     if debug.on(debug.Function): 
-                        s = "GetDongle - Dongle found: manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
+                        s = "GetDongle - Try dongle: manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
                             (devAntDongle.manufacturer, devAntDongle.product, \
                             hex(devAntDongle.idVendor), hex(devAntDongle.idProduct), devAntDongle.idProduct) 
                         logfile.Write (s.replace('\0',''))
@@ -1067,7 +1071,10 @@ def msgUnpage51_TrackResistance(info):
     Grade = tuple[nGrade]
     rtn   = Grade * 0.01 - 200          # -200% - 200%, units 0.01%
     
-    rtn  *= 2.5                         # Empirically...
+#   rtn  *= 2.5                         # Empirically...
+                                        # This was entered when creating the file
+                                        # but never tested / properly verified
+                                        # 2020-03-31 Incorrect as comparing with Rouvy
     rtn   = round(rtn,2)
 
     return rtn
