@@ -38,6 +38,7 @@ import re
 if platform.system() == 'False':
     import serial
 import struct
+import sys
 import usb.core
 import time
 
@@ -47,6 +48,14 @@ import structConstants      as sc
 
 import FortiusAntCommand    as cmd
 
+def uprint(*objects, sep=' ', end='\n', file=sys.stdout):
+    enc = file.encoding
+    if enc == 'UTF-8':
+        print(*objects, sep=sep, end=end, file=file)
+    else:
+        f = lambda obj: str(obj).encode(enc, errors='backslashreplace').decode(enc)
+        print(*map(f, objects), sep=sep, end=end, file=file)
+        
 #-------------------------------------------------------------------------------
 # Our own choice what channels are used
 #
@@ -372,13 +381,15 @@ def GetDongle(p=None):
                 msg = "Could not find ANT-dongle"
                 devAntDongles = usb.core.find(find_all=True, idProduct=ant_pid)
                 for devAntDongle in devAntDongles:
-                    if debug.on(debug.Data1 | debug.Function):
-                        print (devAntDongle, file=logfile.Logfile())
                     if debug.on(debug.Function): 
                         s = "GetDongle - Try dongle: manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
                             (devAntDongle.manufacturer, devAntDongle.product, \
                             hex(devAntDongle.idVendor), hex(devAntDongle.idProduct), devAntDongle.idProduct) 
                         logfile.Write (s.replace('\0',''))
+
+                    if debug.on(debug.Data1 | debug.Function):
+                        uprint (devAntDongle, file=logfile.Logfile())
+                        pass
 
                     #-----------------------------------------------------------
                     # Initialize the dongle
@@ -406,9 +417,11 @@ def GetDongle(p=None):
                                 msg = "Using %s dongle" %  devAntDongle.manufacturer # dongle[1]
                                 msg = msg.replace('\0','')          # .manufacturer is NULL-terminated
 
-                    except usb.core.USBError:                       # cannot write to ANT dongle
-                        msg = "GetDongle - ANT dongle in use"
-                        
+                    # except usb.core.USBError:                       # cannot write to ANT dongle
+                        # msg = "GetDongle - ANT dongle in use"
+
+                    except Exception as e:
+                        msg = "GetDongle: " + str(e)
                     #-----------------------------------------------------------
                     # If found, don't try the next ANT-dongle of this type
                     #-----------------------------------------------------------
