@@ -385,9 +385,12 @@ def GetDongle(p=None):
                     #-----------------------------------------------------------
                     # Initialize the dongle
                     #-----------------------------------------------------------
-                    devAntDongle.set_configuration()
 
                     try:                                            # check if in use
+                        if debug.on(debug.Function): logfile.Write ("GetDongle - Set configuration")
+                        devAntDongle.set_configuration()
+
+
                         reset_string=msg4A_ResetSystem()            # reset string probe
                                                                     # same as ResetDongle()
                                                                     # done here to have explicit error-handling.
