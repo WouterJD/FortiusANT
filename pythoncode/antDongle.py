@@ -411,10 +411,12 @@ def GetDongle(p=None):
                                 msg = "Using %s dongle" %  devAntDongle.manufacturer # dongle[1]
                                 msg = msg.replace('\0','')          # .manufacturer is NULL-terminated
 
-                    # except usb.core.USBError:                       # cannot write to ANT dongle
-                        # msg = "GetDongle - ANT dongle in use"
+                    except usb.core.USBError:                       # cannot write to ANT dongle
+                        logfile.Write ("GetDongle - Exception: %s" % e)
+                        msg = "GetDongle - ANT dongle in use"
 
                     except Exception as e:
+                        logfile.Write ("GetDongle - Exception: %s" % e)
                         msg = "GetDongle: " + str(e)
                     #-----------------------------------------------------------
                     # If found, don't try the next ANT-dongle of this type
@@ -422,7 +424,7 @@ def GetDongle(p=None):
                     if found_available_ant_stick: break
             
             except Exception as e:
-                print ("Exception: %s" % e)
+                logfile.Write ("GetDongle - Exception: %s" % e)
                 #---------------------------------------------------------------
                 # Handle exceptions on usb.core.find
                 #---------------------------------------------------------------
