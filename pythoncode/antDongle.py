@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-15"
+__version__ = "2020-04-15b"
+# 2020-04-15    Exception handling on antDongle.read() improved
 # 2020-04-15    Logfile extended for .write and .read
 # 2020-04-14    Error handling on GetDongle() improved
 #               OS-dependencies removed (since works for Windows, Linux and Mac)
@@ -513,71 +514,79 @@ def ReadFromDongle(devAntDongle, drop):
     # https://www.thisisant.com/forum/view/viewthread/812
     #---------------------------------------------------------------------------
     data = []
-    try:
-        while True:                                 # ends on exception
+    NoException = True
+    while NoException:                              # ends after exception on .read
+        try:
+            trv = []                                # initialize because is processed even after exception
             trv = devAntDongle.read(0x81,1000,20)   # input:   endpoint address, length, timeout
                                                     # returns: an array of bytes
-            if debug.on(debug.Data1): logfile.Write('devAntDongle.read(0x81,1000,20) returns %s ' % logfile.HexSpaceL(trv))
-
-            if len(trv) > 900: logfile.Write ("ReadFromDongle() too much data from .read()" )
-            start  = 0
-            while start < len(trv):
-                error = False
-                #---------------------------------------------------------------
-                # Each message starts with a4; skip characters if not
-                #---------------------------------------------------------------
-                skip = start
-                while trv[skip] != 0xa4 and skip < len(trv):
-                    skip += 1
-                if skip != start:
-                    logfile.Write ("ReadFromDongle %s characters skipped " % (skip - start))
-                    start = skip
-                #---------------------------------------------------------------
-                # Second character in the buffer (element in trv) is length of 
-                # the info; add four for synch, len, id and checksum
-                #---------------------------------------------------------------
-                length = trv[start+1] + 4
-                if start + length <= len(trv):
-                    #---------------------------------------------------------------
-                    # Check length and checksum
-                    # Append to return array when correct
-                    #---------------------------------------------------------------
-                    d = bytes(trv[start : start+length])
-                    checksum = d[-1:]
-                    expected = CalcChecksum(d)
-
-                    if expected != checksum:
-                        error = "error: checksum incorrect"
-                        logfile.Write ("%s checksum=%s expected=%s data=%s" % \
-                            ( error, logfile.HexSpace(checksum), logfile.HexSpace(expected), logfile.HexSpace(d) ) )
-                    else:
-                        data.append(d)                         # add data to array
-                        if drop == True:
-                            DongleDebugMessage ("Dongle    drop   :", d)
-                        else:
-                            DongleDebugMessage ("Dongle    receive:", d)
-                else:
-                    error = "error: message exceeds buffer length"
-                if error:
-                    logfile.Write ("ReadFromDongle %s" % (error))
-                #---------------------------------------------------------------
-                # Next buffer in trv
-                #---------------------------------------------------------------
-                start += length
-    # --------------------------------------------------------------------------
-    # https://docs.python.org/3/library/exceptions.html
-    # https://docs.python.org/3/library/exceptions.html
-    # --------------------------------------------------------------------------
-    # TimeoutError not raised on all systems, inspect text-message as well.
-    # "timeout error" on most systems, "timed out" on Macintosh.
-    # --------------------------------------------------------------------------
-    except TimeoutError:
-        pass
-    except Exception as e:
-        if "timeout error" in str(e) or "timed out" in str(e):
+        # --------------------------------------------------------------------------
+        # https://docs.python.org/3/library/exceptions.html
+        # https://docs.python.org/3/library/exceptions.html
+        # --------------------------------------------------------------------------
+        # TimeoutError not raised on all systems, inspect text-message as well.
+        # "timeout error" on most systems, "timed out" on Macintosh.
+        # --------------------------------------------------------------------------
+        except TimeoutError:
+            NoException = False
             pass
-        else:
-            logfile.Write ("devAntDongle.read exception: " + str(e))
+        except Exception as e:
+            NoException = False
+            if "timeout error" in str(e) or "timed out" in str(e):
+                pass
+            else:
+                logfile.Write ("devAntDongle.read exception: " + str(e))
+
+        # --------------------------------------------------------------------------
+        # Handle content returned by .read()
+        # --------------------------------------------------------------------------
+        if debug.on(debug.Data1): logfile.Write('devAntDongle.read(0x81,1000,20) returns %s ' % logfile.HexSpaceL(trv))
+
+        if len(trv) > 900: logfile.Write ("ReadFromDongle() too much data from .read()" )
+        start  = 0
+        while start < len(trv):
+            error = False
+            #---------------------------------------------------------------
+            # Each message starts with a4; skip characters if not
+            #---------------------------------------------------------------
+            skip = start
+            while trv[skip] != 0xa4 and skip < len(trv):
+                skip += 1
+            if skip != start:
+                logfile.Write ("ReadFromDongle %s characters skipped " % (skip - start))
+                start = skip
+            #---------------------------------------------------------------
+            # Second character in the buffer (element in trv) is length of 
+            # the info; add four for synch, len, id and checksum
+            #---------------------------------------------------------------
+            length = trv[start+1] + 4
+            if start + length <= len(trv):
+                #---------------------------------------------------------------
+                # Check length and checksum
+                # Append to return array when correct
+                #---------------------------------------------------------------
+                d = bytes(trv[start : start+length])
+                checksum = d[-1:]
+                expected = CalcChecksum(d)
+
+                if expected != checksum:
+                    error = "error: checksum incorrect"
+                    logfile.Write ("%s checksum=%s expected=%s data=%s" % \
+                        ( error, logfile.HexSpace(checksum), logfile.HexSpace(expected), logfile.HexSpace(d) ) )
+                else:
+                    data.append(d)                         # add data to array
+                    if drop == True:
+                        DongleDebugMessage ("Dongle    drop   :", d)
+                    else:
+                        DongleDebugMessage ("Dongle    receive:", d)
+            else:
+                error = "error: message exceeds buffer length"
+            if error:
+                logfile.Write ("ReadFromDongle %s" % (error))
+            #---------------------------------------------------------------
+            # Next buffer in trv
+            #---------------------------------------------------------------
+            start += length
        
     # too much if debug.on(debug.Function): logfile.Write ("ReadFromDongle() returns: " + logfile.HexSpaceL(data))
     return data
