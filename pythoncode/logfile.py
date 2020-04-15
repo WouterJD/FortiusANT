@@ -1,8 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-13"
-# 2020-04-13    Logfile() added
+__version__ = "2020-04-15"
+# 2020-04-15    HexSpace() supports int
+# 2020-04-13    Print() added
 # 2020-03-24    Resolve crash when non-bytes input to HexSpace()
 # 2020-02-12    Write() flushes stdout
 #               No error when fLogfile not opened (sometimes raised w/o reason)
@@ -42,16 +43,20 @@ def IsOpen():
         return False
 
 #-------------------------------------------------------------------------------
-# P r i n t   to   l o g f i l e
+# P r i n t   t o   l o g f i l e
+#-------------------------------------------------------------------------------
+# https://stackoverflow.com/questions/14630288/unicodeencodeerror-charmap-codec-cant-encode-character-maps-to-undefined
 #-------------------------------------------------------------------------------
 def Print(*objects, sep=' ', end='\n'):
     global fLogfile
-    enc = fLogfile.encoding
-    if enc == 'UTF-8':
-        print(*objects, sep=sep, end=end, file=fLogfile)
-    else:
-        f = lambda obj: str(obj).encode(enc, errors='backslashreplace').decode(enc)
-        print(*map(f, objects), sep=sep, end=end, file=fLogfile)
+
+    if IsOpen():
+        enc = fLogfile.encoding
+        if enc == 'UTF-8':
+            print(*objects, sep=sep, end=end, file=fLogfile)
+        else:
+            f = lambda obj: str(obj).encode(enc, errors='backslashreplace').decode(enc)
+            print(*map(f, objects), sep=sep, end=end, file=fLogfile)
 
 #-------------------------------------------------------------------------------
 # W r i t e
@@ -102,8 +107,10 @@ def HexSpace(info):
             if i > 0 and i % 2 == 0: rtn += " "
             rtn += s[i]
         rtn += '"'
+    elif type(info) is int:
+        rtn = '"' + hex(info)[2:].zfill(2) + '"'
     else:
-        rtn = '"' + str(info) + '"'        # Safeguard against non-bytes input
+        rtn = '"' + str(info) + '"'
     return rtn
 
 def HexSpaceL(list):

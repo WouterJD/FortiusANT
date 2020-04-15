@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-14b"
+__version__ = "2020-04-15"
+# 2020-04-15    Logfile extended for .write and .read
 # 2020-04-14    Error handling on GetDongle() improved
 #               OS-dependencies removed (since works for Windows, Linux and Mac)
 # 2020-04-13    Some print() replaced by logfile.Write().
@@ -474,13 +475,13 @@ def SendToDongle(messages, devAntDongle, comment='', receive=True, drop=True):
         #-----------------------------------------------------------------------
         # Send the message
         #-----------------------------------------------------------------------
+        DongleDebugMessage("Dongle    send   :", message)
         try:
+            if debug.on(debug.Data1): logfile.Write('devAntDongle.write(0x01,%s)' % logfile.HexSpace(message))
             devAntDongle.write(0x01,message)    # input:   endpoint address, buffer, timeout
                                                 # returns: 
         except Exception as e:
-            logfile.Write ("SendToDongle write error: " + str(e))
-
-        DongleDebugMessage("Dongle    send   :", message)
+            logfile.Write ("devAntDongle.write exception: " + str(e))
 
         #-----------------------------------------------------------------------
         # Read all responses
@@ -489,7 +490,7 @@ def SendToDongle(messages, devAntDongle, comment='', receive=True, drop=True):
             data = ReadFromDongle(devAntDongle, drop)
             for d in data: rtn.append(d)
 
-    if debug.on(debug.Function): logfile.Write ("SendToDongle() returns: " +  logfile.HexSpaceL(rtn))
+    # too much if debug.on(debug.Function): logfile.Write ("SendToDongle() returns: " +  logfile.HexSpaceL(rtn))
     return rtn
 
 #-------------------------------------------------------------------------------
@@ -516,6 +517,7 @@ def ReadFromDongle(devAntDongle, drop):
         while True:                                 # ends on exception
             trv = devAntDongle.read(0x81,1000,20)   # input:   endpoint address, length, timeout
                                                     # returns: an array of bytes
+            if debug.on(debug.Data1): logfile.Write('devAntDongle.read(0x81,1000,20) returns %s ' % logfile.HexSpaceL(trv))
 
             if len(trv) > 900: logfile.Write ("ReadFromDongle() too much data from .read()" )
             start  = 0
@@ -575,9 +577,9 @@ def ReadFromDongle(devAntDongle, drop):
         if "timeout error" in str(e) or "timed out" in str(e):
             pass
         else:
-            logfile.Write ("ReadFromDongle read error: " + str(e))
+            logfile.Write ("devAntDongle.read exception: " + str(e))
        
-    if debug.on(debug.Function): logfile.Write ("ReadFromDongle() returns: " + logfile.HexSpaceL(data))
+    # too much if debug.on(debug.Function): logfile.Write ("ReadFromDongle() returns: " + logfile.HexSpaceL(data))
     return data
 
 # ------------------------------------------------------------------------------
