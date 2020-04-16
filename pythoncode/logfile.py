@@ -1,8 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-15"
-# 2020-04-15    HexSpace() supports int
+__version__ = "2020-04-16"
+# 2020-04-16    Console() introduced
+# 2020-04-15    HexSpace) supports int
 # 2020-04-13    Print() added
 # 2020-03-24    Resolve crash when non-bytes input to HexSpace()
 # 2020-02-12    Write() flushes stdout
@@ -59,14 +60,24 @@ def Print(*objects, sep=' ', end='\n'):
             print(*map(f, objects), sep=sep, end=end, file=fLogfile)
 
 #-------------------------------------------------------------------------------
-# W r i t e
+# W r i t e   and   C o n s o le
 #
 # Refer https://strftime.org/ for format codes
 # hh:mm:ss,ddd is 12 characters (%f for microseconds provides 6 digits)
 #-------------------------------------------------------------------------------
-def Write (logText):
+# In the beginning, Write() replaced print() AND writes all printed messages to
+# logfile. Then Write() was used to fill the logfile, taking for granted that
+# all written messages are also printed on the console.
+#
+# Therefore Console() is introduced: prints AND writes
+#           Write()   does NOT print to console anymore, unless requested.
+#-------------------------------------------------------------------------------
+def Console (logText):
+    Write(logText, True)
+    
+def Write (logText, console=False):
     logText = datetime.utcnow().strftime('%H:%M:%S,%f')[0:12] + ": " + logText
-    print (logText)
+    if console: print (logText)
     sys.stdout.flush()
     
     if debug.on():

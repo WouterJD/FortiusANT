@@ -1,7 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-29"
+__version__ = "2020-04-16"
+# 2020-04-16    Write() replaced by Console() where needed
+# 2020-04-15    Message changed "Connected to Tacx Trainer"
+# 2020-04-12    Timeout-handling improved; Macintosh returns "timed out".
+# 2020-04-07    SendToTrainer() also logs Mode-parameters
 # 2020-03-29    ReceiveFromTrainer() returns Error="Not found"
 #                   I'm finally rid of text in Speed causing errors!
 # 2020-03-29    PowercurveFactor implemented to increment/decrement resistance
@@ -234,7 +238,7 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence):
     global LegacyProtocol
 
     if TargetGrade < -20 or TargetGrade > 30:
-        logfile.Write("Grade2Resistance; TargetGrade (%s) out of bounds!" % (TargetGrade))
+        logfile.Console("Grade2Resistance; TargetGrade (%s) out of bounds!" % (TargetGrade))
 
     if UserAndBikeWeight == 0: UserAndBikeWeight = 80
 
@@ -443,15 +447,15 @@ def GetTrainer():
     #---------------------------------------------------------------------------
     # Find supported trainer
     #---------------------------------------------------------------------------
-    msg = "GetTrainer - No trainer found"
+    msg = "No Tacx trainer found"
     for idp in [tt_iMagic, tt_iMagicWG, tt_Fortius, tt_FortiusSB, tt_FortiusSB_nfw]:
         try:
             if debug.on(debug.Function): logfile.Write ("GetTrainer - Check for trainer %s" % (hex(idp)))
-            dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=idp)     # find trainer USB device
+            dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=idp)      # find trainer USB device
             if dev != None:
-                msg = "GetTrainer - Trainer found: " + hex(idp)
-                if debug.on(debug.Function):
-                    print (dev)
+                msg = "Connected to Tacx Trainer T" + hex(idp)[2:]          # remove 0x from result, was "Trainer found:"
+                if debug.on(debug.Data2 | debug.Function):
+                    logfile.Print (dev)
                 trainer_type = idp
                 break
         except Exception as e:
@@ -524,7 +528,7 @@ def GetTrainer():
     #---------------------------------------------------------------------------
     # Done
     #---------------------------------------------------------------------------
-    logfile.Write(msg)
+    logfile.Console(msg)
     if debug.on(debug.Function):logfile.Write ("GetTrainer() returns, trainertype=" + hex(trainer_type))
     return dev, msg
 
@@ -550,7 +554,7 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade,
                     PedalEcho, SpeedKmh, Cadence, Calibrate, SimulateTrainer):
     global LegacyProtocol # As filled in GetTrainer()
 
-    if debug.on(debug.Function): logfile.Write ("SendToTrainer(%s, %s, %s, %s, %s, %s, %s)" % (TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, PedalEcho, SpeedKmh, Cadence))
+    if debug.on(debug.Function): logfile.Write ("SendToTrainer(%s, %s, %s, %s, %s, %s, %s, %s)" % (Mode, TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, PedalEcho, SpeedKmh, Cadence))
 
     #---------------------------------------------------------------------------
     # Data buffer depends on trainer_type
@@ -592,13 +596,16 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade,
 
         if TargetMode == gui.mode_Power:
             Target = Power2Resistance(TargetPower, SpeedKmh, Cadence)
+            # Target *= PowercurveFactor                    # manual adjustment of requested resistance
+                                                            # IS NOT permitted: When trainer software
+                                                            # asks for 100W, you will get 100Watt!
             if LegacyProtocol == False and Target < Calibrate:
                 Target = Calibrate                          # Avoid motor-function for low TargetPower
             Weight = 0x0a                                   # weight=0x0a is a good fly-wheel value
                                                             # UserAndBikeWeight is not used!
         elif TargetMode == gui.mode_Grade:
             Target = Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence)
-            Target *= PowercurveFactor                      # manual adjustment of requested power
+            Target *= PowercurveFactor                      # manual adjustment of requested resistance
             Weight = 0x0a                                   # weight=0x0a is a good fly-wheel value
                                                             # UserAndBikeWeight is not used!        
                                                             #       an 100kg flywheels gives undesired behaviour :-)
@@ -608,14 +615,14 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade,
     elif Mode == modeCalibrate:
         Calibrate   = 0
         PedalEcho   = 0
-        Target      = Speed2Wheel(20)
+        Target      = Speed2Wheel(20)                       # 20 km/h is our decision for calibration
         Weight      = 0
 
     else:
         error = "SendToTrainer; incorrect Mode %s!" % Mode
 
     if error:
-        logfile.Write(error)
+        logfile.Console(error)
     else:
         #-----------------------------------------------------------------------
         # Build data buffer to be sent to trainer (legacy or new)
@@ -647,7 +654,7 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade,
             try:
                 devTrainer.write(0x02, data, 30)                             # send data to device
             except Exception as e:
-                logfile.Write ("SendToTrainer: USB WRITE ERROR " + str(e))
+                logfile.Console("SendToTrainer: USB WRITE ERROR " + str(e))
   
 #-------------------------------------------------------------------------------
 # R e c e i v e F r o m T r a i n e r
@@ -680,14 +687,16 @@ def ReceiveFromTrainer(devTrainer):
     #-----------------------------------------------------------------------------
     #  Read from trainer
     #-----------------------------------------------------------------------------
+    data = ""
     try:
         data = devTrainer.read(0x82, 64, 30)
+    except TimeoutError:
+        pass
     except Exception as e:
-        if "timeout error" in str(e):            #trainer did not return any data
+        if "timeout error" in str(e) or "timed out" in str(e): # trainer did not return any data
             pass
         else:
-            logfile.Write ("ReceiveFromTrainer: USB READ ERROR: " + str(e))
-        data = ""
+            logfile.Console("ReceiveFromTrainer: USB READ ERROR: " + str(e))
     if debug.on(debug.Data2):logfile.Write ("Trainer recv data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
 
     #-----------------------------------------------------------------------------

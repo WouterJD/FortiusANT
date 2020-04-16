@@ -1,7 +1,14 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-29"
+__version__ = "2020-04-07"
+# 2020-04-07    Messages enlarged to improve readability
+#               Message with PowerFactor is no longer displayed
+#                   PowerFactor is an antifier inherited way of calibrating
+#                   which is not used anymore, although still suppported.
+#                   Since the value is not dynamic, the message is obsolete.
+#               Digital Gearbox display as a graphic in number of teeth,
+#                   as if enlarging/reducing the cassette of the bicycle.
 # 2020-03-29    PowercurveFactor added to console
 # 2020-02-09    Suffix to refresh text-fields removed (?(
 # 2020-02-07    Text resized; as large as possible. Units abbreviated
@@ -21,6 +28,7 @@ __version__ = "2020-03-29"
 #
 #               Also, text fields are flickering, therefore updated every second
 #-------------------------------------------------------------------------------
+import array
 import math
 import numpy
 import os
@@ -37,13 +45,19 @@ import logfile
 #-------------------------------------------------------------------------------
 # constants
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier GUI v2.4"
+WindowTitle         = "Fortius Antifier GUI v2.5"
 
-LargeTexts  = True  # 2020-02-07
+LargeTexts          = True  # 2020-02-07
 
-mode_Basic  = 0     # Basic Resistance
-mode_Power  = 1     # Target Power
-mode_Grade  = 2     # Target Resistance
+mode_Basic          = 0     # Basic Resistance
+mode_Power          = 1     # Target Power
+mode_Grade          = 2     # Target Resistance
+
+bg                  = wx.Colour(220,220,220) # Background colour [for self.Speedometers]
+colorTacxFortius    = wx.Colour(120,148,227)
+Margin              = 4
+
+showPowerFactor     = False
 
 class staticVariables:
     LastFields = 0
@@ -131,8 +145,8 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
         self.HeartRate      = 123
         self.HeartRateWH    = 40
-                            # 2020-02-07    # 2020-01-25
-        self.HeartRateX     = 25            # BitmapW - 25 - self.HeartRateWH
+                            # 2020-04-07    # 2020-02-07    # 2020-01-25
+        self.HeartRateX     = Margin        # 25            # BitmapW - 25 - self.HeartRateWH
         self.HeartRateY     = BitmapH - 50 - self.HeartRateWH
         self.HeartRateImage = False
         try:
@@ -148,12 +162,61 @@ class frmFortiusAntGui(wx.Frame):
             # print('Cannot load ' + Heart_jpg)
             pass
         # ----------------------------------------------------------------------
+		# Calculate location of Gearbox image
+        # Positioned above HeartRate_img, equally wide/heigh
+        # ----------------------------------------------------------------------
+        self.GearboxTeeth  = 0
+        self.GearboxWH     = self.HeartRateWH
+        self.GearboxX      = self.HeartRateX
+        self.GearboxY      = self.HeartRateY - self.HeartRateWH - Margin
+        
+        # ----------------------------------------------------------------------
+        # Idea to generate the bitmap, but the "gearbox" can as easily be drawn
+        # Code left for reference, even though not correct/complete yet.
+        # ----------------------------------------------------------------------
+        if False:
+            print(1)
+            print(self.GearboxImage)
+            print('width=%s height=%s' % (self.GearboxImage.GetWidth(), self.GearboxImage.GetHeight()))
+            print(2)
+            print(self.GearboxBitmap)
+            print('width=%s height=%s' % (self.GearboxBitmap.GetWidth(), self.GearboxBitmap.GetHeight()))
+            print(3)
+
+
+            self.GearboxBitmap  = wx.Bitmap(self.GearboxImage)
+
+            bitDepth = self.GearboxBitmap.GetDepth()
+            if bitDepth == 24:
+                bpp = 3  # bytes per pixel
+                buffer_length = self.GearboxBitmap.GetWidth() * self.GearboxBitmap.GetHeight() * bpp
+                buffer = array.array('B', [0] * buffer_length )
+                self.GearboxBitmap.CopyToBuffer(buffer, wx.BitmapBufferFormat_RGB)
+                
+                print ('  :0         1         2         3         ')
+                print ('  : 123456789 123456789 123456789 123456789')
+                for y in range(0, self.GearboxBitmap.GetHeight()):
+                    print('%2.0f:' % y, end='')
+                    for x in range(0, self.GearboxBitmap.GetWidth()):
+                        index = (y * self.GearboxBitmap.GetWidth() + x ) * bpp
+                        r = buffer[index]
+                        g = buffer[index + 1]
+                        b = buffer[index + 2]
+                        if r==255 and g==255 and b==255: print ('.', end='')
+                        else:                            print ('x', end='')
+                        # if r==255 and g==255 and b==255: print ('......... ', end='')
+                        # else:                            print ('%3.0f%3.0f%3.0f ' % (r,g,b), end='')
+                    print('')
+            print(4)
+             
+            print(5)
+            
+        # ----------------------------------------------------------------------
 		# Calculate Width and X
         # ----------------------------------------------------------------------
         #
         # x [button] x [speed] x [revs] x [power] x
         #
-        Margin  = 4
         ButtonX = Margin
         ButtonW = 80
 
@@ -179,8 +242,6 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
         MiddleTextFontSize  = 10
         TicksFontSize       = 10
-        bg                  = wx.Colour(220,220,220) # Background colour for self.Speedometers
-        colorTacxFortius    = wx.Colour(120,1940,227)
 
         # ----------------------------------------------------------------------
 		# self.Speedometer
@@ -379,32 +440,44 @@ class frmFortiusAntGui(wx.Frame):
 
         # ----------------------------------------------------------------------
 		# USB Trainer
+        # - Is positioned UNDER the Speed control
+        # - Has width of Speed + Cadence control
         # ----------------------------------------------------------------------
-        self.txtUsbTrainer = wx.TextCtrl(self, value="txtUsbTrainer", size=(10,-1), style=wx.TE_LEFT | wx.TE_READONLY)
-        self.txtUsbTrainer.SetSize((self.Speed.Position[0] + self.Speed.Size[0] - Margin, -1))
-        self.txtUsbTrainer.SetPosition((Margin, self.Power.Position[1] + self.Power.Size[1] + 5))
+        self.txtUsbTrainer = wx.TextCtrl(self, value="txtUsbTrainer", size=(10,TextCtrlH), style=wx.TE_LEFT | wx.TE_READONLY)
+        self.txtUsbTrainer.SetSize((self.Revs.Position[0] + self.Revs.Size[0] - Margin, -1))
+        self.txtUsbTrainer.SetPosition((Margin, self.Speed.Position[1] + self.Speed.Size[1] + 5))
+        self.txtUsbTrainer.SetBackgroundColour(bg)
 
         # ----------------------------------------------------------------------
 		# ANT Dongle
         # ----------------------------------------------------------------------
-        self.txtAntDongle = wx.TextCtrl(self, value="txtAntDongle", size=(10,-1), style=wx.TE_LEFT | wx.TE_READONLY)
+        self.txtAntDongle = wx.TextCtrl(self, value="txtAntDongle", size=(10,TextCtrlH), style=wx.TE_LEFT | wx.TE_READONLY)
         self.txtAntDongle.SetSize((self.txtUsbTrainer.Size[0], -1))
         self.txtAntDongle.SetPosition((Margin, self.txtUsbTrainer.Position[1] + self.txtUsbTrainer.Size[1] + 5))
+        self.txtAntDongle.SetBackgroundColour(bg)
 
         # ----------------------------------------------------------------------
 		# self.Power factor
         # ----------------------------------------------------------------------
-        self.txtPowerFactor = wx.TextCtrl(self, value="txtPowerFactor", size=(10,-1), style=wx.TE_LEFT | wx.TE_READONLY)
-        self.txtPowerFactor.SetSize((self.txtUsbTrainer.Size[0], -1))
-        self.txtPowerFactor.SetPosition((Margin, self.txtAntDongle.Position[1] + self.txtAntDongle.Size[1] + 5))
+        if showPowerFactor:
+            self.txtPowerFactor = wx.TextCtrl(self, value="txtPowerFactor", size=(10,-1), style=wx.TE_LEFT | wx.TE_READONLY)
+            self.txtPowerFactor.SetSize((self.txtUsbTrainer.Size[0], TextCtrlH))
+            self.txtPowerFactor.SetPosition((Margin, self.txtAntDongle.Position[1] + self.txtAntDongle.Size[1] + 5))
+            self.txtPowerFactor.SetBackgroundColour(bg)
 
         # ----------------------------------------------------------------------
-		# self.HeartRate
+		# self.HeartRate, shown to the right of the Heartrate image
         # ----------------------------------------------------------------------
         self.txtHeartRate = wx.TextCtrl(self, value="123", size=(int(self.HeartRateWH*2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY)
         self.txtHeartRate.SetBackgroundColour(bg)
-        self.txtHeartRate.SetPosition(( self.HeartRateX - int((self.txtHeartRate.Size[0] - self.HeartRateWH)/2), \
-                                        self.HeartRateY - self.txtHeartRate.Size[1] - 5))
+        self.txtHeartRate.SetPosition(( self.HeartRateX + self.HeartRateWH + Margin, self.HeartRateY))
+
+        # ----------------------------------------------------------------------
+		# self.Gearbox, shown to the right of the Gearbox image
+        # ----------------------------------------------------------------------
+        self.txtGearbox = wx.TextCtrl(self, value="123", size=(int(self.GearboxWH*2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY)
+        self.txtGearbox.SetBackgroundColour(bg)
+        self.txtGearbox.SetPosition(( self.GearboxX + self.GearboxWH + Margin, self.GearboxY))
 
         # ----------------------------------------------------------------------
 		# Font setting for all measurements
@@ -415,6 +488,11 @@ class frmFortiusAntGui(wx.Frame):
         self.txtTarget.SetFont(TextCtrlFont)
         self.txtTacx.SetFont(TextCtrlFont)
         self.txtHeartRate.SetFont(TextCtrlFont)
+        self.txtGearbox.SetFont(TextCtrlFont)
+        
+        self.txtUsbTrainer.SetFont(TextCtrlFont)
+        self.txtAntDongle.SetFont(TextCtrlFont)
+        if showPowerFactor: self.txtPowerFactor.SetFont(TextCtrlFont)
 
         # ----------------------------------------------------------------------
 		# Buttons
@@ -473,7 +551,7 @@ class frmFortiusAntGui(wx.Frame):
         while self.RunningSwitch == True:
             t = time.localtime()
             f += 1
-            self.SetValues(f/100 * self.SpeedMax, f/100 * self.RevsMax, f/100 * self.PowerMax, t[5], False, t[0] + t[5], 123)
+            self.SetValues(f/100 * self.SpeedMax, f/100 * self.RevsMax, f/100 * self.PowerMax, t[5], False, t[0] + t[5], 123, 10)
             time.sleep(1/8)                         # sleep 0.125 second (like Tacx2Dongle)
             if f > 100:
                 self.RunningSwitch == False
@@ -492,7 +570,7 @@ class frmFortiusAntGui(wx.Frame):
 #           tr -= 5
 #           self.SetValues(r * self.SpeedMax, r * self.RevsMax, r * self.PowerMax, t[5], t[0] + t[5])
 #           self.SetValues(35.6, 234, 123, mode_Grade, 345, 19.5, 2345, 123)
-            self.SetValues(r * 35.6, r * 234, r * 123, mode_Grade, r * 345, r * 19.5, r * 2345, r * 123)
+            self.SetValues(r * 35.6, r * 234, r * 123, mode_Grade, r * 345, r * 19.5, r * 2345, r * 123, random.randint(9,27))
             time.sleep(0.250)                       # sleep 0.250 second (like Tacx2Dongle)
         return True
 
@@ -569,9 +647,8 @@ class frmFortiusAntGui(wx.Frame):
     # Output:       None
     # --------------------------------------------------------------------------
     def ResetValues(self):
-        self.SetValues(0,0,0,0,0,0,0,0)
-    def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate):
-#       iHeartRate = 0 # The heartrate update takes too much time
+        self.SetValues(0,0,0,0,0,0,0,0,0)
+    def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth):
         # ----------------------------------------------------------------------
         # Average power over the last 10 readings
         # ----------------------------------------------------------------------
@@ -580,9 +657,18 @@ class frmFortiusAntGui(wx.Frame):
         iPowerMean = int(numpy.mean(self.PowerArray))               # Calculate average
 
         # ----------------------------------------------------------------------
-        # HeartRate is needed on OnPaint() event
+        # Values are needed on OnPaint() event
         # ----------------------------------------------------------------------
-        self.HeartRate = iHeartRate
+        if iHeartRate > 40:
+            self.HeartRate    = iHeartRate
+        else:
+            self.HeartRate    = 0
+
+
+        if iTargetMode == mode_Grade:
+            self.GearboxTeeth = iTeeth          # Only valid in Resistance-mode
+        else:
+            self.GearboxTeeth = 0               # Not valid in PowerMode
 
         # ----------------------------------------------------------------------
         # Update measurements once per second only (otherwise too much flicker)
@@ -641,55 +727,74 @@ class frmFortiusAntGui(wx.Frame):
                 Elapsed = time.time() - staticVariables.LastFields
                 logfile.Write ("SetValues() done in %s ms" % int(Elapsed*1000))
 
-
         # ----------------------------------------------------------------------
         # If there is a HeartRate, bounce the image
         # We pass here every 0.250 second = 400 times/minute
         # Do not process more often than heartbeat
         # ----------------------------------------------------------------------
+        bRefreshRequired = False
         delta = time.time() - staticVariables.LastHeart # Delta time since previous
-        if delta >= 60 / max(60, iHeartRate):           # At HeartRate, not slower than 1/second
+        if delta >= 60 / max(60, self.HeartRate * 2):   # At HeartRate, not slower than 1/second
+                                                        # *2 because one heartbeat = 2 cycles
             staticVariables.LastHeart = time.time()     # Time in seconds
-            if iHeartRate > 40:
-                self.txtHeartRate.Show()
-                self.txtHeartRate.SetValue  ("%i" % iHeartRate)
+            if self.HeartRate > 0:
+                if not self.txtHeartRate.IsShown():
+                    self.txtHeartRate.Show()
+                self.txtHeartRate.SetValue  ("%i" % self.HeartRate)
 
-                if False:                               # if True: Show Large/Small on every passage
+                if self.HeartRateWH  == 40:             # Show 36x36 on every other passage
                     self.HeartRateWH  = 36
                     self.HeartRateX  += 2               # center in the 40x40 area
                     self.HeartRateY  += 2               # center in the 40x40 area
-
-                    self.Refresh()
-
-                    time.sleep(0.10)                    # short sleep; but this takes too long!
-                    self.HeartRateWH  = 40
-                    self.HeartRateX  -= 2               # use the 40x40 area
-                    self.HeartRateY  -= 2               # use the 40x40 area
-                    self.Refresh()
-
-                elif self.HeartRateWH  == 40:           # Show 36x36 on every other passage
-                    self.HeartRateWH  = 36
-                    self.HeartRateX  += 2               # center in the 40x40 area
-                    self.HeartRateY  += 2               # center in the 40x40 area
-
-                    self.Refresh()
+                    bRefreshRequired  = True
 
                 elif self.HeartRateWH  == 36:           # Show 40x40 on every other passage
                     self.HeartRateWH  = 40
                     self.HeartRateX  -= 2               # use the 40x40 area
                     self.HeartRateY  -= 2               # use the 40x40 area
-                    self.Refresh()
+                    bRefreshRequired  = True
 
             else:
-                self.txtHeartRate.Hide()
+                if self.txtHeartRate.IsShown():
+                    self.txtHeartRate.Hide()
+                    bRefreshRequired  = True
 
-    def SetMessages(self, Tacx=None, Dongle=None, Factor=None, PowercurveFactor=1):
-        if Tacx   != None: self.txtUsbTrainer.SetValue(Tacx)
-        if Dongle != None: self.txtAntDongle.SetValue(Dongle)
-        if Factor != None:
-            s = ""
-            if PowercurveFactor != 1: s = ", Curve factor=%4.2f" % PowercurveFactor
-            self.txtPowerFactor.SetValue("Power factor=%4.2f%s" % (Factor, s) )
+        # ----------------------------------------------------------------------
+        # Gearbox
+        # Show the size of the selected sprocket.
+        # The cassette is displayed in OnPaint()!
+        # ----------------------------------------------------------------------
+        if self.GearboxTeeth > 0:
+            if not self.txtGearbox.IsShown():
+                self.txtGearbox.Show()
+
+            self.txtGearbox.SetValue  ("%i" % self.GearboxTeeth)
+            bRefreshRequired  = True            # So that gearbox is painted
+            
+        else:
+            if self.txtGearbox.IsShown():
+                self.txtGearbox.Hide()
+                bRefreshRequired  = True
+
+        # ----------------------------------------------------------------------
+        # Refresh if required; so that JPGs are drawn in the OnPaint() event
+        # ----------------------------------------------------------------------
+        if bRefreshRequired: self.Refresh()
+
+    def SetMessages(self, Tacx=None, Dongle=None, Factor=None):
+        if Tacx   != None:
+            if Tacx[:4] == '* * ': self.txtUsbTrainer.SetForegroundColour(wx.BLUE)
+            else:                  self.txtUsbTrainer.SetForegroundColour(wx.BLACK)
+            self.txtUsbTrainer.SetBackgroundColour(bg)
+            self.txtUsbTrainer.SetValue(Tacx)
+
+        if Dongle != None:
+            self.txtAntDongle.SetValue(Dongle)
+
+        if showPowerFactor and Factor != None:
+            s1 = ""
+            if round(Factor,1) != 1: s1 = "Power factor=%4.1f" % Factor
+            self.txtPowerFactor.SetValue("%s" % (s1) )
 
     # --------------------------------------------------------------------------
     # O n P a i n t
@@ -697,12 +802,13 @@ class frmFortiusAntGui(wx.Frame):
     # input:        None
     #
     # Description:  Paint the frame, the bitmap and the HeartRate
+    #               Ref: http://zetcode.com/wxpython/gdi/
     #
     # Output:       None
     # --------------------------------------------------------------------------
     def OnPaint(self, event):
         # ----------------------------------------------------------------------
-        # Draw background
+        # Draw background (to be done on every OnPaint() otherwise disappears!
         # ----------------------------------------------------------------------
         dc = wx.PaintDC(self)
         dc.DrawBitmap(self.BackgroundBitmap, 0, 0)          # LeftTop in pixels
@@ -720,6 +826,38 @@ class frmFortiusAntGui(wx.Frame):
                 dc.DrawBitmap(self.bmp40x40, self.HeartRateX, self.HeartRateY)
             else:
                 logfile.Write("Unsupported image size")
+        else:
+            pass
+
+        # ----------------------------------------------------------------------
+        # Draw 12speed Digital Gearbox with interval of 10% lineair
+        # 12speed since 12*3 pixels fits in the 40x40 area we have chosen to use
+        # ----------------------------------------------------------------------
+        if self.GearboxTeeth > 0:
+            # Cassette corresponds to the shifting +/- with factor 1.1
+            # FortiusANT takes 15 as midpoint,
+            # so we have a "realistic" smallest sprocket of 9 teeth
+            # The graphical size must decrease with even pixels and is
+            #   therefore not calculated but a static table.
+            #   Size are determined so that it approximately "looks good".
+            #            1   2   3   4   5   6   7   8   9  10  11  12
+            cassette = [27, 24, 22, 20, 18, 17, 15, 14, 12, 11, 10, 9] # teeth
+            sizes    = [40, 36, 32, 28, 24, 20, 16, 14, 12, 10,  8, 6] # pixels
+            drawn = False
+            
+            for i in range(0,12):
+                teeth=cassette[i]
+                if teeth <= self.GearboxTeeth and not drawn:
+                    dc.SetPen(wx.Pen(wx.RED))                     # Selected gear
+                    drawn = True
+                else:
+                    dc.SetPen(wx.Pen(colorTacxFortius))           # Other gears
+
+                x = self.GearboxX + 1 + i * 3                     # horizontal position
+                w = 2                                             # width
+                h = sizes [i]                                     # heigth
+                y = self.GearboxY + int((self.GearboxWH - h) / 2) # vertical
+                dc.DrawRectangle(self.GearboxX + x, y, w, h)
         else:
             pass
 

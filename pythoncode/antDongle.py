@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-15b"
+__version__ = "2020-04-16"
+# 2020-04-16    Write() replaced by Console() where needed
 # 2020-04-15    Exception handling on antDongle.read() improved
 # 2020-04-15    Logfile extended for .write and .read
 # 2020-04-14    Error handling on GetDongle() improved
@@ -325,14 +326,14 @@ def ResetDongle(devAntDongle):
 # returns   none
 #-------------------------------------------------------------------------------
 def EnumerateAll():
-    logfile.Write("Dongles in the system:")
+    logfile.Console("Dongles in the system:")
     devices = usb.core.find(find_all=True)
     for device in devices:
 #       print (device)
         s = "manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
                 (device.manufacturer, device.product, \
                  hex(device.idVendor), hex(device.idProduct), device.idProduct) 
-        logfile.Write (s.replace('\0',''))
+        logfile.Console(s.replace('\0',''))
 
         i = 0
         for cfg in device:          # Do not understand this construction; see pyusb tutorial
@@ -340,7 +341,7 @@ def EnumerateAll():
             for intf in cfg:
                 for ep in intf:
                     pass
-    logfile.Write("--------------------")
+    logfile.Console("--------------------")
   
 #-------------------------------------------------------------------------------
 # G e t D o n g l e
@@ -377,7 +378,7 @@ def GetDongle(p=None):
             msg = "No (free) ANT-dongle found"         # was: "Could not find ANT-dongle"
             devAntDongles = usb.core.find(find_all=True, idProduct=ant_pid)
         except Exception as e:
-            logfile.Write ("GetDongle - Exception: %s" % e)
+            logfile.Console("GetDongle - Exception: %s" % e)
             if "AttributeError" in str(e):
                 msg = "GetDongle - Could not find dongle: " + str(e)
             elif "No backend" in str(e):
@@ -393,7 +394,7 @@ def GetDongle(p=None):
                     s = "GetDongle - Try dongle: manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
                         (devAntDongle.manufacturer, devAntDongle.product, \
                         hex(devAntDongle.idVendor), hex(devAntDongle.idProduct), devAntDongle.idProduct) 
-                    logfile.Write (s.replace('\0',''))
+                    logfile.Console(s.replace('\0',''))
                 if debug.on(debug.Data1 | debug.Function):
                     logfile.Print (devAntDongle)
                     # prints "DEVICE ID 0fcf:1009 on Bus 000 Address 001 ================="
@@ -433,7 +434,7 @@ def GetDongle(p=None):
                     msg = "GetDongle - ANT dongle in use"
 
                 except Exception as e:
-                    logfile.Write ("GetDongle - Exception: %s" % e)
+                    logfile.Console("GetDongle - Exception: %s" % e)
                     msg = "GetDongle: " + str(e)
 
                 #---------------------------------------------------------------
@@ -482,7 +483,7 @@ def SendToDongle(messages, devAntDongle, comment='', receive=True, drop=True):
             devAntDongle.write(0x01,message)    # input:   endpoint address, buffer, timeout
                                                 # returns: 
         except Exception as e:
-            logfile.Write ("devAntDongle.write exception: " + str(e))
+            logfile.Console("devAntDongle.write exception: " + str(e))
 
         #-----------------------------------------------------------------------
         # Read all responses
@@ -535,14 +536,14 @@ def ReadFromDongle(devAntDongle, drop):
             if "timeout error" in str(e) or "timed out" in str(e):
                 pass
             else:
-                logfile.Write ("devAntDongle.read exception: " + str(e))
+                logfile.Console("devAntDongle.read exception: " + str(e))
 
         # --------------------------------------------------------------------------
         # Handle content returned by .read()
         # --------------------------------------------------------------------------
         if debug.on(debug.Data1): logfile.Write('devAntDongle.read(0x81,1000,20) returns %s ' % logfile.HexSpaceL(trv))
 
-        if len(trv) > 900: logfile.Write ("ReadFromDongle() too much data from .read()" )
+        if len(trv) > 900: logfile.Console("ReadFromDongle() too much data from .read()" )
         start  = 0
         while start < len(trv):
             error = False
@@ -553,7 +554,7 @@ def ReadFromDongle(devAntDongle, drop):
             while trv[skip] != 0xa4 and skip < len(trv):
                 skip += 1
             if skip != start:
-                logfile.Write ("ReadFromDongle %s characters skipped " % (skip - start))
+                logfile.Console("ReadFromDongle %s characters skipped " % (skip - start))
                 start = skip
             #---------------------------------------------------------------
             # Second character in the buffer (element in trv) is length of 
@@ -571,7 +572,7 @@ def ReadFromDongle(devAntDongle, drop):
 
                 if expected != checksum:
                     error = "error: checksum incorrect"
-                    logfile.Write ("%s checksum=%s expected=%s data=%s" % \
+                    logfile.Console("%s checksum=%s expected=%s data=%s" % \
                         ( error, logfile.HexSpace(checksum), logfile.HexSpace(expected), logfile.HexSpace(d) ) )
                 else:
                     data.append(d)                         # add data to array
@@ -582,7 +583,7 @@ def ReadFromDongle(devAntDongle, drop):
             else:
                 error = "error: message exceeds buffer length"
             if error:
-                logfile.Write ("ReadFromDongle %s" % (error))
+                logfile.Console("ReadFromDongle %s" % (error))
             #---------------------------------------------------------------
             # Next buffer in trv
             #---------------------------------------------------------------

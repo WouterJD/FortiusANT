@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-18"
+__version__ = "2020-04-16"
+# 2020-04-16    Write() replaced by Console() where needed
 # 2020-02-18    SimulateTrainer added, so the behaviour of a training program
 #                   can be checked.
 # 2020-02-12    Different channels used for HRM and HRM_s
@@ -68,9 +69,9 @@ debug.activate(clv.debug)
 
 if True or debug.on(debug.Any):
     logfile.Open  ('ExplorANT')
-    logfile.Write ("ExplorANT started")
+    logfile.Console ("ExplorANT started")
     clv.print()
-    logfile.Write ("--------------------")
+    logfile.Console ("--------------------")
 
 # ------------------------------------------------------------------------------
 # First enumerate all dongles
@@ -90,7 +91,7 @@ else:
     p = None            # Take the default
 
 devAntDongle, msg = ant.GetDongle(p)
-logfile.Write (msg)
+logfile.Console (msg)
 
 if devAntDongle:
     #---------------------------------------------------------------------------
@@ -117,7 +118,7 @@ if devAntDongle:
     # --------------------------------------------------------------------------
     # Do pairing loop
     # --------------------------------------------------------------------------
-    logfile.Write ("Pairing, press Ctrl-C to exit")
+    logfile.Console ("Pairing, press Ctrl-C to exit")
     try:
         RunningSwitch  = True
         pairingCounter = 10             # Do pairing for n seconds
@@ -190,7 +191,11 @@ if devAntDongle:
                         pass                    
                     else:
                         print('*', end=' ')
+                        d = deviceID
+                        logfile.Write ("ExplorANT: %3s discovered on channel=%s, number=%5s typeID=%3s TrType=%3s" % \
+                            (d.DeviceType, d.Channel, d.DeviceNumber, d.DeviceTypeID, d.TransmissionType) )
                         if not deviceID in deviceIDs:
+                            logfile.Write('ExplorANT: added to list')
                             deviceIDs.append(deviceID)
                             print(DeviceType, end=' ')
                             
@@ -200,9 +205,12 @@ if devAntDongle:
                             info = ant.msgPage70_RequestDataPage(Channel, ant.DeviceNumber_EA, 255, 255, 1, 70, 0)
                             d    = ant.ComposeMessage (ant.msgID_AcknowledgedData, info)
                             ant.SendToDongle([d], devAntDongle, '', False)
+                        else:
+                            logfile.Write('ExplorANT: already in list')
+
                     deviceID = None
                 else:
-                    logfile.Write ("Ignore message id=%s ch=%s page=%s" % (hex(id), Channel, DataPageNumber))
+                    logfile.Console ("Ignore message id=%s ch=%s page=%s" % (hex(id), Channel, DataPageNumber))
                     pass
             
             #-------------------------------------------------------------------
@@ -221,16 +229,18 @@ if devAntDongle:
                 
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        logfile.Console ("Pairing loop stopped due to exception: " + str(e))
     print('')
-    logfile.Write ("Pairing stopped")
+    logfile.Console ("Pairing stopped")
 
     #---------------------------------------------------------------------------
     # Show what devices discovered
     #---------------------------------------------------------------------------
     for d in deviceIDs:
-        logfile.Write ("%3s discovered on channel=%s, number=%5s typeID=%3s TrType=%3s" % \
+        logfile.Console (" %3s discovered on channel=%s, number=%5s typeID=%3s TrType=%3s" % \
             (d.DeviceType, d.Channel, d.DeviceNumber, d.DeviceTypeID, d.TransmissionType) )
-    logfile.Write ("--------------------")
+    logfile.Console ("--------------------")
     
     #---------------------------------------------------------------------------
     # Free pairing channels
@@ -260,24 +270,24 @@ if devAntDongle:
 
             clv.hrm = -1 # When simulating master do not act as slave
             ant.HRM_ChannelConfig(devAntDongle)
-            logfile.Write ('HRM master channel %s opened; device %s' % (ant.channel_HRM, ant.DeviceNumber_HRM))
+            logfile.Console ('HRM master channel %s opened; device %s' % (ant.channel_HRM, ant.DeviceNumber_HRM))
 
             clv.fe = -1 # When simulating master do not act as slave
             ant.Trainer_ChannelConfig(devAntDongle)
-            logfile.Write ('FE master channel %s opened; device %s' % (ant.channel_FE, ant.DeviceNumber_FE))
+            logfile.Console ('FE master channel %s opened; device %s' % (ant.channel_FE, ant.DeviceNumber_FE))
 
         if clv.hrm > 0:
             ant.SlaveHRM_ChannelConfig(devAntDongle, clv.hrm)
-            logfile.Write ('HRM slave channel %s opened; listening to device %s' % (ant.channel_HRM_s, clv.hrm))
+            logfile.Console ('HRM slave channel %s opened; listening to device %s' % (ant.channel_HRM_s, clv.hrm))
 
         if clv.fe > 0:
             ant.SlaveTrainer_ChannelConfig(devAntDongle, clv.fe)
-            logfile.Write ('FE  slave channel %s opened; listening to device %s' % (ant.channel_FE_s,  clv.fe))
+            logfile.Console ('FE  slave channel %s opened; listening to device %s' % (ant.channel_FE_s,  clv.fe))
 
         # ----------------------------------------------------------------------
         # Get info from the devices
         # ----------------------------------------------------------------------
-        logfile.Write ("Listening, press Ctrl-C to exit")
+        logfile.Console ("Listening, press Ctrl-C to exit")
         try:
             RunningSwitch   = True
             
@@ -369,7 +379,7 @@ if devAntDongle:
                                         HRM_page2_done = True
                                         HRM_ManufacturerID = Spec1
                                         HRM_SerialNumber   = (Spec3 << 8) + Spec2
-                                        logfile.Write ("HRM page=%s ManufacturerID=%s SerialNumber=%s" % \
+                                        logfile.Console ("HRM page=%s ManufacturerID=%s SerialNumber=%s" % \
                                                     (DataPageNumber, HRM_ManufacturerID, HRM_SerialNumber))
 
                                 if DataPageNumber & 0x7f == 3:
@@ -378,7 +388,7 @@ if devAntDongle:
                                         HRM_HWrevision = Spec1
                                         HRM_SWversion  = Spec2
                                         HRM_Model      = Spec3
-                                        logfile.Write ("HRM page=%s HWrevision=%s, SWversion=%s Model=%s" % \
+                                        logfile.Console ("HRM page=%s HWrevision=%s, SWversion=%s Model=%s" % \
                                                 (DataPageNumber, HRM_HWrevision, HRM_SWversion, HRM_Model))
                                     
 
@@ -422,7 +432,7 @@ if devAntDongle:
                                     FE_page80_done = True
                                     Channel, DataPageNumber, Reserved, Reserved, FE_HWrevision, FE_ManufacturerID, FE_ModelNumber = \
                                         ant.msgUnpage80_ManufacturerInfo(info)
-                                    logfile.Write ("FE Page=%s HWrevision=%s ManufacturerID=%s Model=%s" % \
+                                    logfile.Console ("FE Page=%s HWrevision=%s ManufacturerID=%s Model=%s" % \
                                                    (DataPageNumber, FE_HWrevision, FE_ManufacturerID, FE_ModelNumber))
 
                             #---------------------------------------------------
@@ -434,7 +444,7 @@ if devAntDongle:
                                     FE_page81_done = True
                                     Channel, DataPageNumber, Reserved1, FE_SWrevisionSupp, FE_SWrevisionMain, FE_SerialNumber = \
                                         ant.msgUnpage81_ProductInformation(info)
-                                    logfile.Write ("FE Page=%s SWrevision=%s.%s Serial#=%s" % \
+                                    logfile.Console ("FE Page=%s SWrevision=%s.%s Serial#=%s" % \
                                                    (DataPageNumber, FE_SWrevisionMain, FE_SWrevisionSupp, FE_SerialNumber))
 
                     elif id == ant.msgID_AcknowledgedData:
@@ -501,7 +511,7 @@ if devAntDongle:
                             #-------------------------------------------------------
                             else: error = "Unknown FE data page"
                     if Unknown:
-                        logfile.Write ("IGNORED!! msg=%s ch=%s p=%s info=%s" % \
+                        logfile.Console ("IGNORED!! msg=%s ch=%s p=%s info=%s" % \
                                         (hex(id), Channel, DataPageNumber, logfile.HexSpace(info)))
             
                 #-------------------------------------------------------
@@ -517,17 +527,19 @@ if devAntDongle:
                 if listenCount == 4:
                     listenCount = 0
                     if clv.SimulateTrainer:
-                        logfile.Write ( ("Cadence=%3s Power=%3s Speed=%4.1f hr=%3s " + \
+                        logfile.Console ( ("Cadence=%3s Power=%3s Speed=%4.1f hr=%3s " + \
                                     "B=%s P=%s T=%s U=%s R=%s") % \
                                     (Cadence, CurrentPower, SpeedKmh, HeartRate, \
                                      dpBasicResistance, dpTargetPower, dpTrackResistance, dpUserConfiguration, dpRequestDatapage))
 
                     else:
-                        logfile.Write ("HRM#=%2s hr=%3s FE-C#=%2s Speed=%4s Cadence=%3s Power=%3s hr=%3s" % \
+                        logfile.Console ("HRM#=%2s hr=%3s FE-C#=%2s Speed=%4s Cadence=%3s Power=%3s hr=%3s" % \
                                     (HRM_s_count, HRM_HeartRate, FE_s_count, FE_Speed, FE_Cadence, FE_Power, FE_HeartRate))
                     
         except KeyboardInterrupt:
-            logfile.Write ("Listening stopped")
+            logfile.Console ("Listening stopped")
+        except Exception as e:
+            logfile.Console ("Listening stopped due to exception: " + str(e))
         #---------------------------------------------------------------
         # Free channel
         #---------------------------------------------------------------
@@ -539,5 +551,5 @@ if devAntDongle:
         # Release dongle
         #---------------------------------------------------------------
         ant.ResetDongle (devAntDongle)
-logfile.Write ("We're done")
-logfile.Write ("--------------------")
+logfile.Console ("We're done")
+logfile.Console ("--------------------")

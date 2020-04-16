@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-25"
+__version__ = "2020-04-16"
+# 2020-04-16    Write() replaced by Console()
+# 2020-04-10    -P PowerMode added
+# 2020-04-09    -p command line help improved
 # 2020-03-25    Typo's corrected on command line help
 # 2020-03-04    Command-line variables with values printed when debugging
 # 2020-02-10    scs added for Alana, analoque to .hrm
@@ -46,6 +49,7 @@ class CommandLineVariables(object):
     hrm             = None       # introduced 2020-02-09; None=not specified, numeric=HRM device, -1=no HRM
     manual          = False
     manualGrade     = False
+    PowerMode       = False      # introduced 2020-04-10; When specified Grade-commands are ignored xx seconds after Power-commands
     scs             = None       # introduced 2020-02-10; None=not specified, numeric=SCS device
     
     tyre            = __tyre__   # m        tyre circumference
@@ -77,7 +81,10 @@ class CommandLineVariables(object):
         parser.add_argument('-m','--manual',    help='Run manual power (ignore target from antDongle)',     required=False, action='store_true')
         parser.add_argument('-M','--manualGrade',help='Run manual grade (ignore target from antDongle)',    required=False, action='store_true')
         parser.add_argument('-n','--calibrate', help='Do not calibrate before start',                       required=False, action='store_false')
-        parser.add_argument('-p','--factor',    help='Adjust target Power by multiplying by this factor',   required=False, default=False)
+        parser.add_argument('-p','--factor',    help='Adjust target Power by multiplying by this factor for static calibration',
+                                                                                                            required=False, default=False)
+        parser.add_argument('-P','--PowerMode', help='Power mode has preference over Resistance mode (for 30 seconds)',
+                                                                                                            required=False, action='store_true')
         parser.add_argument('-r','--resistance',help='FTP percentages for resistance mode, default=150/100',required=False, default=False)
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument('-S','--scs',       help='Use this Speed Cadence Sensor (0: default device)',   required=False, default=False)
@@ -92,14 +99,15 @@ class CommandLineVariables(object):
         self.manual          = args.manual
         self.manualGrade     = args.manualGrade
         self.calibrate       = args.calibrate
+        self.PowerMode       = args.PowerMode
         self.SimulateTrainer = args.simulate
         
         if self.manual and self.manualGrade:
-            logfile.Write("-m and -M are mutually exclusive; manual power selected")
+            logfile.Console("-m and -M are mutually exclusive; manual power selected")
             self.manualGrade = False        # Mutually exclusive
         
         if (self.manual or self.manualGrade) and self.SimulateTrainer:
-            logfile.Write("-m/-M and -s both specified, most likely for program test purpose")
+            logfile.Console("-m/-M and -s both specified, most likely for program test purpose")
         
         #-----------------------------------------------------------------------
         # Bicycle definition to be parsed; three parameters
@@ -115,7 +123,7 @@ class CommandLineVariables(object):
                     self.tyre = float(b[0])
                     if self.tyre < 1: self.tyre = self.__tyre__
                 except:
-                    logfile.Write('Command line error; -b incorrect tyre=%s' % b[0])
+                    logfile.Console('Command line error; -b incorrect tyre=%s' % b[0])
                     self.tyre = self.__tyre__
             
             #-------------------------------------------------------------------
@@ -129,14 +137,14 @@ class CommandLineVariables(object):
                     try:
                         self.fL = int(s[0])
                     except:
-                        logfile.Write('Command line error; -b incorrect large chainring=%s' % s[0])
+                        logfile.Console('Command line error; -b incorrect large chainring=%s' % s[0])
 
                 self.fS = self.fL                       # Default is single chainring
                 if len(s) >= 1:
                     try:
                         self.fS = int(s[1])
                     except:
-                        logfile.Write('Command line error; -b incorrect small chainring=%s' % s[1])
+                        logfile.Console('Command line error; -b incorrect small chainring=%s' % s[1])
 
             #-------------------------------------------------------------------
             # parameter3: Cassette, small/large separated by /
@@ -148,14 +156,14 @@ class CommandLineVariables(object):
                     try:
                         self.rS = int(s[0])
                     except:
-                        logfile.Write('Command line error; -b incorrect small cassette=%s' % s[0])
+                        logfile.Console('Command line error; -b incorrect small cassette=%s' % s[0])
 
                 self.rL = self.rS               # Default is single speed cassette
                 if len(s) >= 1:
                     try:
                         self.rL = int(s[1])
                     except:
-                        logfile.Write('Command line error; -b incorrect large cassette=%s' % s[1])
+                        logfile.Console('Command line error; -b incorrect large cassette=%s' % s[1])
 
         #-----------------------------------------------------------------------
         # Get debug-flags, used in debug module
@@ -164,7 +172,7 @@ class CommandLineVariables(object):
             try:
                 self.debug = int(args.debug)
             except:
-                logfile.Write('Command line error; -d incorrect debugging flags=%s' % args.debug)
+                logfile.Console('Command line error; -d incorrect debugging flags=%s' % args.debug)
 
         #-----------------------------------------------------------------------
         # Get riders FTP
@@ -174,7 +182,7 @@ class CommandLineVariables(object):
                 self.ftp = int(args.ftp)
                 if self.ftp < 50: self.ftp = self.__ftp__
             except:
-                logfile.Write('Command line error; -f incorrect ftp=%s' % args.ftp)
+                logfile.Console('Command line error; -f incorrect ftp=%s' % args.ftp)
 
         #-----------------------------------------------------------------------
         # Get HRM
@@ -188,7 +196,7 @@ class CommandLineVariables(object):
             try:
                 self.hrm = int(args.hrm)
             except:
-                logfile.Write('Command line error; -H incorrect HRM=%s' % args.hrm)
+                logfile.Console('Command line error; -H incorrect HRM=%s' % args.hrm)
 
         #-----------------------------------------------------------------------
         # Get SCS
@@ -201,7 +209,7 @@ class CommandLineVariables(object):
 #scs        try:
 #scs            self.scs = int(args.scs)
 #scs        except:
-#scs            logfile.Write('Command line error; -S incorrect SCS=%s' % args.scs)
+#scs            logfile.Console('Command line error; -S incorrect SCS=%s' % args.scs)
 
         #-----------------------------------------------------------------------
         # Get powerfactor
@@ -210,7 +218,7 @@ class CommandLineVariables(object):
             try:
                 self.PowerFactor = float(args.factor)
             except:
-                logfile.Write('Command line error; -f incorrect power factor=%s' % args.factor)
+                logfile.Console('Command line error; -f incorrect power factor=%s' % args.factor)
 
         #-----------------------------------------------------------------------
         # Parse Resistance
@@ -221,30 +229,31 @@ class CommandLineVariables(object):
                 try:
                     self.ResistanceH = int(s[0])
                 except:
-                    logfile.Write('Command line error; -r incorrect high resistance=%s' % s[0])
+                    logfile.Console('Command line error; -r incorrect high resistance=%s' % s[0])
 
             if len(s) >= 1:
                 try:
                     self.ResistanceL = int(s[1])
                 except:
-                    logfile.Write('Command line error; -r incorrect low resistance=%s' % s[1])
+                    logfile.Console('Command line error; -r incorrect low resistance=%s' % s[1])
 
     def print(self):
         try:
             v = debug.on(debug.Any)     # Verbose: print all command-line variables with values
-            if      self.autostart:          logfile.Write ("-a")
-            if v or self.args.bicycle:       logfile.Write ("-b %s,%s/%s,%s/%s" % (self.tyre, self.fL, self.fS, self.rS, self.rL))
-            if v or self.args.debug:         logfile.Write ("-d %s (%s)" % (self.debug, bin(self.debug) ) )
-            if v or self.args.ftp:           logfile.Write ("-f %s" % self.ftp )
-            if      self.gui:                logfile.Write ("-g")
-            if v or self.args.hrm:           logfile.Write ("-H %s" % self.hrm )
-            if      self.manual:             logfile.Write ("-m")
-            if      self.manualGrade:        logfile.Write ("-M")
-            if      not self.args.calibrate: logfile.Write ("-n")
-            if v or self.args.factor:        logfile.Write ("-p %s" % self.PowerFactor )
-            if v or self.args.resistance:    logfile.Write ("-r %s/%s" % (self.ResistanceH, self.ResistanceL))
-            if      self.args.simulate:      logfile.Write ("-s")
-#scs        if      self.args.scs:           logfile.Write ("-S %s" % self.scs )
+            if      self.autostart:          logfile.Console("-a")
+            if v or self.args.bicycle:       logfile.Console("-b %s,%s/%s,%s/%s" % (self.tyre, self.fL, self.fS, self.rS, self.rL))
+            if v or self.args.debug:         logfile.Console("-d %s (%s)" % (self.debug, bin(self.debug) ) )
+            if v or self.args.ftp:           logfile.Console("-f %s" % self.ftp )
+            if      self.gui:                logfile.Console("-g")
+            if v or self.args.hrm:           logfile.Console("-H %s" % self.hrm )
+            if      self.manual:             logfile.Console("-m")
+            if      self.manualGrade:        logfile.Console("-M")
+            if      not self.args.calibrate: logfile.Console("-n")
+            if v or self.args.factor:        logfile.Console("-p %s" % self.PowerFactor )
+            if      self.args.PowerMode:     logfile.Console("-P")
+            if v or self.args.resistance:    logfile.Console("-r %s/%s" % (self.ResistanceH, self.ResistanceL))
+            if      self.args.simulate:      logfile.Console("-s")
+#scs        if      self.args.scs:           logfile.Console("-S %s" % self.scs )
         except:
             pass # May occur when incorrect command line parameters, error already given before
 
