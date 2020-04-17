@@ -907,7 +907,7 @@ def Tacx2Dongle(self):
                             elif RequestedPageNumber == 80:
                                 info = ant.msgPage80_ManufacturerInfo(ant.channel_FE, 0xff, 0xff, \
                                     ant.HWrevision_FE, ant.Manufacturer_tacx, ant.ModelNumber_FE)
-                                comment = "(Manufactorer info)"
+                                comment = "(Manufacturer info)"
                             elif RequestedPageNumber == 81:
                                 info = ant.msgPage81_ProductInformation(ant.channel_FE, 0xff, \
                                     ant.SWrevisionSupp_FE, ant.SWrevisionMain_FE, ant.SerialNumber_FE)
