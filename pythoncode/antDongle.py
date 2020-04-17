@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-16"
+__version__ = "2020-04-17"
+# 2020-04-17    Added: msgID_UnassignChannel
 # 2020-04-16    Write() replaced by Console() where needed
 # 2020-04-15    Exception handling on antDongle.read() improved
 # 2020-04-15    Logfile extended for .write and .read
@@ -112,6 +113,7 @@ msgID_AcknowledgedData                  = 0x4f
 msgID_ChannelResponse                   = 0x40
 msgID_Capabilities                      = 0x54
 
+msgID_UnassignChannel                   = 0x41
 msgID_AssignChannel                     = 0x42
 msgID_ChannelPeriod                     = 0x43
 msgID_ChannelRfFrequency                = 0x45
@@ -677,6 +679,7 @@ def DongleDebugMessage(text, d):
         
         elif id == msgID_ChannelResponse        : id_ = 'Channel Response'
         elif id == msgID_Capabilities           : id_ = 'Capabilities'
+        elif id == msgID_UnassignChannel        : id_ = 'Unassign Channel'
         elif id == msgID_AssignChannel          : id_ = 'Assign Channel'
         elif id == msgID_ChannelPeriod          : id_ = 'Channel Period'
         elif id == msgID_ChannelRfFrequency     : id_ = 'Channel RfFrequency'

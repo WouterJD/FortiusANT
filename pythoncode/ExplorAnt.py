@@ -110,7 +110,7 @@ if devAntDongle:
     #
     # Therefore, open as many channels as devices you want to find.
     #---------------------------------------------------------------------------
-    NrDevicesToPair = 10
+    NrDevicesToPair = 5
     for i in range(0, NrDevicesToPair):
         ant.SlavePair_ChannelConfig(devAntDongle, i)
     deviceIDs = []
@@ -127,10 +127,14 @@ if devAntDongle:
         # Refer to D0652.pdf, page 120. en section 9.5.4.4
         #-------------------------------------------------------------------
         messages = []
+        print ('Request to pair on channel: ', end='')
         for i in range(0, NrDevicesToPair):
+            print (i, end=' ')
             messages.append (ant.msg4D_RequestMessage(i, ant.msgID_ChannelID) )
         ant.SendToDongle(messages, devAntDongle, '', False, False)
+        print ('')
 
+        print ('Responses from channel: ', end='')
         while RunningSwitch == True and pairingCounter > 0:
             StartTime = time.time()
             #-------------------------------------------------------------------
@@ -187,17 +191,20 @@ if devAntDongle:
                     # Store in device table, so we print at the end of loop
                     #-----------------------------------------------------------
                     deviceID = clsDeviceID(Channel, DeviceType, DeviceNumber, DeviceTypeID, TransmissionType)
-                    if DeviceNumber == 0:       # The pairing device (?)
+                    print (Channel, end=' ')
+                    if DeviceNumber == 0:       # No device to pair, try again
+                        ant.SendToDongle([ant.msg4D_RequestMessage(Channel, ant.msgID_ChannelID)], \
+                                        devAntDongle, '', False, False)
                         pass                    
                     else:
-                        print('*', end=' ')
                         d = deviceID
                         logfile.Write ("ExplorANT: %3s discovered on channel=%s, number=%5s typeID=%3s TrType=%3s" % \
                             (d.DeviceType, d.Channel, d.DeviceNumber, d.DeviceTypeID, d.TransmissionType) )
                         if not deviceID in deviceIDs:
-                            logfile.Write('ExplorANT: added to list')
-                            deviceIDs.append(deviceID)
                             print(DeviceType, end=' ')
+                            logfile.Write('ExplorANT: added to list')
+
+                            deviceIDs.append(deviceID)
                             
                             #---------------------------------------------------
                             # Ask the found device for more info; page 70
@@ -206,6 +213,7 @@ if devAntDongle:
                             d    = ant.ComposeMessage (ant.msgID_AcknowledgedData, info)
                             ant.SendToDongle([d], devAntDongle, '', False)
                         else:
+                            print('*', end=' ')
                             logfile.Write('ExplorANT: already in list')
 
                     deviceID = None
