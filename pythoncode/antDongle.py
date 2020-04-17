@@ -2,6 +2,7 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-04-17"
+# 2020-04-17    Added: i-Vortex (VTX)
 # 2020-04-17    Added: Page54 FE_Capabilities to support Golden Cheetah
 # 2020-04-17    Added: msgID_UnassignChannel
 # 2020-04-16    Write() replaced by Console() where needed
@@ -70,6 +71,7 @@ channel_SCS         = 3        # ANT+ Channel for Speed Cadence Sensor
 channel_FE_s        = 4        # ANT+ channel for Fitness Equipment    (slave=Cycle Training Program)
 channel_HRM_s       = 5        # ANT+ channel for Heart Rate Monitor   (slave=display)
 channel_SCS_s       = 6        # ANT+ Channel for Speed Cadence Sensor (slave=display)
+channel_VTX_s       = 7        # ANT+ Channel for Tacx i-Vortex        (slave=Cycle Training Program)
 
 DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
 DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT uses and
@@ -166,6 +168,8 @@ Manufacturer_trainer_road	            =281
 DeviceTypeID_FE         = DeviceTypeID_fitness_equipment
 DeviceTypeID_HRM        = DeviceTypeID_heart_rate
 DeviceTypeID_SCS        = DeviceTypeID_bike_speed_cadence
+DeviceTypeID_VTX        = 61            # Tacx i-Vortex
+                                        # 0x3d      according TotalReverse
 
 TransmissionType_IC     = 0x01          # 5.2.3.1   Transmission Type
 TransmissionType_IC_GDP = 0x05          #           0x01 = Independant Channel
@@ -220,11 +224,13 @@ def Calibrate(devAntDongle):
   ]
   SendToDongle(messages,devAntDongle)
   
-def SlavePair_ChannelConfig(devAntDongle, channel_pair):
+def SlavePair_ChannelConfig(devAntDongle, channel_pair, \
+                            DeviceNumber=0, DeviceTypeID=0, TransmissionType=0):
+                            # Slave, by default full wildcards ChannelID, see msg51 comment
   if debug.on(debug.Data1): logfile.Write ("SlavePair_ChannelConfig()")
   messages=[
     msg42_AssignChannel         (channel_pair, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
-    msg51_ChannelID             (channel_pair, 0, 0, 0), # Slave, full wildcards ChannelID, see msg51 comment
+    msg51_ChannelID             (channel_pair, DeviceNumber, DeviceTypeID, TransmissionType), 
     msg45_ChannelRfFrequency    (channel_pair, RfFrequency_2457Mhz), 
     msg43_ChannelPeriod         (channel_pair, ChannelPeriod=0x1f86),
     msg60_ChannelTransmitPower  (channel_pair, TransmitPower_0dBm),
@@ -292,6 +298,19 @@ def SlaveSCS_ChannelConfig(devAntDongle, DeviceNumber):                     # No
     msg60_ChannelTransmitPower  (channel_SCS_s, TransmitPower_0dBm),
     msg4B_OpenChannel           (channel_SCS_s),
 #   msg4D_RequestMessage        (channel_SCS_s, msgID_ChannelID) # Note that answer may be in logfile only
+  ]
+  SendToDongle(messages, devAntDongle, '')
+
+def SlaveVTX_ChannelConfig(devAntDongle, DeviceNumber):                     # Note: not tested!!!
+  if debug.on(debug.Data1): logfile.Write ("SlaveVTX_ChannelConfig()")
+  messages=[
+    msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
+    msg51_ChannelID             (channel_VTX_s, DeviceNumber, DeviceTypeID_VTX, TransmissionType_IC),
+    msg45_ChannelRfFrequency    (channel_VTX_s, RfFrequency_2457Mhz), 
+    msg43_ChannelPeriod         (channel_VTX_s, ChannelPeriod=0x2000),
+    msg60_ChannelTransmitPower  (channel_VTX_s, TransmitPower_0dBm),
+    msg4B_OpenChannel           (channel_VTX_s),
+#   msg4D_RequestMessage        (channel_VTX_s, msgID_ChannelID) # Note that answer may be in logfile only
   ]
   SendToDongle(messages, devAntDongle, '')
 

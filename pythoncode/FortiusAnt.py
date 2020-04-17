@@ -757,8 +757,11 @@ def Tacx2Dongle(self):
                             
                             info = False
                             if   RequestedPageNumber == 54:
-                                # Capabilities; bit 0 = Basic, bit 1 = Target bit 3 = Simulation
-                                info = ant.msgPage54_FE_Capabilities(ant.channel_FE, 0xff, 0xff, 0xff, 0xff, 1000, 0x03)
+                                # Capabilities;
+                                # bit 0 = Basic mode
+                                # bit 1 = Target/Power/Ergo mode
+                                # bit 2 = Simulation/Restance/Slope mode
+                                info = ant.msgPage54_FE_Capabilities(ant.channel_FE, 0xff, 0xff, 0xff, 0xff, 1000, 0x07)
                                 comment = "(FE Capabilities)"
                             elif RequestedPageNumber == 80:
                                 info = ant.msgPage80_ManufacturerInfo(ant.channel_FE, 0xff, 0xff, \

@@ -109,10 +109,22 @@ if devAntDongle:
     # be found and not a list of HRM's.
     #
     # Therefore, open as many channels as devices you want to find.
+    #
+    # There may be masters around with the pairing bit set and they will be
+    # found only when the slave has the pairing bit set as well
+    #
+    # Therefore set the pairing bit on every odd channel...
+    #
+    # Ref: D00000652_ANT_Message_Protocol_and_Usage_Rev_5.1.pdf, page 29.
+    # ref: AN02_Device_Pairing_Rev2.3.pdf
     #---------------------------------------------------------------------------
-    NrDevicesToPair = 5
+    NrDevicesToPair = 6
     for i in range(0, NrDevicesToPair):
-        ant.SlavePair_ChannelConfig(devAntDongle, i)
+        DeviceNumber    =0
+        DeviceTypeID    =0 
+        TransmissionType=0
+        if i % 1 == 1: DeviceTypeID &= 0x80
+        ant.SlavePair_ChannelConfig(devAntDongle, i, DeviceNumber, DeviceTypeID, TransmissionType)
     deviceIDs = []
 
     # --------------------------------------------------------------------------
@@ -121,7 +133,7 @@ if devAntDongle:
     logfile.Console ("Pairing, press Ctrl-C to exit")
     try:
         RunningSwitch  = True
-        pairingCounter = 10             # Do pairing for n seconds
+        pairingCounter = 10     # Do pairing for n seconds
         #-------------------------------------------------------------------
         # Ask for ChannelID message
         # Refer to D0652.pdf, page 120. en section 9.5.4.4
@@ -184,6 +196,12 @@ if devAntDongle:
                         DeviceType = 'FE'
                         if clv.fe <= 0: clv.fe = DeviceNumber
 
+                    elif DeviceTypeID == ant.DeviceTypeID_SCS:
+                        DeviceType = 'SCS'
+
+                    elif DeviceTypeID == ant.DeviceTypeID_VTX:
+                        DeviceType = 'VTX'
+
                     else:
                         DeviceType = '?'
 
@@ -191,8 +209,8 @@ if devAntDongle:
                     # Store in device table, so we print at the end of loop
                     #-----------------------------------------------------------
                     deviceID = clsDeviceID(Channel, DeviceType, DeviceNumber, DeviceTypeID, TransmissionType)
-                    print (Channel, end=' ')
-                    if DeviceNumber == 0:       # No device to pair, try again
+                    # print (Channel, end=' ')
+                    if DeviceNumber == 0:      # No device paired, request again
                         ant.SendToDongle([ant.msg4D_RequestMessage(Channel, ant.msgID_ChannelID)], \
                                         devAntDongle, '', False, False)
                         pass                    
@@ -291,6 +309,10 @@ if devAntDongle:
         if clv.fe > 0:
             ant.SlaveTrainer_ChannelConfig(devAntDongle, clv.fe)
             logfile.Console ('FE  slave channel %s opened; listening to device %s' % (ant.channel_FE_s,  clv.fe))
+
+        if True:
+            ant.SlaveVTX_ChannelConfig(devAntDongle, 0)
+            logfile.Console ('VTX slave channel %s opened; listening to device %s' % (ant.channel_VTX_s,  0))
 
         # ----------------------------------------------------------------------
         # Get info from the devices
