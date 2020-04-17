@@ -2,6 +2,7 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-04-17"
+# 2020-04-17    Added: Page54 FE_Capabilities to support Golden Cheetah
 # 2020-04-17    Added: msgID_UnassignChannel
 # 2020-04-16    Write() replaced by Console() where needed
 # 2020-04-15    Exception handling on antDongle.read() improved
@@ -731,6 +732,7 @@ def DongleDebugMessage(text, d):
             elif p        == 48: p_ = 'Basic Resistance'
             elif p        == 49: p_ = 'Target Power'
             elif p        == 51: p_ = 'Track Resistance'
+            elif p        == 54: p_ = 'FE Capabilities'
             elif p        == 55: p_ = 'User Configuration'
             elif p        == 70: p_ = 'Request Datapage'
             elif p        == 76: p_ = 'Mode settings page'
@@ -1173,6 +1175,30 @@ def msgUnpage70_RequestDataPage(info):
 
     return tuple[nSlaveSerialNumber], tuple[nDescriptorByte1], tuple[nDescriptorByte2], \
            AckRequired, NrTimes, tuple[nRequestedPageNumber], tuple[nCommandType]
+
+# ------------------------------------------------------------------------------
+# P a g e 5 4 _ F E   C a p a b i l i t i e s
+# ------------------------------------------------------------------------------
+# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
+# D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
+# Common Data Page 80: (0x50) Manufacturers Information          
+# ------------------------------------------------------------------------------
+def msgPage54_FE_Capabilities(Channel, Reserved1, Reserved2, Reserved3, Reserved4, MaximumResistance, CapabilitiesBits):
+    DataPageNumber      = 54
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fReserved1          = sc.unsigned_char
+    fReserved2          = sc.unsigned_char
+    fReserved3          = sc.unsigned_char
+    fReserved4          = sc.unsigned_char
+    fMaximumResistance  = sc.unsigned_short
+    fCapabilitiesBits   = sc.unsigned_char
+
+    format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fReserved2 + fReserved3 + fReserved4 + fMaximumResistance + fCapabilitiesBits
+    info  = struct.pack (format,  Channel,   DataPageNumber,   Reserved1 ,  Reserved2 ,  Reserved3 ,  Reserved4 ,  MaximumResistance,   CapabilitiesBits)
+    
+    return info
 
 # ------------------------------------------------------------------------------
 # P a g e 8 0 _ M a n u f a c t u r e r I n f o

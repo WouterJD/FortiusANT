@@ -2,7 +2,8 @@
 # Version info
 #-------------------------------------------------------------------------------
 WindowTitle = "Fortius Antifier v2.5"
-__version__ = "2020-04-16"
+__version__ = "2020-04-17"
+# 2020-04-17    Added: Page54 FE_Capabilities
 # 2020-04-16    Write() replaced by Console() where needed
 # 2020-04-15    Calibration is aborted when iFlow 1932 returns positive values
 #               Fortius returns one positive reading and then goes negative...
@@ -755,7 +756,11 @@ def Tacx2Dongle(self):
                                 RequestedPageNumber, CommandType = ant.msgUnpage70_RequestDataPage(info)
                             
                             info = False
-                            if   RequestedPageNumber == 80:
+                            if   RequestedPageNumber == 54:
+                                # Capabilities; bit 0 = Basic, bit 1 = Target bit 3 = Simulation
+                                info = ant.msgPage54_FE_Capabilities(ant.channel_FE, 0xff, 0xff, 0xff, 0xff, 1000, 0x03)
+                                comment = "(FE Capabilities)"
+                            elif RequestedPageNumber == 80:
                                 info = ant.msgPage80_ManufacturerInfo(ant.channel_FE, 0xff, 0xff, \
                                     ant.HWrevision_FE, ant.Manufacturer_tacx, ant.ModelNumber_FE)
                                 comment = "(Manufactorer info)"
