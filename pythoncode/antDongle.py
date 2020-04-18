@@ -1,19 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-17"
-# 2020-04-17    Added: i-Vortex (VTX)
-# 2020-04-17    Added: Page54 FE_Capabilities to support Golden Cheetah
-# 2020-04-17    Added: msgID_UnassignChannel
-# 2020-04-16    Write() replaced by Console() where needed
-# 2020-04-15    Exception handling on antDongle.read() improved
-# 2020-04-15    Logfile extended for .write and .read
-# 2020-04-14    Error handling on GetDongle() improved
-#               OS-dependencies removed (since works for Windows, Linux and Mac)
-# 2020-04-13    Some print() replaced by logfile.Write().
-#               Dongle printed to logfile
-# 2020-04-12    TimeoutError-handling improved; Macintosh returns "timed out".
-#               Old code is removed, it appears obsolete for all platforms
+__version__ = "2020-04-13"
+# 2020-04-13    Dongle printed to logfile
 # 2020-03-31    The grade as provided by Zwift or Rouvy was multiplied by 2.5
 #               resulting in far too steep slopes. Removed.
 # 2020-03-09    GetDongle() improved; multiple dongles of same type supported
@@ -71,7 +60,6 @@ channel_SCS         = 3        # ANT+ Channel for Speed Cadence Sensor
 channel_FE_s        = 4        # ANT+ channel for Fitness Equipment    (slave=Cycle Training Program)
 channel_HRM_s       = 5        # ANT+ channel for Heart Rate Monitor   (slave=display)
 channel_SCS_s       = 6        # ANT+ Channel for Speed Cadence Sensor (slave=display)
-channel_VTX_s       = 7        # ANT+ Channel for Tacx i-Vortex        (slave=Cycle Training Program)
 
 DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
 DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT uses and
@@ -116,7 +104,6 @@ msgID_AcknowledgedData                  = 0x4f
 msgID_ChannelResponse                   = 0x40
 msgID_Capabilities                      = 0x54
 
-msgID_UnassignChannel                   = 0x41
 msgID_AssignChannel                     = 0x42
 msgID_ChannelPeriod                     = 0x43
 msgID_ChannelRfFrequency                = 0x45
@@ -168,8 +155,6 @@ Manufacturer_trainer_road	            =281
 DeviceTypeID_FE         = DeviceTypeID_fitness_equipment
 DeviceTypeID_HRM        = DeviceTypeID_heart_rate
 DeviceTypeID_SCS        = DeviceTypeID_bike_speed_cadence
-DeviceTypeID_VTX        = 61            # Tacx i-Vortex
-                                        # 0x3d      according TotalReverse
 
 TransmissionType_IC     = 0x01          # 5.2.3.1   Transmission Type
 TransmissionType_IC_GDP = 0x05          #           0x01 = Independant Channel
@@ -224,13 +209,11 @@ def Calibrate(devAntDongle):
   ]
   SendToDongle(messages,devAntDongle)
   
-def SlavePair_ChannelConfig(devAntDongle, channel_pair, \
-                            DeviceNumber=0, DeviceTypeID=0, TransmissionType=0):
-                            # Slave, by default full wildcards ChannelID, see msg51 comment
+def SlavePair_ChannelConfig(devAntDongle, channel_pair):
   if debug.on(debug.Data1): logfile.Write ("SlavePair_ChannelConfig()")
   messages=[
     msg42_AssignChannel         (channel_pair, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
-    msg51_ChannelID             (channel_pair, DeviceNumber, DeviceTypeID, TransmissionType), 
+    msg51_ChannelID             (channel_pair, 0, 0, 0), # Slave, full wildcards ChannelID, see msg51 comment
     msg45_ChannelRfFrequency    (channel_pair, RfFrequency_2457Mhz), 
     msg43_ChannelPeriod         (channel_pair, ChannelPeriod=0x1f86),
     msg60_ChannelTransmitPower  (channel_pair, TransmitPower_0dBm),
@@ -301,19 +284,6 @@ def SlaveSCS_ChannelConfig(devAntDongle, DeviceNumber):                     # No
   ]
   SendToDongle(messages, devAntDongle, '')
 
-def SlaveVTX_ChannelConfig(devAntDongle, DeviceNumber):                     # Note: not tested!!!
-  if debug.on(debug.Data1): logfile.Write ("SlaveVTX_ChannelConfig()")
-  messages=[
-    msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
-    msg51_ChannelID             (channel_VTX_s, DeviceNumber, DeviceTypeID_VTX, TransmissionType_IC),
-    msg45_ChannelRfFrequency    (channel_VTX_s, RfFrequency_2457Mhz), 
-    msg43_ChannelPeriod         (channel_VTX_s, ChannelPeriod=0x2000),
-    msg60_ChannelTransmitPower  (channel_VTX_s, TransmitPower_0dBm),
-    msg4B_OpenChannel           (channel_VTX_s),
-#   msg4D_RequestMessage        (channel_VTX_s, msgID_ChannelID) # Note that answer may be in logfile only
-  ]
-  SendToDongle(messages, devAntDongle, '')
-
 def PowerDisplay_unused(devAntDongle):
   if debug.on(debug.Data1): logfile.Write ("powerdisplay()")
                                                     # calibrate as power display
@@ -348,14 +318,14 @@ def ResetDongle(devAntDongle):
 # returns   none
 #-------------------------------------------------------------------------------
 def EnumerateAll():
-    logfile.Console("Dongles in the system:")
+    logfile.Write("Dongles in the system:")
     devices = usb.core.find(find_all=True)
     for device in devices:
 #       print (device)
         s = "manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
                 (device.manufacturer, device.product, \
                  hex(device.idVendor), hex(device.idProduct), device.idProduct) 
-        logfile.Console(s.replace('\0',''))
+        logfile.Write (s.replace('\0',''))
 
         i = 0
         for cfg in device:          # Do not understand this construction; see pyusb tutorial
@@ -363,7 +333,7 @@ def EnumerateAll():
             for intf in cfg:
                 for ep in intf:
                     pass
-    logfile.Console("--------------------")
+    logfile.Write("--------------------")
   
 #-------------------------------------------------------------------------------
 # G e t D o n g l e
@@ -382,92 +352,127 @@ def GetDongle(p=None):
         dongles = { (p, "(provided)")                                     }
 
     #---------------------------------------------------------------------------
+    # Windows, Darwin
+    #---------------------------------------------------------------------------
     # https://github.com/pyusb/pyusb/blob/master/docs/tutorial.rst
     #---------------------------------------------------------------------------
     found_available_ant_stick = False
-    #---------------------------------------------------------------------------
-    # Check the known (and supported) dongle types
-    # Removed: if platform.system() in [ 'Windows', 'Darwin', 'Linux' ]:
-    #---------------------------------------------------------------------------
-    for dongle in dongles:
-        ant_pid = dongle[0]
-        if debug.on(debug.Function): logfile.Write ("GetDongle - Check for dongle %s %s" % (ant_pid, dongle[1]))
-        try:
-            #-------------------------------------------------------------------
-            # Find the ANT-dongles of this type
-            # Note: filter on idVendor=0x0fcf is removed
-            #-------------------------------------------------------------------
-            msg = "No (free) ANT-dongle found"         # was: "Could not find ANT-dongle"
-            devAntDongles = usb.core.find(find_all=True, idProduct=ant_pid)
-        except Exception as e:
-            logfile.Console("GetDongle - Exception: %s" % e)
-            if "AttributeError" in str(e):
-                msg = "GetDongle - Could not find dongle: " + str(e)
-            elif "No backend" in str(e):
-                msg = "GetDongle - No backend, check libusb: " + str(e)
-            else:
-                msg = "GetDongle: " + str(e)
-        else:
-            #-------------------------------------------------------------------
-            # Try all dongles of this type
-            #-------------------------------------------------------------------
-            for devAntDongle in devAntDongles:
-                if debug.on(debug.Function): 
-                    s = "GetDongle - Try dongle: manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
-                        (devAntDongle.manufacturer, devAntDongle.product, \
-                        hex(devAntDongle.idVendor), hex(devAntDongle.idProduct), devAntDongle.idProduct) 
-                    logfile.Console(s.replace('\0',''))
-                if debug.on(debug.Data1 | debug.Function):
-                    logfile.Print (devAntDongle)
-                    # prints "DEVICE ID 0fcf:1009 on Bus 000 Address 001 ================="
-                    # But .Bus and .Address not found for logging
+    if platform.system() in [ 'Windows', 'Darwin', 'Linux' ]:
+        #-----------------------------------------------------------------------
+        # Check the known (and supported) dongle types
+        #-----------------------------------------------------------------------
+        for dongle in dongles:
+            ant_pid = dongle[0]
+            if debug.on(debug.Function): logfile.Write ("GetDongle - Check for dongle %s %s" % (ant_pid, dongle[1]))
+            try:
                 #---------------------------------------------------------------
-                # Initialize the dongle
+                # Try the ANT-dongles of this type
+                # Note: filter on idVendor=0x0fcf is removed
                 #---------------------------------------------------------------
-                try:                                            # check if in use
-                    if debug.on(debug.Function): logfile.Write ("GetDongle - Set configuration")
-                    devAntDongle.set_configuration()
+                msg = "Could not find ANT-dongle"
+                devAntDongles = usb.core.find(find_all=True, idProduct=ant_pid)
+                for devAntDongle in devAntDongles:
+                    if debug.on(debug.Function): 
+                        s = "GetDongle - Try dongle: manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
+                            (devAntDongle.manufacturer, devAntDongle.product, \
+                            hex(devAntDongle.idVendor), hex(devAntDongle.idProduct), devAntDongle.idProduct) 
+                        logfile.Write (s.replace('\0',''))
 
-
-                    reset_string=msg4A_ResetSystem()            # reset string probe
-                                                                # same as ResetDongle()
-                                                                # done here to have explicit error-handling.
-                    if debug.on(debug.Function): logfile.Write ("GetDongle - Send reset string to dongle")
-                    devAntDongle.write(0x01, reset_string)
-                    time.sleep(0.500)                           # after reset, 500ms before next action
-
-
-                    if debug.on(debug.Function): logfile.Write ("GetDongle - Read answer")
-                    reply = ReadFromDongle(devAntDongle, False)
-
-
-                    if debug.on(debug.Function): logfile.Write ("GetDongle - Check for an ANT+ reply")
-                    msg = "No expected reply from dongle"
-                    for s in reply:
-                        synch, length, id, info, checksum, rest, c, d = DecomposeMessage(s)
-                        if synch==0xa4 and length==0x01 and id==0x6f:
-                            found_available_ant_stick = True
-                            msg = "Using %s dongle" %  devAntDongle.manufacturer # dongle[1]
-                            msg = msg.replace('\0','')          # .manufacturer is NULL-terminated
-
-                except usb.core.USBError as e:                  # cannot write to ANT dongle
                     if debug.on(debug.Data1 | debug.Function):
-                        logfile.Write ("GetDongle - Exception: %s" % e)
-                    msg = "GetDongle - ANT dongle in use"
+                        logfile.Print (devAntDongle)
+                        pass
 
-                except Exception as e:
-                    logfile.Console("GetDongle - Exception: %s" % e)
+                    #-----------------------------------------------------------
+                    # Initialize the dongle
+                    #-----------------------------------------------------------
+
+                    try:                                            # check if in use
+                        if debug.on(debug.Function): logfile.Write ("GetDongle - Set configuration")
+                        devAntDongle.set_configuration()
+
+
+                        reset_string=msg4A_ResetSystem()            # reset string probe
+                                                                    # same as ResetDongle()
+                                                                    # done here to have explicit error-handling.
+                        if debug.on(debug.Function): logfile.Write ("GetDongle - Send reset string to dongle")
+                        devAntDongle.write(0x01, reset_string)
+                        time.sleep(0.500)                           # after reset, 500ms before next action
+
+                        if debug.on(debug.Function): logfile.Write ("GetDongle - Read answer")
+                        reply = ReadFromDongle(devAntDongle, False)
+
+                        if debug.on(debug.Function): logfile.Write ("GetDongle - Check for an ANT+ reply")
+
+                        msg = "No expected reply from dongle"
+                        for s in reply:
+                            synch, length, id, info, checksum, rest, c, d = DecomposeMessage(s)
+                            if synch==0xa4 and length==0x01 and id==0x6f:
+                                found_available_ant_stick = True
+                                msg = "Using %s dongle" %  devAntDongle.manufacturer # dongle[1]
+                                msg = msg.replace('\0','')          # .manufacturer is NULL-terminated
+
+                    except usb.core.USBError:                       # cannot write to ANT dongle
+                        logfile.Write ("GetDongle - Exception: %s" % e)
+                        msg = "GetDongle - ANT dongle in use"
+
+                    except Exception as e:
+                        logfile.Write ("GetDongle - Exception: %s" % e)
+                        msg = "GetDongle: " + str(e)
+                    #-----------------------------------------------------------
+                    # If found, don't try the next ANT-dongle of this type
+                    #-----------------------------------------------------------
+                    if found_available_ant_stick: break
+            
+            except Exception as e:
+                logfile.Write ("GetDongle - Exception: %s" % e)
+                #---------------------------------------------------------------
+                # Handle exceptions on usb.core.find
+                #---------------------------------------------------------------
+                if "AttributeError" in str(e):
+                    msg = "GetDongle - Could not find dongle: " + str(e)
+                elif "No backend" in str(e):
+                    msg = "GetDongle - No backend, check libusb: " + str(e)
+                else:
                     msg = "GetDongle: " + str(e)
 
-                #---------------------------------------------------------------
-                # If found, don't try the next ANT-dongle of this type
-                #---------------------------------------------------------------
-                if found_available_ant_stick: break
+            #-------------------------------------------------------------------
+            # If found, don't try the next type
+            #-------------------------------------------------------------------
+            if found_available_ant_stick: break
 
-        #-----------------------------------------------------------------------
-        # If found, don't try the next type
-        #-----------------------------------------------------------------------
-        if found_available_ant_stick: break
+    #---------------------------------------------------------------------------
+    # Find ANT+ USB stick on serial (was ever used on Linux, Posix)
+    #---------------------------------------------------------------------------
+    elif False:
+        print ('***** not tested; what platform needs this? *****')
+        for p in glob.glob('/dev/ttyUSB*'):
+            devAntDongle = serial.Serial(p, 19200, rtscts=True, dsrdtr=True)
+
+            # I would expect that devAntDongle is checked for success....
+
+            reply = ResetDongle(devAntDongle)
+            msg = "No expected reply from dongle"
+            for s in reply:
+                synch, length, id, info, checksum, rest, c, p = DecomposeMessage(s)
+                if synch==0xa4 and length==0x01 and id==0x6f:
+                    serial_port = p
+                    found_available_ant_stick = True
+                    msg = "Found ANT Stick"
+
+            if not found_available_ant_stick:
+                 devAntDongle.close()   #not correct reply to reset
+
+            if found_available_ant_stick == True: break
+
+        if found_available_ant_stick == False:
+            print ('Could not find ANT+ device. Check output of "lsusb | grep 0fcf" and "ls /dev/ttyUSB*"')
+            #sys.exit()
+        
+    #---------------------------------------------------------------------------
+    # Other OS
+    #---------------------------------------------------------------------------
+    else:
+        msg = "OS not Supported"
   
     #---------------------------------------------------------------------------
     # Done
@@ -499,13 +504,17 @@ def SendToDongle(messages, devAntDongle, comment='', receive=True, drop=True):
         #-----------------------------------------------------------------------
         # Send the message
         #-----------------------------------------------------------------------
+        if False:
+            print ('***** not tested; what platform needs this? *****')
+            devAntDongle.write(message)             # Note: devAntDongle is a serial here!
+        else:
+            try:
+                devAntDongle.write(0x01,message)    # input:   endpoint address, buffer, timeout
+                                                    # returns: 
+            except Exception as e:
+                logfile.Write ("SendToDongle write error: " + str(e))
+
         DongleDebugMessage("Dongle    send   :", message)
-        try:
-            if debug.on(debug.Data1): logfile.Write('devAntDongle.write(0x01,%s)' % logfile.HexSpace(message))
-            devAntDongle.write(0x01,message)    # input:   endpoint address, buffer, timeout
-                                                # returns: 
-        except Exception as e:
-            logfile.Console("devAntDongle.write exception: " + str(e))
 
         #-----------------------------------------------------------------------
         # Read all responses
@@ -514,7 +523,7 @@ def SendToDongle(messages, devAntDongle, comment='', receive=True, drop=True):
             data = ReadFromDongle(devAntDongle, drop)
             for d in data: rtn.append(d)
 
-    # too much if debug.on(debug.Function): logfile.Write ("SendToDongle() returns: " +  logfile.HexSpaceL(rtn))
+    if debug.on(debug.Function): logfile.Write ("SendToDongle() returns: " +  logfile.HexSpaceL(rtn))
     return rtn
 
 #-------------------------------------------------------------------------------
@@ -537,81 +546,74 @@ def ReadFromDongle(devAntDongle, drop):
     # https://www.thisisant.com/forum/view/viewthread/812
     #---------------------------------------------------------------------------
     data = []
-    NoException = True
-    while NoException:                              # ends after exception on .read
-        try:
-            trv = []                                # initialize because is processed even after exception
-            trv = devAntDongle.read(0x81,1000,20)   # input:   endpoint address, length, timeout
-                                                    # returns: an array of bytes
-        # --------------------------------------------------------------------------
-        # https://docs.python.org/3/library/exceptions.html
-        # https://docs.python.org/3/library/exceptions.html
-        # --------------------------------------------------------------------------
-        # TimeoutError not raised on all systems, inspect text-message as well.
-        # "timeout error" on most systems, "timed out" on Macintosh.
-        # --------------------------------------------------------------------------
-        except TimeoutError:
-            NoException = False
-            pass
-        except Exception as e:
-            NoException = False
-            if "timeout error" in str(e) or "timed out" in str(e):
-                pass
+    try:
+        while True:                                     # ends on exception
+            if False:
+                print ('***** not tested; what platform needs this? *****')
+                devAntDongle.timeout = 0.1
+                try:
+                    trv = devAntDongle.read(size=256)   # Note: devAntDongle is a serial here!
+                except Exception as e:
+                    trv = ""
+                    logfile.Write ( str(e) )
             else:
-                logfile.Console("devAntDongle.read exception: " + str(e))
+                trv = devAntDongle.read(0x81,1000,20)   # input:   endpoint address, length, timeout
+                                                        # returns: an array of bytes
 
-        # --------------------------------------------------------------------------
-        # Handle content returned by .read()
-        # --------------------------------------------------------------------------
-        if debug.on(debug.Data1): logfile.Write('devAntDongle.read(0x81,1000,20) returns %s ' % logfile.HexSpaceL(trv))
-
-        if len(trv) > 900: logfile.Console("ReadFromDongle() too much data from .read()" )
-        start  = 0
-        while start < len(trv):
-            error = False
-            #---------------------------------------------------------------
-            # Each message starts with a4; skip characters if not
-            #---------------------------------------------------------------
-            skip = start
-            while trv[skip] != 0xa4 and skip < len(trv):
-                skip += 1
-            if skip != start:
-                logfile.Console("ReadFromDongle %s characters skipped " % (skip - start))
-                start = skip
-            #---------------------------------------------------------------
-            # Second character in the buffer (element in trv) is length of 
-            # the info; add four for synch, len, id and checksum
-            #---------------------------------------------------------------
-            length = trv[start+1] + 4
-            if start + length <= len(trv):
+            if len(trv) > 900: logfile.Write ("ReadFromDongle() too much data from .read()" )
+            start  = 0
+            while start < len(trv):
+                error = False
                 #---------------------------------------------------------------
-                # Check length and checksum
-                # Append to return array when correct
+                # Each message starts with a4; skip characters if not
                 #---------------------------------------------------------------
-                d = bytes(trv[start : start+length])
-                checksum = d[-1:]
-                expected = CalcChecksum(d)
+                skip = start
+                while trv[skip] != 0xa4 and skip < len(trv):
+                    skip += 1
+                if skip != start:
+                    logfile.Write ("ReadFromDongle %s characters skipped " % (skip - start))
+                    start = skip
+                #---------------------------------------------------------------
+                # Second character in the buffer (element in trv) is length of 
+                # the info; add four for synch, len, id and checksum
+                #---------------------------------------------------------------
+                length = trv[start+1] + 4
+                if start + length <= len(trv):
+                    #---------------------------------------------------------------
+                    # Check length and checksum
+                    # Append to return array when correct
+                    #---------------------------------------------------------------
+                    d = bytes(trv[start : start+length])
+                    checksum = d[-1:]
+                    expected = CalcChecksum(d)
 
-                if expected != checksum:
-                    error = "error: checksum incorrect"
-                    logfile.Console("%s checksum=%s expected=%s data=%s" % \
-                        ( error, logfile.HexSpace(checksum), logfile.HexSpace(expected), logfile.HexSpace(d) ) )
-                else:
-                    data.append(d)                         # add data to array
-                    if drop == True:
-                        DongleDebugMessage ("Dongle    drop   :", d)
+                    if expected != checksum:
+                        error = "error: checksum incorrect"
+                        logfile.Write ("%s checksum=%s expected=%s data=%s" % \
+                            ( error, logfile.HexSpace(checksum), logfile.HexSpace(expected), logfile.HexSpace(d) ) )
                     else:
-                        DongleDebugMessage ("Dongle    receive:", d)
-            else:
-                error = "error: message exceeds buffer length"
-            if error:
-                logfile.Console("ReadFromDongle %s" % (error))
-            #---------------------------------------------------------------
-            # Next buffer in trv
-            #---------------------------------------------------------------
-            start += length
+                        data.append(d)                         # add data to array
+                        if drop == True:
+                            DongleDebugMessage ("Dongle    drop   :", d)
+                        else:
+                            DongleDebugMessage ("Dongle    receive:", d)
+                else:
+                    error = "error: message exceeds buffer length"
+                if error:
+                    logfile.Write ("ReadFromDongle %s" % (error))
+                #---------------------------------------------------------------
+                # Next buffer in trv
+                #---------------------------------------------------------------
+                start += length
+    except Exception as e:
+        if "timeout error" in str(e):
+            if debug.on(debug.Data1):
+                logfile.Write ("Dongle    timeout")
+            pass
+        else:
+            logfile.Write ("ReadFromDongle read error: " + str(e))
        
-    # too much if debug.on(debug.Function): logfile.Write ("ReadFromDongle() returns: " + logfile.HexSpaceL(data))
+    if debug.on(debug.Function): logfile.Write ("ReadFromDongle() returns: " + logfile.HexSpaceL(data))
     return data
 
 # ------------------------------------------------------------------------------
@@ -699,7 +701,6 @@ def DongleDebugMessage(text, d):
         
         elif id == msgID_ChannelResponse        : id_ = 'Channel Response'
         elif id == msgID_Capabilities           : id_ = 'Capabilities'
-        elif id == msgID_UnassignChannel        : id_ = 'Unassign Channel'
         elif id == msgID_AssignChannel          : id_ = 'Assign Channel'
         elif id == msgID_ChannelPeriod          : id_ = 'Channel Period'
         elif id == msgID_ChannelRfFrequency     : id_ = 'Channel RfFrequency'
@@ -751,7 +752,6 @@ def DongleDebugMessage(text, d):
             elif p        == 48: p_ = 'Basic Resistance'
             elif p        == 49: p_ = 'Target Power'
             elif p        == 51: p_ = 'Track Resistance'
-            elif p        == 54: p_ = 'FE Capabilities'
             elif p        == 55: p_ = 'User Configuration'
             elif p        == 70: p_ = 'Request Datapage'
             elif p        == 76: p_ = 'Mode settings page'
@@ -1194,30 +1194,6 @@ def msgUnpage70_RequestDataPage(info):
 
     return tuple[nSlaveSerialNumber], tuple[nDescriptorByte1], tuple[nDescriptorByte2], \
            AckRequired, NrTimes, tuple[nRequestedPageNumber], tuple[nCommandType]
-
-# ------------------------------------------------------------------------------
-# P a g e 5 4 _ F E   C a p a b i l i t i e s
-# ------------------------------------------------------------------------------
-# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
-# D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
-# Common Data Page 80: (0x50) Manufacturers Information          
-# ------------------------------------------------------------------------------
-def msgPage54_FE_Capabilities(Channel, Reserved1, Reserved2, Reserved3, Reserved4, MaximumResistance, CapabilitiesBits):
-    DataPageNumber      = 54
-
-    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
-    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
-    fReserved1          = sc.unsigned_char
-    fReserved2          = sc.unsigned_char
-    fReserved3          = sc.unsigned_char
-    fReserved4          = sc.unsigned_char
-    fMaximumResistance  = sc.unsigned_short
-    fCapabilitiesBits   = sc.unsigned_char
-
-    format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fReserved2 + fReserved3 + fReserved4 + fMaximumResistance + fCapabilitiesBits
-    info  = struct.pack (format,  Channel,   DataPageNumber,   Reserved1 ,  Reserved2 ,  Reserved3 ,  Reserved4 ,  MaximumResistance,   CapabilitiesBits)
-    
-    return info
 
 # ------------------------------------------------------------------------------
 # P a g e 8 0 _ M a n u f a c t u r e r I n f o
