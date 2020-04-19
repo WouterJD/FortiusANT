@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-18"
+__version__ = "2020-04-19"
+# 2020-04-19    Tacx i-Vortex data pages implemented
 # 2020-04-18    Changed: Vortex frequency=2466
 #                        Calibrate() creates two networks, the default and 
 #                           an extra network for Tacx i-Vortex
@@ -483,7 +484,6 @@ def GetDongle(p=None):
     if debug.on(debug.Function): logfile.Write ("GetDongle() returns: " + msg)
     return devAntDongle, msg
 
-
 #-------------------------------------------------------------------------------
 # S e n d T o D o n g l e
 #-------------------------------------------------------------------------------
@@ -921,66 +921,315 @@ def unmsg64_ChannelResponse(info):
     return tuple[nChannel], tuple[nInitiatingMessageID], tuple[nResponseCode]
 
 # ------------------------------------------------------------------------------
-# P a g e 0 0   Tacx Vortex data pages
+# P a g e 0 0   T a c x V o r t e x D a t a S p e e d
 # ------------------------------------------------------------------------------
 # Refer:    GoldenCheetah\GoldenCheetah\src\ANT; ANTmessage.cpp
-#           vortexPage = payload[0];
-#           case TACX_VORTEX_DATA_SPEED:
-#               vortexUsingVirtualSpeed = (payload[1] >> 7) == 1;
-#               vortexPower = payload[2] | ((payload[1] & 7) << 8); // watts
-#               vortexSpeed = payload[4] | ((payload[3] & 3) << 8); // cm/s
-#               // 0, 1, 2, 3 = none, running, new, failed
-#               vortexCalibrationState = (payload[1] >> 5) & 3;
-#               // unclear if this is set to anything
-#               vortexCadence = payload[7];
+#               vortexPage = payload[0];
+#               case TACX_VORTEX_DATA_SPEED:
+#               {
+#                   vortexUsingVirtualSpeed = (payload[1] >> 7) == 1;
+#                   vortexPower = payload[2] | ((payload[1] & 7) << 8); // watts
+#                   vortexSpeed = payload[4] | ((payload[3] & 3) << 8); // cm/s
+#                   // 0, 1, 2, 3 = none, running, new, failed
+#                   vortexCalibrationState = (payload[1] >> 5) & 3;
+#                   // unclear if this is set to anything
+#                   vortexCadence = payload[7];
+#                   break;
+#               }
+# ------------------------------------------------------------------------------
+#                                           payload[0][1][2][3][4][5][6][7]
+#06:15:48,254: IGNORED!! msg=0x4e ch=7 p=0 info="07 00 80 17 00 4a 00 05 1d" TACX_VORTEX_DATA_SPEED
+#                                                ch p  power speed rrrrr cd
 # ------------------------------------------------------------------------------
 def msgUnpage00_TacxVortexDataSpeed (info):
+    nChannel            = 0
+    fChannel            = sc.unsigned_char  # 0 First byte of the ANT+ message content
+
+    nDataPageNumber     = 1
+    fDataPageNumber     = sc.unsigned_char  # payload[0]        First byte of the ANT+ datapage
+
+    nPower              = 2
+    fPower              = sc.unsigned_short # payload[1 and 2]  Watts, big-endian
+
+    nSpeed              = 3
+    fSpeed              = sc.unsigned_short # payload[3 and 4]  cm/s, big-endian
+
+    fReserved           = sc.pad * 2        # payload[5 and 6] 
+
+    nCadence            = 4
+    fCadence            = sc.unsigned_char  # payload[7] 
+
+    format= sc.big_endian + fChannel + fDataPageNumber + fPower + fSpeed + fReserved + fCadence
+    tuple = struct.unpack (format, info)
+
+    Channel             =  tuple[nChannel]
+    DataPageNumber      =  tuple[nDataPageNumber]
+    UsingVirtualSpeed   = (tuple[nPower] & 0x8000) >> 15 # B 1000 0000 0000 0000
+    CalibrationState    = (tuple[nPower] & 0x6000) >> 13 # B 0110 0000 0000 0000
+    Power               =  tuple[nPower] & 0x07ff        # B 0000 0111 1111 1111
+    Speed               =  tuple[nSpeed] & 0xffff
+    Cadence             =  tuple[nCadence]
+
+    return UsingVirtualSpeed, Power, Speed, CalibrationState, Cadence
+
+# ------------------------------------------------------------------------------
+# P a g e 0 1   T a c x V o r t e x D a t a S e r i a l
+# ------------------------------------------------------------------------------
+# Refer:    GoldenCheetah\GoldenCheetah\src\ANT; ANTmessage.cpp
+#               vortexPage = payload[0];
+#               case TACX_VORTEX_DATA_SERIAL:
+#               {
+#                   // unk0 .. unk2 make up the serial number of the trainer
+#                   //uint8_t unk0 = payload[1];
+#                   //uint8_t unk1 = payload[2];
+#                   //uint32_t unk2 = payload[3] << 16 | payload[4] << 8 || payload[5];
+#                   // various flags, only known one is for virtual speed used
+#                   //uint8_t alarmStatus = payload[6] << 8 | payload[7];
+#                   break;
+#               }
+# ------------------------------------------------------------------------------
+#                                           payload[0][1][2][3][4][5][6][7]
+#06:15:35,603: IGNORED!! msg=0x4e ch=7 p=1 info="07 01 3d 0d 00 29 42 00 00" TACX_VORTEX_DATA_SERIAL
+#                                                ch p  s1 s2 serial-- alarm
+# ------------------------------------------------------------------------------
+def msgUnpage01_TacxVortexDataSerial (info):
     nChannel            = 0
     fChannel            = sc.unsigned_char  #0 First byte of the ANT+ message content
 
     nDataPageNumber     = 1
-    fDataPageNumber     = sc.unsigned_char  #1 First byte of the ANT+ datapage (payload)
+    fDataPageNumber     = sc.unsigned_char  # payload[0] First byte of the ANT+ datapage
 
-    nPowerMSB           = 2
-    fPowerMSB           = sc.unsigned_char  #2  // watts
+    nS1                 = 2
+    fS1                 = sc.unsigned_char  # payload[1]
 
-    nPowerLSB           = 3
-    fPowerLSB           = sc.unsigned_char  #3
+    nS2                 = 3
+    fS2                 = sc.unsigned_char  # payload[2]
 
-    nSpeedMSB           = 4
-    fSpeedMSB           = sc.unsigned_char  #4  // cm/s
+    nS3                 = 4
+    fS3                 = sc.unsigned_char  # payload[3]
 
-    nSpeedLSB           = 5
-    fSpeedLSB           = sc.unsigned_char  #5
+    nSerial             = 5
+    fSerial             = sc.unsigned_short # payload[4, 5]
 
-    fReserved           = sc.pad            #6
+    nAlarm              = 6
+    fAlarm              = sc.unsigned_short # payload[6, 7]
 
-    nCadence            = 6
-    fCadence            = sc.unsigned_char  #7
-
-    format= sc.no_alignment+fChannel+fDataPageNumber+fPowerMSB+fPowerLSB+fSpeedMSB+fSpeedLSB+fReserved+fCadence
+    format= sc.big_endian + fChannel + fDataPageNumber + fS1 + fS2 + fS3 + fSerial + fAlarm
     tuple = struct.unpack (format, info)
 
-    Channel             = tuple[nChannel]
-    DataPageNumber      = tuple[nDataPageNumber]
-    PowerMSB            = tuple[nPowerMSB]
-    PowerLSB            = tuple[nPowerLSB]
-    SpeedMSB            = tuple[nSpeedMSB]
-    SpeedLSB            = tuple[nSpeedLSB]
-    Cadence             = tuple[nCadence]
+    Channel             =  tuple[nChannel]
+    DataPageNumber      =  tuple[nDataPageNumber]
+    S1                  =  tuple[nS1]
+    S2                  =  tuple[nS2]
+    Serial              =  tuple[nS3] * 256 * 256 + tuple[nSerial]
+    Alarm               =  tuple[nAlarm]
 
-    UsingVirtualSpeed = False
-    if (PowerMSB & 0b10000000): UsingVirtualSpeed = True
-    
-    CalibrationState = (SpeedMSB & 0b01100000) >> 5
+    return S1, S2, Serial, Alarm
 
-    PowerMSB &= 0b01111111
-    Power = PowerMSB * 256 + PowerLSB
+# ------------------------------------------------------------------------------
+# P a g e 0 2   T a c x V o r t e x D a t a V e r s i o n
+# ------------------------------------------------------------------------------
+# Refer:    GoldenCheetah\GoldenCheetah\src\ANT; ANTmessage.cpp
+#               vortexPage = payload[0];
+#               case TACX_VORTEX_DATA_VERSION:
+#               {
+#                   //uint8_t major = payload[4];
+#                   //uint8_t minor = payload[5];
+#                   //uint8_t build = payload[6] << 8 | payload[7];
+#                   break;
+#               }
+# ------------------------------------------------------------------------------
+#                                           payload[0][1][2][3][4][5][6][7]
+#06:15:35,850: IGNORED!! msg=0x4e ch=7 p=2 info="07 02 00 61 83 00 02 00 07" TACX_VORTEX_DATA_VERSION
+#                                                ch p  rrrrrrrr ma mi build
+# ------------------------------------------------------------------------------
+def msgUnpage02_TacxVortexDataVersion (info):
+    nChannel            = 0
+    fChannel            = sc.unsigned_char  #0 First byte of the ANT+ message content
 
-    SpeedMSB &= 0b00000011
-    Speed = SpeedMSB * 256 + SpeedLSB
-    
-    return UsingVirtualSpeed, Power, Speed, CalibrationState, Cadence
+    nDataPageNumber     = 1
+    fDataPageNumber     = sc.unsigned_char  # payload[0] First byte of the ANT+ datapage
+
+    fReserved           = sc.pad * 3        # payload[1, 2, 3] 
+
+    nMajor              = 2
+    fMajor              = sc.unsigned_char  # payload[4]
+
+    nMinor              = 3
+    fMinor              = sc.unsigned_char  # payload[5]
+
+    nBuild              = 4
+    fBuild              = sc.unsigned_short # payload[6, 7]
+
+    format= sc.big_endian + fChannel + fDataPageNumber + fReserved + fMajor + fMinor + fBuild
+    tuple = struct.unpack (format, info)
+
+    Channel             =  tuple[nChannel]
+    DataPageNumber      =  tuple[nDataPageNumber]
+    Major               =  tuple[nMajor]
+    Minor               =  tuple[nMinor]
+    Build               =  tuple[nBuild]
+
+    return Major, Minor, Build
+
+# ------------------------------------------------------------------------------
+# P a g e 0 3   T a c x V o r t e x D a t a C a l i b r a t i o n
+# ------------------------------------------------------------------------------
+# Refer:    GoldenCheetah\GoldenCheetah\src\ANT; ANTmessage.cpp
+#               vortexPage = payload[0];
+#               case TACX_VORTEX_DATA_CALIBRATION:
+#               {
+#                   // one byte for calibration, tacx treats this as signed
+#                   vortexCalibration = payload[5];
+#                   // duplicate of ANT deviceId, I think, necessary for issuing commands
+#                   vortexId = payload[6] << 8 | payload[7];
+#                   break;
+#               }
+# ------------------------------------------------------------------------------
+#                                           payload[0][1][2][3][4][5][6][7]
+#06:15:36,118: IGNORED!! msg=0x4e ch=7 p=3 info="07 03 ff ff ff ff 0e 30 b0" TACX_VORTEX_DATA_CALIBRATION
+#                                                      rrrrrrrrrrr cal
+#                                                                     vtxid
+# ------------------------------------------------------------------------------
+def msgUnpage03_TacxVortexDataCalibration (info):
+    nChannel            = 0
+    fChannel            = sc.unsigned_char  #0 First byte of the ANT+ message content
+
+    nDataPageNumber     = 1
+    fDataPageNumber     = sc.unsigned_char  # payload[0] First byte of the ANT+ datapage
+
+    fReserved           = sc.pad * 4        # payload[1, 2, 3, 4] 
+
+    nCalibration        = 2
+    fCalibration        = sc.unsigned_char  # payload[5]
+
+    nVortexID           = 3
+    fVortexID           = sc.unsigned_short # payload[6, 7]
+
+    format= sc.big_endian + fChannel + fDataPageNumber + fReserved + fCalibration + fVortexID
+    tuple = struct.unpack (format, info)
+
+    Channel             =  tuple[nChannel]
+    DataPageNumber      =  tuple[nDataPageNumber]
+    Calibration         =  tuple[nCalibration]
+    VortexID            =  tuple[nVortexID]
+
+    return Calibration, VortexID
+
+# ------------------------------------------------------------------------------
+# P a g e 1 6   T a c x V o r t e x S e t F C S e r i a l
+# ------------------------------------------------------------------------------
+# Refer:    GoldenCheetah\GoldenCheetah\src\ANT; ANTmessage.cpp
+#   ANTMessage ANTMessage::tacxVortexSetFCSerial(const uint8_t channel, const uint16_t setVortexId)
+#   {
+#       return ANTMessage(9, ANT_BROADCAST_DATA, channel, 0x10, setVortexId >> 8, setVortexId & 0xFF,
+#                         0x55, // coupling request
+#                         0x7F, 0, 0, 0);
+#   }
+# ------------------------------------------------------------------------------
+def msgPage16_TacxVortexSetFCSerial (Channel, VortexID):
+    DataPageNumber      = 16
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fVortexID           = sc.unsigned_short
+    fCommand            = sc.unsigned_char  # 0x55 = coupling request
+    fSomething          = sc.unsigned_char  # no explanation...
+    fReserved           = sc.pad * 3
+
+    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fSomething + fReserved
+    info   = struct.pack(format, Channel,   DataPageNumber,   VortexID,   0x55,      0x7F)
+
+    return info
+
+# ------------------------------------------------------------------------------
+# P a g e 1 6   T a c x V o r t e x S t a r t C a l i b r a t i o n
+# ------------------------------------------------------------------------------
+# Refer:    GoldenCheetah\GoldenCheetah\src\ANT; ANTmessage.cpp
+#   ANTMessage ANTMessage::tacxVortexStartCalibration(const uint8_t channel, const uint16_t vortexId)
+#   {
+#       return ANTMessage(9, ANT_BROADCAST_DATA, channel, 0x10, vortexId >> 8, vortexId & 0xFF,
+#                         0, 0xFF /* signals calibration start */, 0, 0, 0);
+#   }
+# ------------------------------------------------------------------------------
+def msgPage16_TacxVortexStartCalibration (Channel, VortexID):
+    DataPageNumber      = 16
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fVortexID           = sc.unsigned_short
+    fCommand            = sc.unsigned_short # 0x00FF = signals calibration start
+    fReserved           = sc.pad * 3
+
+    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand
+    info   = struct.pack(format, Channel,   DataPageNumber,   VortexID,   0x00FF)
+
+    return info
+
+# ------------------------------------------------------------------------------
+# P a g e 1 6   T a c x V o r t e x S t o p C a l i b r a t i o n
+# ------------------------------------------------------------------------------
+# Refer:    GoldenCheetah\GoldenCheetah\src\ANT; ANTmessage.cpp
+#   ANTMessage ANTMessage::tacxVortexStopCalibration(const uint8_t channel, const uint16_t vortexId)
+#   {
+#       return ANTMessage(9, ANT_BROADCAST_DATA, channel, 0x10, vortexId >> 8, vortexId & 0xFF,
+#                         0, 0x7F /* signals calibration stop */, 0, 0, 0);
+#   }
+# ------------------------------------------------------------------------------
+def msgPage16_tacxVortexStopCalibration (Channel, VortexID):
+    return msgPage16_TacxVortexSetCalibrationValue (Channel, VortexID, 0)
+
+# ------------------------------------------------------------------------------
+# P a g e 1 6   T a c x V o r t e x S e t C a l i b r a t i o n V a l u e
+# ------------------------------------------------------------------------------
+# Refer:    GoldenCheetah\GoldenCheetah\src\ANT; ANTmessage.cpp
+#   ANTMessage ANTMessage::tacxVortexSetCalibrationValue(const uint8_t channel, const uint16_t vortexId, const uint8_t calibrationValue)
+#   {
+#       return ANTMessage(9, ANT_BROADCAST_DATA, channel, 0x10, vortexId >> 8, vortexId & 0xFF,
+#                         0, 0x7F, calibrationValue, 0, 0);
+#   }
+# ------------------------------------------------------------------------------
+def msgPage16_TacxVortexSetCalibrationValue (Channel, VortexID, CalibrationValue):
+    DataPageNumber      = 16
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fVortexID           = sc.unsigned_short
+    fCommand            = sc.unsigned_short # 0x007f = Set calibration value
+    fCalibrationValue   = sc.unsigned_char
+    fReserved           = sc.pad * 2
+
+    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fCalibrationValue + fReserved
+    info   = struct.pack(format, Channel,   DataPageNumber,   VortexID,   0x007F,    0)
+
+    return info
+
+# ------------------------------------------------------------------------------
+# P a g e 1 6   T a c x V o r t e x S e t P o w e r
+# ------------------------------------------------------------------------------
+# Refer:    GoldenCheetah\GoldenCheetah\src\ANT; ANTmessage.cpp
+# ANTMessage ANTMessage::tacxVortexSetPower(const uint8_t channel, const uint16_t vortexId, const uint16_t power)
+#   {
+#    return ANTMessage(9, ANT_BROADCAST_DATA, channel, 0x10, vortexId >> 8, vortexId & 0xFF,
+#                      0xAA, // power request
+#                      0, 0, // no calibration related data
+#                      power >> 8, power & 0xFF);
+#   }
+# ------------------------------------------------------------------------------
+def msgPage16_TacxVortexSetPower (Channel, VortexID, Power):
+    DataPageNumber      = 16
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fVortexID           = sc.unsigned_short
+    fCommand            = sc.unsigned_char
+    fNoCalibrationData  = sc.unsigned_short
+    fPower              = sc.unsigned_short
+
+    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fNoCalibrationData + fPower
+    info   = struct.pack(format, Channel,   DataPageNumber,   VortexID,   0xAA,      0,                   Power)
+
+    return info
 
 # ------------------------------------------------------------------------------
 # P a g e 1 6   G e n e r a l   F E   i n f o
@@ -1523,7 +1772,7 @@ if __name__ == "__main__":
             print(i, logfile.HexSpace(messages[i]))
             if messages[i] == binascii.unhexlify(stringl[i].replace(' ','')): print("equal")
             else:                                                             print("unequal ***********")
-    else:
+    elif False:
         debug.activate()
         EnumerateAll()
         
@@ -1538,6 +1787,42 @@ if __name__ == "__main__":
         print('----- # This is the USB-interface to the trainer')
         d, msg = GetDongle(0x1932)        
         print(msg)
+    else:
+        # test Tacx Vortex Unpage() functions
+        info="07 00 80 17 00 4a 00 05 1d"               # TACX_VORTEX_DATA_SPEED
+        data=binascii.unhexlify(info.replace(' ',''))
+        UsingVirtualSpeed, Power, Speed, CalibrationState, Cadence = msgUnpage00_TacxVortexDataSpeed(data)
+        print ('i-Vortex Page=%s UsingVirtualSpeed=%s Power=%s Speed=%s State=%s Cadence=%s' % \
+            (0, UsingVirtualSpeed, Power, Speed, CalibrationState, Cadence) )
+
+        info="07 01 3d 0d 00 29 42 00 00"               # TACX_VORTEX_DATA_SERIAL
+        data=binascii.unhexlify(info.replace(' ',''))
+        S1, S2, Serial, Alarm = msgUnpage01_TacxVortexDataSerial(data)
+        print ('i-Vortex Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % (1, S1, S2, Serial, Alarm) )
         
+        info="07 02 00 61 83 00 02 00 07"               # TACX_VORTEX_DATA_VERSION
+        data=binascii.unhexlify(info.replace(' ',''))
+        Major, Minor, Build = msgUnpage02_TacxVortexDataVersion(data)
+        print ('i-Vortex Page=%s Major=%s Minor=%s Build=%s' % (2, Major, Minor, Build))
+        
+        info="07 03 ff ff ff ff 0e 30 b0"               # TACX_VORTEX_DATA_CALIBRATION
+        data=binascii.unhexlify(info.replace(' ',''))
+        Calibration, VortexID = msgUnpage03_TacxVortexDataCalibration(data)
+        print ('i-Vortex Page=%s Calibration=%s VortexID=%s' % (3, Calibration, VortexID))
+
+        Channel = channel_VTX_s
+        VortexID = 0x5975
+        CalibrationValue = 19
+        Power = 123
+        data = [
+            ComposeMessage (msgID_BroadcastData, msgPage16_TacxVortexSetFCSerial (Channel, VortexID) ), \
+            ComposeMessage (msgID_BroadcastData, msgPage16_TacxVortexStartCalibration (Channel, VortexID) ), \
+            ComposeMessage (msgID_BroadcastData, msgPage16_tacxVortexStopCalibration (Channel, VortexID) ), \
+            ComposeMessage (msgID_BroadcastData, msgPage16_TacxVortexSetCalibrationValue (Channel, VortexID, CalibrationValue) ), \
+            ComposeMessage (msgID_BroadcastData, msgPage16_TacxVortexSetPower (Channel, VortexID, Power) ) \
+        ]
+        for d in data:
+            print(logfile.HexSpace(d))
+
 else:
     pass                                # We're included so do not take action!

@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-16"
+__version__ = "2020-04-19"
+# 2020-04-19    Tacx i-Vortex data pages interpreted
+#               If Tacx i-Vortex is detected, Power is set to 100+seconds.
 # 2020-04-16    Write() replaced by Console() where needed
 # 2020-02-18    SimulateTrainer added, so the behaviour of a training program
 #                   can be checked.
@@ -118,13 +120,20 @@ if devAntDongle:
     # Ref: D00000652_ANT_Message_Protocol_and_Usage_Rev_5.1.pdf, page 29.
     # ref: AN02_Device_Pairing_Rev2.3.pdf
     #---------------------------------------------------------------------------
-    NrDevicesToPair = 6
+    NrDevicesToPair = 10            # Must be > channel_VTX_s !!
+    print ('Open channels: ', end='')
     for i in range(0, NrDevicesToPair):
-        DeviceNumber    =0
-        DeviceTypeID    =0 
-        TransmissionType=0
-        if i % 1 == 1: DeviceTypeID &= 0x80
-        ant.SlavePair_ChannelConfig(devAntDongle, i, DeviceNumber, DeviceTypeID, TransmissionType)
+        print (i, end=' ')
+        if i == ant.channel_VTX_s:
+            ant.SlaveVTX_ChannelConfig(devAntDongle, 0)
+        else:
+            DeviceNumber    =0
+            DeviceTypeID    =0 
+            TransmissionType=0
+            if i % 1 == 1: DeviceTypeID &= 0x80
+            ant.SlavePair_ChannelConfig(devAntDongle, i, DeviceNumber, DeviceTypeID, TransmissionType)
+    print ('')
+        
     deviceIDs = []
 
     # --------------------------------------------------------------------------
@@ -133,20 +142,17 @@ if devAntDongle:
     logfile.Console ("Pairing, press Ctrl-C to exit")
     try:
         RunningSwitch  = True
-        pairingCounter = 10     # Do pairing for n seconds
+        pairingCounter = 30     # Do pairing for n seconds
         #-------------------------------------------------------------------
         # Ask for ChannelID message
         # Refer to D0652.pdf, page 120. en section 9.5.4.4
         #-------------------------------------------------------------------
         messages = []
-        print ('Request to pair on channel: ', end='')
         for i in range(0, NrDevicesToPair):
-            print (i, end=' ')
             messages.append (ant.msg4D_RequestMessage(i, ant.msgID_ChannelID) )
         ant.SendToDongle(messages, devAntDongle, '', False, False)
-        print ('')
 
-        print ('Responses from channel: ', end='')
+        print ('Wait for responses from channel what device is paired: ', end='')
         while RunningSwitch == True and pairingCounter > 0:
             StartTime = time.time()
             #-------------------------------------------------------------------
@@ -219,7 +225,7 @@ if devAntDongle:
                         logfile.Write ("ExplorANT: %3s discovered on channel=%s, number=%5s typeID=%3s TrType=%3s" % \
                             (d.DeviceType, d.Channel, d.DeviceNumber, d.DeviceTypeID, d.TransmissionType) )
                         if not deviceID in deviceIDs:
-                            print(DeviceType, end=' ')
+                            print('%s=%s' % (d.Channel, DeviceType), end=' ')
                             logfile.Write('ExplorANT: added to list')
 
                             deviceIDs.append(deviceID)
@@ -319,31 +325,39 @@ if devAntDongle:
         # ----------------------------------------------------------------------
         logfile.Console ("Listening, press Ctrl-C to exit")
         try:
-            RunningSwitch   = True
+            RunningSwitch       = True
             
-            HRM_s_count     = 0
-            HRM_HeartRate   = -1
-            HRM_page2_done  = False
-            HRM_page3_done  = False
+            HRM_s_count         = 0
+            HRM_HeartRate       = -1
+            HRM_page2_done      = False
+            HRM_page3_done      = False
 
-            FE_s_count      = 0
-            FE_Power        = -1
-            FE_Cadence      = -1
-            FE_Speed        = -1
-            FE_HeartRate    = -1
-            FE_page80_done  = False
-            FE_page81_done  = False
+            FE_s_count          = 0
+            FE_Power            = -1
+            FE_Cadence          = -1
+            FE_Speed            = -1
+            FE_HeartRate        = -1
+            FE_page80_done      = False
+            FE_page81_done      = False
             
-            listenCount     = 0
+            VTX_UsingVirtualSpeed, VTX_Power, VTX_Speed, VTX_CalibrationState, VTX_Cadence = 0,0,0,0,0
+            VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm = 0,0,0,0
+            VTX_Major, VTX_Minor, VTX_Build = 0,0,0
+            VTX_Calibration, VTX_VortexID = 0,0
+            VortexData          = False  # Can be used to test the Tacx Vortex Unpage functions
+            VortexPower         = True
+            
+            listenCount         = 0
 
-            dpBasicResistance     = 0       #  Requests received from Trainer Road or Zwift
-            dpTargetPower         = 0
-            dpTrackResistance     = 0
-            dpUserConfiguration   = 0
-            dpRequestDatapage     = 0
+            dpBasicResistance   = 0     # Requests received from Trainer Road or Zwift
+            dpTargetPower       = 0
+            dpTrackResistance   = 0
+            dpUserConfiguration = 0
+            dpRequestDatapage   = 0
 
-            TargetPower  	= 100           # For SimulateTrainer
-            CurrentPower	= 100
+            TargetPower  	    = 100   # For SimulateTrainer
+            CurrentPower	    = 100
+            
             while RunningSwitch == True:
                 StartTime = time.time()
                 #---------------------------------------------------------------
@@ -367,6 +381,20 @@ if devAntDongle:
                     data = ant.SendToDongle(messages, devAntDongle, '', True, False)
                 else:
                     data = ant.ReadFromDongle(devAntDongle, False)
+                    
+                #---------------------------------------------------------------
+                # Simulate vortex data, just to test the loop
+                #---------------------------------------------------------------
+                if len(data) == 0 and VortexData:
+                    VortexData = False
+                    messages = [    'a4 09 4e 07 00 00 00 cc 00 00 18 00 30', \
+                                    'a4 09 4e 07 01 3d 0d 00 29 42 00 00 be', \
+                                    'a4 09 4e 07 02 00 61 83 00 02 00 07 01', \
+                                    'a4 09 4e 07 03 ff ff ff ff 0e 30 b0 69'  \
+                                ]
+                    for m in messages:
+                        d = binascii.unhexlify(m.replace(' ',''))
+                        data.append(d)
 
                 #---------------------------------------------------------------
                 # Here all response from the ANT dongle are processed
@@ -448,7 +476,7 @@ if devAntDongle:
                             #---------------------------------------------------
                             # Data page 25 (0x19) Trainer info
                             #---------------------------------------------------
-                            if DataPageNumber == 25:    
+                            elif DataPageNumber == 25:    
                                 Unknown = False
                                 Channel, DataPageNumber, xx_Event, FE_Cadence, xx_AccPower, FE_Power, xx_Flags = \
                                     ant.msgUnpage25_TrainerData(info)
@@ -476,6 +504,47 @@ if devAntDongle:
                                         ant.msgUnpage81_ProductInformation(info)
                                     logfile.Console ("FE Page=%s SWrevision=%s.%s Serial#=%s" % \
                                                    (DataPageNumber, FE_SWrevisionMain, FE_SWrevisionSupp, FE_SerialNumber))
+
+                        #-------------------------------------------------------
+                        # VTX_s = Tacx i-Vortex trainer
+                        #-------------------------------------------------------
+                        if Channel == ant.channel_VTX_s:
+                            #---------------------------------------------------
+                            # Data page 00 msgUnpage00_TacxVortexDataSpeed
+                            #---------------------------------------------------
+                            if DataPageNumber == 0:
+                                Unknown = False
+                                VTX_UsingVirtualSpeed, VTX_Power, VTX_Speed, VTX_CalibrationState, VTX_Cadence = \
+                                    ant.msgUnpage00_TacxVortexDataSpeed(info)
+                                logfile.Console ('i-Vortex Page=%s UsingVirtualSpeed=%s Power=%s Speed=%s State=%s Cadence=%s' % \
+                                    (DataPageNumber, VTX_UsingVirtualSpeed, VTX_Power, VTX_Speed, VTX_CalibrationState, VTX_Cadence) )
+
+                            #---------------------------------------------------
+                            # Data page 01 msgUnpage01_TacxVortexDataSerial
+                            #---------------------------------------------------
+                            elif DataPageNumber == 1:
+                                Unknown = False
+                                VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm = ant.msgUnpage01_TacxVortexDataSerial(info)
+                                logfile.Console ('i-Vortex Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % \
+                                    (DataPageNumber, VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm) )
+
+                            #---------------------------------------------------
+                            # Data page 01 msgUnpage02_TacxVortexDataVersion
+                            #---------------------------------------------------
+                            elif DataPageNumber == 2:
+                                Unknown = False
+                                VTX_Major, VTX_Minor, VTX_Build = ant.msgUnpage02_TacxVortexDataVersion(info)
+                                logfile.Console ('i-Vortex Page=%s Major=%s Minor=%s Build=%s' % \
+                                    (DataPageNumber, VTX_Major, VTX_Minor, VTX_Build))
+
+                            #---------------------------------------------------
+                            # Data page 01 msgUnpage03_TacxVortexDataCalibration
+                            #---------------------------------------------------
+                            elif DataPageNumber == 3:
+                                Unknown = False
+                                VTX_Calibration, VTX_VortexID = ant.msgUnpage03_TacxVortexDataCalibration(info)
+                                logfile.Console ('i-Vortex Page=%s Calibration=%s VortexID=%s' % \
+                                    (DataPageNumber, VTX_Calibration, VTX_VortexID))
 
                     elif id == ant.msgID_AcknowledgedData:
                         #-----------------------------------------------------------
@@ -563,8 +632,22 @@ if devAntDongle:
                                      dpBasicResistance, dpTargetPower, dpTrackResistance, dpUserConfiguration, dpRequestDatapage))
 
                     else:
-                        logfile.Console ("HRM#=%2s hr=%3s FE-C#=%2s Speed=%4s Cadence=%3s Power=%3s hr=%3s" % \
-                                    (HRM_s_count, HRM_HeartRate, FE_s_count, FE_Speed, FE_Cadence, FE_Power, FE_HeartRate))
+                        logfile.Console ("HRM#=%2s hr=%3s FE-C#=%2s Speed=%4s Cadence=%3s Power=%3s hr=%3s VTX ID=%s Speed=%4s Cadence=%3s " % \
+                                    (HRM_s_count, HRM_HeartRate, \
+                                     FE_s_count, FE_Speed, FE_Cadence, FE_Power, FE_HeartRate, \
+                                     VTX_VortexID, VTX_Speed, VTX_Cadence
+                                    )\
+                                         )
+
+                #-------------------------------------------------------
+                # Set Tacx Vortex power, once per second
+                #-------------------------------------------------------
+                if listenCount == 0 and VortexPower and VTX_VortexID:
+                    Power = 100 + time.localtime().tm_sec
+                    print('ExplorANT: Set Tacx Vortex power %s' % Power)
+                    info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, VTX_VortexID, Power)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    ant.SendToDongle([msg], devAntDongle, '', False)
                     
         except KeyboardInterrupt:
             logfile.Console ("Listening stopped")
