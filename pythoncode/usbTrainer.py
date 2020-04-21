@@ -58,6 +58,12 @@ import fxload
 global trainer_type;    trainer_type     = 0
 global LegacyProtocol;  LegacyProtocol   = False
 
+# Tuning parameters to physical power calculation - unless overwritten by ANT+
+global WindResistance;    WindResistance = 0.51 # 1.275 * 0.4 * 1.0
+global WindSpeed;         WindSpeed = 0.0
+global DraftingFactor;    DraftingFactor = 1.0
+global RollingResistance; RollingResistance = 0.004
+
 tt_iMagic        = 0x1902    # Old "solid green" iMagic headunit (with or without firmware)
 tt_iMagicWG      = 0x1904    # New "white green" iMagic headunit (firmware inside)
 tt_Fortius       = 0x1932    # New "white blue" Fortius headunit (firmware inside)
@@ -403,27 +409,32 @@ def Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence):
     return rtn
 
 def PfietsNL(TargetGrade, UserAndBikeWeight, SpeedKmh):
+        global WindResistance
+        global WindSpeed
+        global DraftingFactor
+        global RollingResistance
+
         #-----------------------------------------------------------------------
         # Thanks to https://www.fiets.nl/2016/05/02/de-natuurkunde-van-het-fietsen/
         # Required power = roll + air + slope + mechanical
         #-----------------------------------------------------------------------
-        c     = 0.004                           # roll-resistance constant
+        c     = RollingResistance               # roll-resistance coefficient
         m     = UserAndBikeWeight               # kg
         g     = 9.81                            # m/s2
         v     = SpeedKmh / 3.6                  # m/s       km/hr * 1000 / 3600
         Proll = c * m * g * v                   # Watt
         
-        p     = 1.205                           # air-density
-        cdA   = 0.3                             # resistance factor
-        w     =  0                              # wind-speed
-        Pair  = 0.5 * p * cdA * (v+w)*(v+w)* v  # Watt
+        #p     = 1.275                           # air-density
+        #cdA   = 0.4 * 1.0                       # resistance factor
+        w     = WindSpeed / 3.6                 # wind-speed m/s
+        Pair  = 0.5 * WindResistance * (v+w)*(v+w) * DraftingFactor * v # Watt
         
         i     = TargetGrade
         Pslope= i/100 * m * g * v               # Watt
         
-        Pbike = 37
+        #Pbike = 37
         
-        return Proll + Pair + Pslope + Pbike 
+        return Proll + Pair + Pslope #+ Pbike 
 
 #-------------------------------------------------------------------------------
 # G e t T r a i n e r

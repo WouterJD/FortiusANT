@@ -858,6 +858,16 @@ def Tacx2Dongle(self):
                                 logfile.Write('PowerMode: TargetPower info received - timestamp set')
 
                         #-------------------------------------------------------
+                        # Data page 50 (0x32) Wind resistance
+                        #-------------------------------------------------------
+                        elif DataPageNumber == 50:
+                            WindResistance, WindSpeed, DraftingFactor = ant.msgUnpage50_WindResistance(info)
+
+                            usbTrainer.WindResistance = WindResistance
+                            usbTrainer.WindSpeed      = WindSpeed
+                            usbTrainer.DraftingFactor = DraftingFactor
+
+                        #-------------------------------------------------------
                         # Data page 51 (0x33) Track resistance
                         #-------------------------------------------------------
                         elif DataPageNumber == 51:
@@ -878,9 +888,11 @@ def Tacx2Dongle(self):
                                 pass
                             else:
                                 TargetMode            = gui.mode_Grade
-                                TargetGradeFromDongle = ant.msgUnpage51_TrackResistance(info)
+                                TargetGradeFromDongle, RollingResistance = ant.msgUnpage51_TrackResistance(info)
                                 TargetPowerFromDongle = 0
                                 PowerModeActive       = ''
+
+                                usbTrainer.RollingResistance = RollingResistance
                             
                         #-------------------------------------------------------
                         # Data page 55 User configuration

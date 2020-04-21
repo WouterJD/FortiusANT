@@ -1418,7 +1418,7 @@ def msgUnpage48_BasicResistance(info):
     format = sc.no_alignment + fChannel + fDataPageNumber + fReserved + fTotalResistance
     tuple  = struct.unpack (format, info)
 
-    rtn = tuple[nTotalResistance] * 0.005    # 0 ... 100%
+    rtn = tuple[nTotalResistance] * 0.005    # 0 ... 100% (ie 0.0 - 1.0)
     
     return rtn
 
@@ -1443,15 +1443,62 @@ def msgUnpage49_TargetPower(info):
     format = sc.no_alignment + fChannel + fDataPageNumber + fReserved + fTargetPower
     tuple  = struct.unpack (format, info)
     
-    rtn = tuple[nTargetPower] / 4      # returns units of 1Watt
+    TargetPower = tuple[nTargetPower] * 0.25 # W
 
-    return rtn
+    return TargetPower
+
+# ------------------------------------------------------------------------------
+# P a g e 5 0   W i n d R e s i s t a n c e
+# ------------------------------------------------------------------------------
+# D000001231_-_ANT+_Device_Profile_-_Fitness_Equipment_-_Rev_5.0_(6).pdf
+# Data page 50 (0x32) Wind Resistance
+# ------------------------------------------------------------------------------
+def msgUnpage50_WindResistance(info):
+    nChannel            = 0
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    
+    nDataPageNumber     = 1
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    
+    fReserved           = sc.pad * 4
+    
+    nWindResistanceCoefficient = 2
+    fWindResistanceCoefficient = sc.unsigned_short
+    
+    nWindSpeed          = 3
+    fWindSpeed          = sc.unsigned_short
+    
+    nDraftingFactor     = 4
+    fDraftingFactor     = sc.unsigned_char
+    
+    format = sc.no_alignment + fChannel + fDataPageNumber + fReserved + fWindResistanceCoefficient + fWindSpeed + fDraftingFactor
+    tuple  = struct.unpack (format, info)
+    
+    WindResistanceRaw = tuple[nWindResistanceCoefficient]
+    if (WindResistanceRaw == 0xff):
+        WindResistance = 0.51
+    else:
+        WindResistance = WindResistanceRaw * 0.01 # kg/m
+    
+    WindSpeedRaw = tuple[nWindSpeed]
+    if (WindSpeedRaw == 0xff):
+        WindSpeed = 0.0
+    else:
+        WindSpeed = WindSpeedRaw - 127 # km/h
+    
+    DraftingFactorRaw = tuple[nDraftingFactor]
+    if (DraftingFactorRaw == 0xff):
+        DraftingFactor = 1.0
+    else:
+        DraftingFactor = DraftingFactorRaw * 0.01
+
+    return WindResistance, WindSpeed, DraftingFactor
 
 # ------------------------------------------------------------------------------
 # P a g e 5 1   T r a c k R e s i s t a n c e
 # ------------------------------------------------------------------------------
 # D000001231_-_ANT+_Device_Profile_-_Fitness_Equipment_-_Rev_5.0_(6).pdf
-# Data page 51 (0x33) Target `Resistance
+# Data page 51 (0x33) Track Resistance
 # ------------------------------------------------------------------------------
 def msgUnpage51_TrackResistance(info):
     nChannel            = 0
@@ -1471,16 +1518,19 @@ def msgUnpage51_TrackResistance(info):
     format = sc.no_alignment + fChannel + fDataPageNumber + fReserved + fGrade + fRollingResistance
     tuple  = struct.unpack (format, info)
     
-    Grade = tuple[nGrade]
-    rtn   = Grade * 0.01 - 200          # -200% - 200%, units 0.01%
+    GradeRaw = tuple[nGrade]
+    if (GradeRaw == 0xffff):
+        Grade = 0.0
+    else:
+        Grade = GradeRaw * 0.01 - 200 # -200% - 200%, units 0.01%
     
-#   rtn  *= 2.5                         # Empirically...
-                                        # This was entered when creating the file
-                                        # but never tested / properly verified
-                                        # 2020-03-31 Incorrect as comparing with Rouvy
-    rtn   = round(rtn,2)
+    RollingResistanceRaw = tuple[nRollingResistance]
+    if (RollingResistanceRaw == 0xff):
+        RollingResistance = 0.004
+    else:
+        RollingResistance = RollingResistanceRaw * 0.00005
 
-    return rtn
+    return Grade, RollingResistance
 
 # ------------------------------------------------------------------------------
 # P a g e 5 5   U s e r   C o n f i g u r a t i o n
