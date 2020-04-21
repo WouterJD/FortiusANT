@@ -1,9 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-16"
+__version__ = "2020-04-17"
+# 2020-04-17    Open() provides suffix option
 # 2020-04-16    Console() introduced
-# 2020-04-15    HexSpace) supports int
+# 2020-04-15    HexSpace() supports int
 # 2020-04-13    Print() added
 # 2020-03-24    Resolve crash when non-bytes input to HexSpace()
 # 2020-02-12    Write() flushes stdout
@@ -29,11 +30,13 @@ import debug
 #-------------------------------------------------------------------------------
 # O p e n
 #-------------------------------------------------------------------------------
-def Open(prefix='FortiusANT'):
+def Open(prefix='FortiusANT', suffix=''):
     global fLogfile
     
     if debug.on():
-        filename = prefix + '.' + datetime.utcnow().strftime('%Y-%m-%d %H-%M-%S') + ".log"
+        if len(suffix) > 0 and suffix[0] != '.':
+            suffix = '.' + suffix
+        filename = prefix + '.' + datetime.utcnow().strftime('%Y-%m-%d %H-%M-%S') + suffix + ".log"
         fLogfile = open(filename,"w+")
 
 def IsOpen():

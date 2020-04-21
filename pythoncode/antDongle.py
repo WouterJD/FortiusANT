@@ -1,8 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-19"
-# 2020-04-19    Tacx i-Vortex data pages implemented
+__version__ = "2020-04-20"
+# 2020-04-20    Tacx i-Vortex data pages implemented, Command+Subcommand
 # 2020-04-18    Changed: Vortex frequency=2466
 #                        Calibrate() creates two networks, the default and 
 #                           an extra network for Tacx i-Vortex
@@ -71,15 +71,17 @@ import FortiusAntCommand    as cmd
 channel_FE          = 1        # ANT+ channel for Fitness Equipment
 channel_HRM         = 2        # ANT+ channel for Heart Rate Monitor
 channel_SCS         = 3        # ANT+ Channel for Speed Cadence Sensor
+channel_VTX         = 5        # ANT+ Channel for Tacx i-Vortex
 
-channel_FE_s        = 4        # ANT+ channel for Fitness Equipment    (slave=Cycle Training Program)
-channel_HRM_s       = 5        # ANT+ channel for Heart Rate Monitor   (slave=display)
-channel_SCS_s       = 6        # ANT+ Channel for Speed Cadence Sensor (slave=display)
-channel_VTX_s       = 7        # ANT+ Channel for Tacx i-Vortex        (slave=Cycle Training Program)
+channel_FE_s        = 5        # ANT+ channel for Fitness Equipment    (slave=Cycle Training Program)
+channel_HRM_s       = 6        # ANT+ channel for Heart Rate Monitor   (slave=display)
+channel_SCS_s       = 7        # ANT+ Channel for Speed Cadence Sensor (slave=display)
+channel_VTX_s       = 8        # ANT+ Channel for Tacx i-Vortex        (slave=Cycle Training Program)
 
 DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
 DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT uses and
 DeviceNumber_HRM    = 57592    #       slaves (TrainerRoad, Zwift, ExplorANT) will find.
+DeviceNumber_VTX    = 57593    #       
 
 ModelNumber_FE      = 2875     # short antifier-value=0x8385, Tacx Neo=2875
 SerialNumber_FE     = 19590705 # int   1959-7-5
@@ -295,7 +297,7 @@ def SlaveHRM_ChannelConfig(devAntDongle, DeviceNumber):
   ]
   SendToDongle(messages, devAntDongle, '')
 
-def SlaveSCS_ChannelConfig(devAntDongle, DeviceNumber):                     # Note: not tested!!!
+def SlaveSCS_ChannelConfig(devAntDongle, DeviceNumber):
   if debug.on(debug.Data1): logfile.Write ("SlaveSCS_ChannelConfig()")
   messages=[
     msg42_AssignChannel         (channel_SCS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
@@ -308,7 +310,20 @@ def SlaveSCS_ChannelConfig(devAntDongle, DeviceNumber):                     # No
   ]
   SendToDongle(messages, devAntDongle, '')
 
-def SlaveVTX_ChannelConfig(devAntDongle, DeviceNumber):                     # Note: not tested!!!
+def VTX_ChannelConfig(devAntDongle):                         # Pretend to be a Tacx i-Vortex
+  if debug.on(debug.Data1): logfile.Write ("VTX_ChannelConfig()")
+  messages=[
+    msg42_AssignChannel         (channel_VTX, ChannelType_BidirectionalTransmit, NetworkNumber=0x01),
+    msg51_ChannelID             (channel_VTX, DeviceNumber_VTX, DeviceTypeID_VTX, TransmissionType_IC),
+    msg45_ChannelRfFrequency    (channel_VTX, RfFrequency_2466Mhz), 
+    msg43_ChannelPeriod         (channel_VTX, ChannelPeriod=0x2000),
+    msg60_ChannelTransmitPower  (channel_VTX, TransmitPower_0dBm),
+    msg4B_OpenChannel           (channel_VTX),
+#   msg4D_RequestMessage        (channel_VTX, msgID_ChannelID) # Note that answer may be in logfile only
+  ]
+  SendToDongle(messages, devAntDongle, '')
+
+def SlaveVTX_ChannelConfig(devAntDongle, DeviceNumber):     # Listen to a Tacx i-Vortex
   if debug.on(debug.Data1): logfile.Write ("SlaveVTX_ChannelConfig()")
   messages=[
     msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
@@ -941,6 +956,21 @@ def unmsg64_ChannelResponse(info):
 #06:15:48,254: IGNORED!! msg=0x4e ch=7 p=0 info="07 00 80 17 00 4a 00 05 1d" TACX_VORTEX_DATA_SPEED
 #                                                ch p  power speed rrrrr cd
 # ------------------------------------------------------------------------------
+def msgPage00_TacxVortexDataSpeed (Channel, Power, Speed, Cadence):
+    DataPageNumber      = 0
+
+    fChannel            = sc.unsigned_char  # 0 First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # payload[0]        First byte of the ANT+ datapage
+    fPower              = sc.unsigned_short # payload[1 and 2]  Watts, big-endian
+    fSpeed              = sc.unsigned_short # payload[3 and 4]  cm/s, big-endian
+    fReserved           = sc.pad * 2        # payload[5 and 6] 
+    fCadence            = sc.unsigned_char  # payload[7] 
+
+    format = sc.big_endian +    fChannel + fDataPageNumber +    fPower +    fSpeed + fReserved + fCadence
+    info   = struct.pack(format, Channel ,  DataPageNumber , int(Power), int(Speed),          int(Cadence))
+
+    return info
+
 def msgUnpage00_TacxVortexDataSpeed (info):
     nChannel            = 0
     fChannel            = sc.unsigned_char  # 0 First byte of the ANT+ message content
@@ -1134,10 +1164,10 @@ def msgPage16_TacxVortexSetFCSerial (Channel, VortexID):
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
     fVortexID           = sc.unsigned_short
     fCommand            = sc.unsigned_char  # 0x55 = coupling request
-    fSomething          = sc.unsigned_char  # no explanation...
+    fSubcommand         = sc.unsigned_char  # no explanation...
     fReserved           = sc.pad * 3
 
-    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fSomething + fReserved
+    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fSubcommand + fReserved
     info   = struct.pack(format, Channel,   DataPageNumber,   VortexID,   0x55,      0x7F)
 
     return info
@@ -1158,11 +1188,12 @@ def msgPage16_TacxVortexStartCalibration (Channel, VortexID):
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
     fVortexID           = sc.unsigned_short
-    fCommand            = sc.unsigned_short # 0x00FF = signals calibration start
+    fCommand            = sc.unsigned_char  # 0x00 
+    fSubcommand         = sc.unsigned_char  # 0xFF signals calibration start
     fReserved           = sc.pad * 3
 
-    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand
-    info   = struct.pack(format, Channel,   DataPageNumber,   VortexID,   0x00FF)
+    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fSubcommand + fReserved
+    info   = struct.pack(format, Channel,   DataPageNumber,   VortexID,   0x00,     0xFF)
 
     return info
 
@@ -1195,12 +1226,13 @@ def msgPage16_TacxVortexSetCalibrationValue (Channel, VortexID, CalibrationValue
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
     fVortexID           = sc.unsigned_short
-    fCommand            = sc.unsigned_short # 0x007f = Set calibration value
-    fCalibrationValue   = sc.unsigned_char
+    fCommand            = sc.unsigned_char  # 
+    fSubcommand         = sc.unsigned_char  # 0x7F signals calibration start
+    fCalibrationValue   = sc.unsigned_char  
     fReserved           = sc.pad * 2
 
-    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fCalibrationValue + fReserved
-    info   = struct.pack(format, Channel,   DataPageNumber,   VortexID,   0x007F,    0)
+    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fSubcommand + fCalibrationValue + fReserved
+    info   = struct.pack(format, Channel,   DataPageNumber,   VortexID,   0,        0x7F,         CalibrationValue  )
 
     return info
 
@@ -1222,14 +1254,32 @@ def msgPage16_TacxVortexSetPower (Channel, VortexID, Power):
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
     fVortexID           = sc.unsigned_short
-    fCommand            = sc.unsigned_char
-    fNoCalibrationData  = sc.unsigned_short
+    fCommand            = sc.unsigned_char  # 0xAA power request
+    fSubcommand         = sc.unsigned_char
+    fNoCalibrationData  = sc.unsigned_char
     fPower              = sc.unsigned_short
 
-    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fNoCalibrationData + fPower
-    info   = struct.pack(format, Channel,   DataPageNumber,   VortexID,   0xAA,      0,                   Power)
+    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fSubcommand + fNoCalibrationData + fPower
+    info   = struct.pack(format, Channel,   DataPageNumber,   VortexID,   0xAA,      0,            0,                   Power)
 
     return info
+
+def msgUnpage16_TacxVortexSetPower (info):
+    DataPageNumber      = 16
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fVortexID           = sc.unsigned_short
+    fCommand            = sc.unsigned_char  # 0xAA power request
+    fSubcommand         = sc.unsigned_char
+    fNoCalibrationData  = sc.unsigned_char
+    fPower              = sc.unsigned_short
+
+    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fSubcommand + fNoCalibrationData + fPower
+    tuple = struct.unpack (format, info)
+
+          #Channel,  DataPageNumber, VortexID, Command,  Subcommand, NoCalibrationData, Power
+    return tuple[0], tuple[1],       tuple[2], tuple[3], tuple[4],   tuple[5],          tuple[6]
 
 # ------------------------------------------------------------------------------
 # P a g e 1 6   G e n e r a l   F E   i n f o
@@ -1812,8 +1862,8 @@ if __name__ == "__main__":
 
         Channel = channel_VTX_s
         VortexID = 0x5975
-        CalibrationValue = 19
-        Power = 123
+        CalibrationValue = 0x19
+        Power = 0x1234
         data = [
             ComposeMessage (msgID_BroadcastData, msgPage16_TacxVortexSetFCSerial (Channel, VortexID) ), \
             ComposeMessage (msgID_BroadcastData, msgPage16_TacxVortexStartCalibration (Channel, VortexID) ), \

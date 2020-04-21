@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-07"
+__version__ = "2020-04-20"
+# 2020-04-20    txtAntHRM added, message size reduced
 # 2020-04-07    Messages enlarged to improve readability
 #               Message with PowerFactor is no longer displayed
 #                   PowerFactor is an antifier inherited way of calibrating
@@ -56,8 +57,6 @@ mode_Grade          = 2     # Target Resistance
 bg                  = wx.Colour(220,220,220) # Background colour [for self.Speedometers]
 colorTacxFortius    = wx.Colour(120,148,227)
 Margin              = 4
-
-showPowerFactor     = False
 
 class staticVariables:
     LastFields = 0
@@ -393,16 +392,14 @@ class frmFortiusAntGui(wx.Frame):
 
         # ----------------------------------------------------------------------
 		# Font sizing for all measurements
-        # 2020-02-07: LargeTexts implemented
         # ----------------------------------------------------------------------
-        if LargeTexts:
-            TextCtrlFont = wx.Font(24, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-            TextCtrlH    = 40
-            TextCtrlW    = int(SpeedWH/2)
-        else:
-            TextCtrlFont = wx.Font(12, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-            TextCtrlH    = 25
-            TextCtrlW    = int(SpeedWH/2)
+        TextCtrlFont = wx.Font(24, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        TextCtrlH    = 40
+        TextCtrlW    = int(SpeedWH/2)
+
+        TextCtrlFont2= wx.Font(12, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        TextCtrlH2   = 25
+        TextCtrlW2   = int(SpeedWH/2)
 
         # ----------------------------------------------------------------------
 		# self.Speed label & text
@@ -443,7 +440,7 @@ class frmFortiusAntGui(wx.Frame):
         # - Is positioned UNDER the Speed control
         # - Has width of Speed + Cadence control
         # ----------------------------------------------------------------------
-        self.txtUsbTrainer = wx.TextCtrl(self, value="txtUsbTrainer", size=(10,TextCtrlH), style=wx.TE_LEFT | wx.TE_READONLY)
+        self.txtUsbTrainer = wx.TextCtrl(self, value="txtUsbTrainer", size=(10,TextCtrlH2), style=wx.TE_LEFT | wx.TE_READONLY)
         self.txtUsbTrainer.SetSize((self.Revs.Position[0] + self.Revs.Size[0] - Margin, -1))
         self.txtUsbTrainer.SetPosition((Margin, self.Speed.Position[1] + self.Speed.Size[1] + 5))
         self.txtUsbTrainer.SetBackgroundColour(bg)
@@ -451,19 +448,18 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# ANT Dongle
         # ----------------------------------------------------------------------
-        self.txtAntDongle = wx.TextCtrl(self, value="txtAntDongle", size=(10,TextCtrlH), style=wx.TE_LEFT | wx.TE_READONLY)
+        self.txtAntDongle = wx.TextCtrl(self, value="txtAntDongle", size=(10,TextCtrlH2), style=wx.TE_LEFT | wx.TE_READONLY)
         self.txtAntDongle.SetSize((self.txtUsbTrainer.Size[0], -1))
         self.txtAntDongle.SetPosition((Margin, self.txtUsbTrainer.Position[1] + self.txtUsbTrainer.Size[1] + 5))
         self.txtAntDongle.SetBackgroundColour(bg)
 
         # ----------------------------------------------------------------------
-		# self.Power factor
+		# ANT Heart Rate Monitor
         # ----------------------------------------------------------------------
-        if showPowerFactor:
-            self.txtPowerFactor = wx.TextCtrl(self, value="txtPowerFactor", size=(10,-1), style=wx.TE_LEFT | wx.TE_READONLY)
-            self.txtPowerFactor.SetSize((self.txtUsbTrainer.Size[0], TextCtrlH))
-            self.txtPowerFactor.SetPosition((Margin, self.txtAntDongle.Position[1] + self.txtAntDongle.Size[1] + 5))
-            self.txtPowerFactor.SetBackgroundColour(bg)
+        self.txtAntHRM = wx.TextCtrl(self, value="txtAntHRM", size=(10,TextCtrlH2), style=wx.TE_LEFT | wx.TE_READONLY)
+        self.txtAntHRM.SetSize((self.txtUsbTrainer.Size[0], -1))
+        self.txtAntHRM.SetPosition((Margin, self.txtAntDongle.Position[1] + self.txtAntDongle.Size[1] + 5))
+        self.txtAntHRM.SetBackgroundColour(bg)
 
         # ----------------------------------------------------------------------
 		# self.HeartRate, shown to the right of the Heartrate image
@@ -490,9 +486,9 @@ class frmFortiusAntGui(wx.Frame):
         self.txtHeartRate.SetFont(TextCtrlFont)
         self.txtGearbox.SetFont(TextCtrlFont)
         
-        self.txtUsbTrainer.SetFont(TextCtrlFont)
-        self.txtAntDongle.SetFont(TextCtrlFont)
-        if showPowerFactor: self.txtPowerFactor.SetFont(TextCtrlFont)
+        self.txtUsbTrainer.SetFont(TextCtrlFont2)
+        self.txtAntDongle.SetFont(TextCtrlFont2)
+        self.txtAntHRM.SetFont(TextCtrlFont2)
 
         # ----------------------------------------------------------------------
 		# Buttons
@@ -523,7 +519,7 @@ class frmFortiusAntGui(wx.Frame):
         self.ResetValues()
         self.SetMessages(Tacx  ="Tacx USB Trainer")
         self.SetMessages(Dongle="ANT+ Dongle")
-        self.SetMessages(Factor=1)
+        self.SetMessages(HRM   ="ANT+ HRM paired")
 
     # --------------------------------------------------------------------------
     # F u n c t i o n s  --  to be provided by subclass.
@@ -664,7 +660,6 @@ class frmFortiusAntGui(wx.Frame):
         else:
             self.HeartRate    = 0
 
-
         if iTargetMode == mode_Grade:
             self.GearboxTeeth = iTeeth          # Only valid in Resistance-mode
         else:
@@ -781,7 +776,7 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
         if bRefreshRequired: self.Refresh()
 
-    def SetMessages(self, Tacx=None, Dongle=None, Factor=None):
+    def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
         if Tacx   != None:
             if Tacx[:4] == '* * ': self.txtUsbTrainer.SetForegroundColour(wx.BLUE)
             else:                  self.txtUsbTrainer.SetForegroundColour(wx.BLACK)
@@ -791,10 +786,8 @@ class frmFortiusAntGui(wx.Frame):
         if Dongle != None:
             self.txtAntDongle.SetValue(Dongle)
 
-        if showPowerFactor and Factor != None:
-            s1 = ""
-            if round(Factor,1) != 1: s1 = "Power factor=%4.1f" % Factor
-            self.txtPowerFactor.SetValue("%s" % (s1) )
+        if HRM != None:
+            self.txtAntHRM.SetValue(HRM)
 
     # --------------------------------------------------------------------------
     # O n P a i n t

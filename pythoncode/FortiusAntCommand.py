@@ -1,16 +1,17 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-16"
+__version__ = "2020-04-20"
+# 2020-04-20    Added: -t i-Vortex
 # 2020-04-16    Write() replaced by Console()
-# 2020-04-10    -P PowerMode added
-# 2020-04-09    -p command line help improved
+# 2020-04-10    Added: -P PowerMode
+# 2020-04-09    Improved: -p command line help
 # 2020-03-25    Typo's corrected on command line help
 # 2020-03-04    Command-line variables with values printed when debugging
 # 2020-02-10    scs added for Alana, analoque to .hrm
 #               disabled (#scs) on command-line since not implemented
-# 2020-02-09    hrm added
-# 2020-01-23    manualGrade added
+# 2020-02-09    Added: -H hrm
+# 2020-01-23    Added: -m manualGrade
 #-------------------------------------------------------------------------------
 import argparse
 import debug
@@ -62,6 +63,8 @@ class CommandLineVariables(object):
     ResistanceH     = 150        # % of ftp
     ResistanceL     = 100        # % of ftp
     SimulateTrainer = False
+    TacxType        = False
+    Tacx_iVortex    = False
 
     #---------------------------------------------------------------------------
     # Define and process command line
@@ -88,6 +91,7 @@ class CommandLineVariables(object):
         parser.add_argument('-r','--resistance',help='FTP percentages for resistance mode, default=150/100',required=False, default=False)
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument('-S','--scs',       help='Use this Speed Cadence Sensor (0: default device)',   required=False, default=False)
+        parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
         args                 = parser.parse_args()
         self.args            = args
 
@@ -237,6 +241,17 @@ class CommandLineVariables(object):
                 except:
                     logfile.Console('Command line error; -r incorrect low resistance=%s' % s[1])
 
+        #-----------------------------------------------------------------------
+        # Get TacxType
+        #-----------------------------------------------------------------------
+        if args.TacxType:
+            self.TacxType = args.TacxType
+            if self.TacxType in ('i-Vortex'):
+                self.Tacx_iVortex = True
+            else:
+                logfile.Console('Command line error; -t incorrect value=%s' % args.TacxType)
+                args.TacxType = False
+
     def print(self):
         try:
             v = debug.on(debug.Any)     # Verbose: print all command-line variables with values
@@ -254,6 +269,7 @@ class CommandLineVariables(object):
             if v or self.args.resistance:    logfile.Console("-r %s/%s" % (self.ResistanceH, self.ResistanceL))
             if      self.args.simulate:      logfile.Console("-s")
 #scs        if      self.args.scs:           logfile.Console("-S %s" % self.scs )
+            if      self.args.TacxType:      logfile.Console("-t %s" % self.TacxType)
         except:
             pass # May occur when incorrect command line parameters, error already given before
 

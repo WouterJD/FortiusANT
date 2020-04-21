@@ -2,7 +2,8 @@
 # Version info
 #-------------------------------------------------------------------------------
 WindowTitle = "Fortius Antifier v2.5"
-__version__ = "2020-04-17"
+__version__ = "2020-04-20"
+# 2020-04-20    txtAntHRM used, i-Vortex paired
 # 2020-04-17    Added: Page54 FE_Capabilities
 # 2020-04-16    Write() replaced by Console() where needed
 # 2020-04-15    Calibration is aborted when iFlow 1932 returns positive values
@@ -191,9 +192,9 @@ def SetDongleMsg(self, msg):
     if clv.gui: self.SetMessages(Dongle=msg)
     else: logfile.Console ("Dongle - " + msg)
 
-def SetFactorMsg(self, msg):
-    if clv.gui: self.SetMessages(Factor=clv.PowerFactor)
-#   else: logfile.Console ("Factor - " + str(msg))        # Already at start
+def SetAntHRMMsg(self, msg):
+    if clv.gui: self.SetMessages(HRM=msg)
+    else: logfile.Console ("AntHRM - " + msg)
 
 def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth):
     # --------------------------------------------------------------------------
@@ -289,15 +290,29 @@ def LocateHW(self):
         if clv.SimulateTrainer:
             GetTrainerMsg = "Simulated Trainer"
             SetTacxMsg(self, GetTrainerMsg)
+
+        elif clv.Tacx_iVortex:
+            GetTrainerMsg = "Pair with Tacx i-Vortex"
+            SetTacxMsg(self, GetTrainerMsg)
+
         else:
             devTrainer, GetTrainerMsg = usbTrainer.GetTrainer()
             SetTacxMsg(self, GetTrainerMsg)
 
     #---------------------------------------------------------------------------
+    # Show where the heartrate comes from 
+    #---------------------------------------------------------------------------
+    if clv.hrm == None:
+        SetAntHRMMsg(self, "Heartrate expected from Tacx Trainer")
+    else:
+        SetAntHRMMsg(self, "Heartrate expected from ANT+ HRM")
+
+    #---------------------------------------------------------------------------
     # Done
     #---------------------------------------------------------------------------
     if debug.on(debug.Application): logfile.Write ("Scan for hardware - end")
-    if (clv.manual or clv.manualGrade or devAntDongle) and (clv.SimulateTrainer or devTrainer): 
+    if (clv.manual or clv.manualGrade or devAntDongle) and \
+       (clv.SimulateTrainer or clv.Tacx_iVortex or devTrainer): 
         return True
     else:
         return False
@@ -316,6 +331,10 @@ def LocateHW(self):
 # Returns:      True
 # ------------------------------------------------------------------------------
 def Runoff(self):
+    if clv.SimulateTrainer or clv.Tacx_iVortex:
+        logfile.Console('Runoff not implemented for Simulated trainer or Tacx i-Vortex')
+        return False
+
     global devTrainer
     TargetMode      = gui.mode_Power
     TargetPower     = 100       # Start with 100 Watt
@@ -384,6 +403,21 @@ def Runoff(self):
             #---------------------------------------------------------------------
             # WAIT    Add wait so we only send every 250ms
             #---------------------------------------------------------------------
+            # #48 Frequency of data capture - sufficient for pedal stroke analysis?
+            #
+            # If we want to do pedal stroke analysis, we should measure every
+            # pedal-cycle multiple times per rotation.
+            # 
+            # Number of measurements/sec = (cadence * 360/angle) / 60 = 6 * cadence / angle
+            # ==> Cycle time (in seconds) = angle / (6 * cadence)
+            # ==> Angle = Cycle time (in seconds) * 6 * cadence
+            #
+            # case 1. Cadence = 120 and Angle = 1 degree
+            #       Cycle time (in seconds) = 1 / (6 * 120) = 1.3889 ms
+            #
+            # case 2. Cadence = 120 and Cycle time (in seconds) = 0.25
+            #       angle = .25 * 6 * 120 = 180 degrees
+            #---------------------------------------------------------------------
             SleepTime = 0.25 - (time.time() - StartTime)
             if SleepTime > 0: time.sleep(SleepTime)
     return True
@@ -409,11 +443,15 @@ def Runoff(self):
 def Tacx2Dongle(self):
     global devAntDongle, devTrainer, GetTrainerMsg
 
+    AntHRMpaired = False
+    AntVTXpaired = False
+    VTX_VortexID = 0
     #---------------------------------------------------------------------------
     # Initialize antDongle
     # Open channels:
     #    one to transmit the trainer info (Fitness Equipment)
     #    one to transmit heartrate info   (HRM monitor)
+    #    one to interface with Tacx i-Vortex (VTX)
     #
     # And if you want a dedicated Speed Cadence Sensor, implement like this...
     #---------------------------------------------------------------------------
@@ -425,8 +463,30 @@ def Tacx2Dongle(self):
         if clv.hrm == None:
             ant.HRM_ChannelConfig(devAntDongle)   # Create ANT+ master channel for HRM
         else:
-            ant.SlaveHRM_ChannelConfig(devAntDongle, clv.hrm)   # Create ANT+ slave channel for HRM
-                                                  # 0: auto pair, nnn: defined HRM
+            #---------------------------------------------------------------------------
+            # Create ANT+ slave channel for HRM;   0: auto pair, nnn: defined HRM
+            #---------------------------------------------------------------------------
+            ant.SlaveHRM_ChannelConfig(devAntDongle, clv.hrm)
+
+            #---------------------------------------------------------------------------
+            # Request what DeviceID is paired to the HRM-channel
+            # No pairing-loop: HRM perhaps not yet active and avoid delay
+            #---------------------------------------------------------------------------
+            msg = ant.msg4D_RequestMessage(ant.channel_HRM_s, ant.msgID_ChannelID)
+            ant.SendToDongle([msg], devAntDongle, '', False, False)
+    
+        if clv.Tacx_iVortex:
+            #---------------------------------------------------------------------------
+            # Create ANT+ slave channel for VTX
+            #---------------------------------------------------------------------------
+            ant.SlaveVTX_ChannelConfig(devAntDongle, 0)
+
+            #---------------------------------------------------------------------------
+            # Request what DeviceID is paired to the VTX-channel
+            # No pairing-loop: VTX perhaps not yet active and avoid delay
+            #---------------------------------------------------------------------------
+            msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
+            ant.SendToDongle([msg], devAntDongle, '', False, False)
 
         if clv.scs != None:
             ant.SlaveSCS_ChannelConfig(devAntDongle, clv.scs)   # Create ANT+ slave channel for SCS
@@ -451,13 +511,15 @@ def Tacx2Dongle(self):
     StartPedalling  = True
     Counter         = 0
 
-    if not clv.SimulateTrainer and usbTrainer.CalibrateSupported():
+    if devTrainer and not clv.SimulateTrainer and usbTrainer.CalibrateSupported():
         SetTacxMsg(self, "* * * * S T A R T   P E D A L L I N G * * * *")
         if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start pedalling for calibration')
     try:
-        while self.RunningSwitch == True and not clv.SimulateTrainer and clv.calibrate \
-              and not Buttons == usbTrainer.CancelButton and Calibrate == 0 \
-              and usbTrainer.CalibrateSupported():
+        while         self.RunningSwitch \
+              and     clv.calibrate \
+              and not Buttons == usbTrainer.CancelButton \
+              and     Calibrate == 0 \
+              and     usbTrainer.CalibrateSupported():
             StartTime = time.time()
             #-------------------------------------------------------------------------
             # Receive / Send trainer
@@ -522,9 +584,10 @@ def Tacx2Dongle(self):
     #---------------------------------------------------------------------------
     # Stop trainer
     #---------------------------------------------------------------------------
-    if debug.on(debug.Function): logfile.Write('Tacx2Dongle; stop trainer')
-    usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeStop, 0, False, False, \
-                                0, 0, 0, 0, 0, 0, clv.SimulateTrainer)
+    if devTrainer:
+        if debug.on(debug.Function): logfile.Write('Tacx2Dongle; stop trainer')
+        usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeStop, 0, False, False, \
+                                    0, 0, 0, 0, 0, 0, clv.SimulateTrainer)
     SetTacxMsg(self, GetTrainerMsg)
 
     #---------------------------------------------------------------------------
@@ -535,7 +598,6 @@ def Tacx2Dongle(self):
     TargetPowerFromDongle   = 100           # set initial Target Power
     TargetPowerTime         = 0             # Time that last TargetPower received
     PowerModeActive         = ''            # Text showing in userinterface
-
 
     PowercurveFactor        = 1             # 1.1 causes higher load
                                             # 0.9 causes lower load
@@ -571,6 +633,10 @@ def Tacx2Dongle(self):
                 SpeedKmh, PedalEcho, HeartRateT, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
                     SimulateReceiveFromTrainer (TargetPower, CurrentPower)
                 if clv.gui: SetTacxMsg(self, GetTrainerMsg + PowerModeActive)
+
+            elif clv.Tacx_iVortex:         # Data is received from ANT messages
+                pass            
+
             else:
                 Error, SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, CurrentResistance, Buttons, Axis = \
                     usbTrainer.ReceiveFromTrainer(devTrainer)
@@ -599,6 +665,7 @@ def Tacx2Dongle(self):
             #   otherwise, HeartRate must be provided from other source
             #-------------------------------------------------------------------
             if clv.hrm == None:
+                print('Set heartrate from trainer', HeartRateT)
                 HeartRate = HeartRateT  
 
             #-------------------------------------------------------------------
@@ -645,17 +712,31 @@ def Tacx2Dongle(self):
                     logfile.Console("Unsupported TargetMode %s" % TargetMode)
 
             #-------------------------------------------------------------------
+            # Prepare
+            #-------------------------------------------------------------------
+            messages = []       # messages to be sent to ANT
+            data = []           # responses received from ANT
+
+            #-------------------------------------------------------------------
             # Send data to trainer (either power OR grade)
             #-------------------------------------------------------------------
-            usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeResistance, \
+            if False and clv.SimulateTrainer:   # I DO NOT REMEMBER NOW
+                pass                            # WHY THIS IS NOT DONE LIKE THIS
+
+            elif clv.Tacx_iVortex and VTX_VortexID:
+                Resistance = usbTrainer.Power2Resistance(TargetPower, SpeedKmh, Cadence)
+                info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, VTX_VortexID, TargetPower) # Resistance?
+                messages.append ( ant.ComposeMessage (ant.msgID_BroadcastData, info) )
+
+            else:
+                usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeResistance, \
                     TargetMode, TargetPower, TargetGrade, PowercurveFactor, \
                     UserAndBikeWeight, \
-                    PedalEcho, SpeedKmh, Cadence, Calibrate, clv.SimulateTrainer)    # testWeight
+                    PedalEcho, SpeedKmh, Cadence, Calibrate, clv.SimulateTrainer)
 
             #-------------------------------------------------------------------
             # Broadcast Heartrate message
             #-------------------------------------------------------------------
-            messages = []
             if clv.hrm == None and HeartRate > 0 and not (clv.manual or clv.manualGrade):
                 messages.append(hrm.BroadcastHeartrateMessage(devAntDongle, HeartRate))
 
@@ -663,8 +744,9 @@ def Tacx2Dongle(self):
             # Broadcast TrainerData message
             #-------------------------------------------------------------------
             if clv.manual or clv.manualGrade:
-                data = []
+                pass
             else:
+                # print('fe.BroadcastTrainerDataMessage', Cadence, CurrentPower, SpeedKmh, HeartRate)
                 messages.append(fe.BroadcastTrainerDataMessage (devAntDongle, Cadence, CurrentPower, SpeedKmh, HeartRate))
                 
             #-------------------------------------------------------------------
@@ -807,6 +889,13 @@ def Tacx2Dongle(self):
                     #-----------------------------------------------------------
                     if Channel == ant.channel_HRM_s:
                         #-------------------------------------------------------
+                        # Ask what device is paired
+                        #-------------------------------------------------------
+                        if not AntHRMpaired:
+                            msg = ant.msg4D_RequestMessage(ant.channel_HRM_s, ant.msgID_ChannelID)
+                            ant.SendToDongle([msg], devAntDongle, '', False, False)
+
+                        #-------------------------------------------------------
                         # Data page 0...4 HRM data
                         # Only expected when -H flag specified
                         #-------------------------------------------------------
@@ -815,6 +904,8 @@ def Tacx2Dongle(self):
                                 Channel, DataPageNumber, Spec1, Spec2, Spec3, \
                                     HeartBeatEventTime, HeartBeatCount, HeartRate = \
                                     ant.msgUnpage_Hrm(info)
+#                               print('Set heartrate from HRM')
+
                             else:
                                 pass                            # Ignore it
                                 
@@ -829,6 +920,56 @@ def Tacx2Dongle(self):
                         # Other data pages
                         #-------------------------------------------------------
                         else: error = "Unknown HRM data page"
+
+                    #-----------------------------------------------------------
+                    # VTX_s = Tacx i-Vortex trainer
+                    #-----------------------------------------------------------
+                    elif Channel == ant.channel_VTX_s:
+                        #-------------------------------------------------------
+                        # Ask what device is paired
+                        #-------------------------------------------------------
+                        if not AntVTXpaired:
+                            msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
+                            ant.SendToDongle([msg], devAntDongle, '', False, False)
+
+                        #-------------------------------------------------------
+                        # Data page 00 msgUnpage00_TacxVortexDataSpeed
+                        #-------------------------------------------------------
+                        if DataPageNumber == 0:
+                            VTX_UsingVirtualSpeed, CurrentPower, VTX_Speed, VTX_CalibrationState, Cadence = \
+                                ant.msgUnpage00_TacxVortexDataSpeed(info)
+                            SpeedKmh = round( VTX_Speed / ( 100 * 1000 / 3600 ), 1)
+                            logfile.Console ('i-Vortex Page=%s UsingVirtualSpeed=%s Power=%s Speed=%s State=%s Cadence=%s' % \
+                                (DataPageNumber, VTX_UsingVirtualSpeed, CurrentPower, SpeedKmh, VTX_CalibrationState, Cadence) )
+
+                        #-------------------------------------------------------
+                        # Data page 01 msgUnpage01_TacxVortexDataSerial
+                        #-------------------------------------------------------
+                        elif DataPageNumber == 1:
+                            VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm = ant.msgUnpage01_TacxVortexDataSerial(info)
+                            logfile.Console ('i-Vortex Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % \
+                                (DataPageNumber, VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm) )
+
+                        #-------------------------------------------------------
+                        # Data page 02 msgUnpage02_TacxVortexDataVersion
+                        #-------------------------------------------------------
+                        elif DataPageNumber == 2:
+                            VTX_Major, VTX_Minor, VTX_Build = ant.msgUnpage02_TacxVortexDataVersion(info)
+                            logfile.Console ('i-Vortex Page=%s Major=%s Minor=%s Build=%s' % \
+                                (DataPageNumber, VTX_Major, VTX_Minor, VTX_Build))
+
+                        #-------------------------------------------------------
+                        # Data page 03 msgUnpage03_TacxVortexDataCalibration
+                        #-------------------------------------------------------
+                        elif DataPageNumber == 3:
+                            VTX_Calibration, VTX_VortexID = ant.msgUnpage03_TacxVortexDataCalibration(info)
+                            logfile.Console ('i-Vortex Page=%s Calibration=%s VortexID=%s' % \
+                                (DataPageNumber, VTX_Calibration, VTX_VortexID))
+
+                        #-------------------------------------------------------
+                        # Other data pages
+                        #-------------------------------------------------------
+                        else: error = "Unknown VTX data page"
 
                     #-----------------------------------------------------------
                     # Speed Cadence Sensor inputs
@@ -865,8 +1006,18 @@ def Tacx2Dongle(self):
                     Channel, DeviceNumber, DeviceTypeID, TransmissionType = \
                         ant.unmsg51_ChannelID(info)
 
-                    if Channel == ant.channel_HRM_s and DeviceTypeID == ant.DeviceTypeID_HRM:
-                        logfile.Console('Heart Rate Monitor paired: %s' % DeviceNumber)
+                    if DeviceNumber == 0:   # No device paired, ignore
+                        pass
+
+                    elif Channel == ant.channel_HRM_s and DeviceTypeID == ant.DeviceTypeID_HRM:
+                        AntHRMpaired = True
+                        SetAntHRMMsg(frame, 'Heart Rate Monitor paired: %s' % DeviceNumber)
+
+                    elif Channel == ant.channel_VTX_s and DeviceTypeID == ant.DeviceTypeID_VTX:
+                        AntVTXpaired = True
+                        GetTrainerMsg = 'Tacx i-Vortex paired: %s' % DeviceNumber
+                        SetTacxMsg(frame, GetTrainerMsg)
+
                     else:
                         logfile.Console('Unexpected device %s on channel %s' % (DeviceNumber, Channel))
                         
@@ -887,7 +1038,7 @@ def Tacx2Dongle(self):
                 else: error = "Unknown message ID"
 
                 #---------------------------------------------------------------
-                # Unsupported channel, message or page can be silentedly ignored
+                # Unsupported channel, message or page can be silently ignored
                 # Show WHAT we ignore, not to be blind for surprises!
                 #---------------------------------------------------------------
                 if error and (PrintWarnings or debug.on(debug.Data1)): logfile.Write(\
@@ -1059,7 +1210,7 @@ if __name__ == "__main__":
         frame = frmFortiusAnt(None)
         frame.SetTitle( WindowTitle )
         app.SetTopWindow(frame)
-        SetFactorMsg(frame, 1)
+        SetAntHRMMsg(frame, '')
         frame.Show()
         if clv.autostart:
             frame.Autostart()
