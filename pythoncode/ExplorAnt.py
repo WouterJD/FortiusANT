@@ -687,12 +687,10 @@ if devAntDongle:
                 #-------------------------------------------------------
                 if not clv.SimulateTrainer and listenCount == 0 and VortexPower and VTX_VortexID:
                     Power = 100 + time.localtime().tm_sec
-                    print('ExplorANT: Set Tacx Vortex power %s' % Power)
+                    logfile.Console('ExplorANT: Set Tacx Vortex power %s' % Power)
                     info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, VTX_VortexID, Power)
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     ant.SendToDongle([msg], devAntDongle, '', False)
-
-
                     
         except KeyboardInterrupt:
             logfile.Console ("Listening stopped")
