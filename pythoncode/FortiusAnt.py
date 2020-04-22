@@ -2,7 +2,8 @@
 # Version info
 #-------------------------------------------------------------------------------
 WindowTitle = "Fortius Antifier v2.5"
-__version__ = "2020-04-22"
+__version__ = "2020-04-22b"
+# 2020-04-22    Crash because frame used instead of self
 # 2020-04-22    Page16_TacxVortexSetPower only sent when data changed
 #               HeartRateT was not initialized
 # 2020-04-20    txtAntHRM used, i-Vortex paired
@@ -675,7 +676,7 @@ def Tacx2Dongle(self):
             #   otherwise, HeartRate must be provided from other source
             #-------------------------------------------------------------------
             if clv.hrm == None:
-                print('Set heartrate from trainer', HeartRateT)
+                # print('Set heartrate from trainer', HeartRateT)
                 HeartRate = HeartRateT  
 
             #-------------------------------------------------------------------
@@ -918,7 +919,7 @@ def Tacx2Dongle(self):
                                 Channel, DataPageNumber, Spec1, Spec2, Spec3, \
                                     HeartBeatEventTime, HeartBeatCount, HeartRate = \
                                     ant.msgUnpage_Hrm(info)
-#                               print('Set heartrate from HRM')
+                                # print('Set heartrate from HRM')
 
                             else:
                                 pass                            # Ignore it
@@ -1025,12 +1026,12 @@ def Tacx2Dongle(self):
 
                     elif Channel == ant.channel_HRM_s and DeviceTypeID == ant.DeviceTypeID_HRM:
                         AntHRMpaired = True
-                        SetAntHRMMsg(frame, 'Heart Rate Monitor paired: %s' % DeviceNumber)
+                        SetAntHRMMsg(self, 'Heart Rate Monitor paired: %s' % DeviceNumber)
 
                     elif Channel == ant.channel_VTX_s and DeviceTypeID == ant.DeviceTypeID_VTX:
                         AntVTXpaired = True
                         GetTrainerMsg = 'Tacx i-Vortex paired: %s' % DeviceNumber
-                        SetTacxMsg(frame, GetTrainerMsg)
+                        SetTacxMsg(self, GetTrainerMsg)
 
                     else:
                         logfile.Console('Unexpected device %s on channel %s' % (DeviceNumber, Channel))
