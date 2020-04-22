@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-20"
+__version__ = "2020-04-22b"
+# 2020-04-22    channel numbers changed into 0...7
+# 2020-04-22    unmsg51_ChannelID() returned incorrect TransmissionType
+#               channel_VTX = 4 (was 5, not intended)
 # 2020-04-20    Tacx i-Vortex data pages implemented, Command+Subcommand
 # 2020-04-18    Changed: Vortex frequency=2466
 #                        Calibrate() creates two networks, the default and 
@@ -68,15 +71,17 @@ import FortiusAntCommand    as cmd
 # A different channel is used for HRM as HRM_d, even though usually a device 
 # will be either one or the other. ExplorANT can be both.
 #-------------------------------------------------------------------------------
-channel_FE          = 1        # ANT+ channel for Fitness Equipment
-channel_HRM         = 2        # ANT+ channel for Heart Rate Monitor
+# M A X #   c h a n n e l s   m a y   b e   8   s o   b e w a r e   h e r e !
+#-------------------------------------------------------------------------------
+channel_FE          = 0        # ANT+ channel for Fitness Equipment
+channel_HRM         = 1        # ANT+ channel for Heart Rate Monitor
+channel_VTX         = 2        # ANT+ Channel for Tacx i-Vortex
 channel_SCS         = 3        # ANT+ Channel for Speed Cadence Sensor
-channel_VTX         = 5        # ANT+ Channel for Tacx i-Vortex
 
-channel_FE_s        = 5        # ANT+ channel for Fitness Equipment    (slave=Cycle Training Program)
-channel_HRM_s       = 6        # ANT+ channel for Heart Rate Monitor   (slave=display)
+channel_FE_s        = 4        # ANT+ channel for Fitness Equipment    (slave=Cycle Training Program)
+channel_HRM_s       = 5        # ANT+ channel for Heart Rate Monitor   (slave=display)
+channel_VTX_s       = 6        # ANT+ Channel for Tacx i-Vortex        (slave=Cycle Training Program)
 channel_SCS_s       = 7        # ANT+ Channel for Speed Cadence Sensor (slave=display)
-channel_VTX_s       = 8        # ANT+ Channel for Tacx i-Vortex        (slave=Cycle Training Program)
 
 DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
 DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT uses and
@@ -903,7 +908,7 @@ def unmsg51_ChannelID(info):
     format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_short + sc.unsigned_char + sc.unsigned_char
     tuple  = struct.unpack (format, info)
 
-    return                         tuple[0],          tuple[1],           tuple[2],          tuple[2]
+    return                         tuple[0],          tuple[1],           tuple[2],          tuple[3]
 
 # ------------------------------------------------------------------------------
 # A N T   M e s s a g e   60   C h a n n e l T r a n s m i t P o w e r

@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-20"
+__version__ = "2020-04-22b"
+# 2020-04-22    Miscellaneous improvements for Tacx i-Vortex
+#               Versions displayed on console
 # 2020-04-20    Tacx i-Vortex speed in km/h, TargetPower *20
 # 2020-04-19    Tacx i-Vortex data pages interpreted
 #               If Tacx i-Vortex is detected, Power is set to 100+seconds.
@@ -73,7 +75,12 @@ debug.activate(clv.debug)
 
 if True or debug.on(debug.Any):
     logfile.Open  ('ExplorANT')
-    logfile.Console ("ExplorANT %s started" % __version__)
+    logfile.Console ("ExplorANT started")
+
+    s = " %17s = %s"
+    logfile.Console(s % ('ExplorANT',     __version__ ))
+    logfile.Console(s % ('antDongle', ant.__version__ ))
+
     clv.print()
     logfile.Console ("--------------------")
 
@@ -336,7 +343,7 @@ if devAntDongle:
 
             if clv.vtx > 0:
                 ant.SlaveVTX_ChannelConfig(devAntDongle, clv.vtx)
-                logfile.Console ('VTX slave channel %s opened; listening to master device %s' % (ant.channel_VTX_s, clv.vtx))
+                logfile.Console ('VTX slave channel %s opened; listening to master device %s' % (ant.channel_VTX_s, 0))
 
         # ----------------------------------------------------------------------
         # Get info from the devices
