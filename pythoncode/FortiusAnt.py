@@ -2,7 +2,8 @@
 # Version info
 #-------------------------------------------------------------------------------
 WindowTitle = "Fortius Antifier v2.5"
-__version__ = "2020-04-22b"
+__version__ = "2020-04-22c"
+# 2020-04-22    Page16_TacxVortexSetPower sent every 0.25 second
 # 2020-04-22    Crash because frame used instead of self
 # 2020-04-22    Page16_TacxVortexSetPower only sent when data changed
 #               HeartRateT was not initialized
@@ -621,10 +622,6 @@ def Tacx2Dongle(self):
     Resistance              = 0
     SpeedKmh                = 0
     
-    FE_commandTime          = 0             # Timestamp of last received command
-    VTX_commandTime         = 0             # Same, as sent to Tacx i-Vortex
-
-    
     #---------------------------------------------------------------------------
     # Initialize antHRM and antFE module
     #---------------------------------------------------------------------------
@@ -734,9 +731,7 @@ def Tacx2Dongle(self):
             if False and clv.SimulateTrainer:   # I DO NOT REMEMBER NOW
                 pass                            # WHY THIS IS NOT DONE LIKE THIS
 
-            elif clv.Tacx_iVortex and VTX_VortexID and VTX_commandTime != FE_commandTime:
-                VTX_commandTime = FE_commandTime    # Only send when changed
-
+            elif clv.Tacx_iVortex and VTX_VortexID:
                 Resistance = usbTrainer.Power2Resistance(TargetPower, SpeedKmh, Cadence)
                 info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, VTX_VortexID, TargetPower) # Resistance?
                 messages.append ( ant.ComposeMessage (ant.msgID_BroadcastData, info) )
@@ -787,7 +782,6 @@ def Tacx2Dongle(self):
                         # Data page 48 (0x30) Basic resistance
                         #-------------------------------------------------------
                         if   DataPageNumber == 48:                  
-                            FE_commandTime = time.time()
                             TargetMode            = gui.mode_Basic
                             TargetGradeFromDongle = 0
                             TargetPowerFromDongle = ant.msgUnpage48_BasicResistance(info) * 1000  # n % of maximum of 1000Watt
@@ -796,7 +790,6 @@ def Tacx2Dongle(self):
                         # Data page 49 (0x31) Target Power
                         #-------------------------------------------------------
                         elif   DataPageNumber == 49:
-                            FE_commandTime        = time.time()
                             TargetMode            = gui.mode_Power
                             TargetGradeFromDongle = 0
                             TargetPowerFromDongle = ant.msgUnpage49_TargetPower(info)
@@ -824,7 +817,6 @@ def Tacx2Dongle(self):
                                     logfile.Write('PowerMode: Grade info ignored')
                                 pass
                             else:
-                                FE_commandTime        = time.time()
                                 TargetMode            = gui.mode_Grade
                                 TargetGradeFromDongle = ant.msgUnpage51_TrackResistance(info)
                                 TargetPowerFromDongle = 0
