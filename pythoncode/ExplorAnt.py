@@ -297,7 +297,8 @@ if devAntDongle:
     #---------------------------------------------------------------------------
     # If any channel specified and/or found: Open the device channels & listen.
     #---------------------------------------------------------------------------
-    if clv.SimulateTrainer or clv.hrm > 0 or clv.fe > 0 or clv.scs > 0 or clv.vtx > 0:
+    if clv.vtx < 0: clv.vtx = ant.DeviceNumber_VTX # Not found during pair, try anyway
+    if clv.SimulateTrainer or clv.hrm >= 0 or clv.fe >= 0 or clv.scs >= 0 or clv.vtx >= 0:
         # ----------------------------------------------------------------------
         # Calibrate ANT+ dongle (because reset was done!)
         # ----------------------------------------------------------------------
@@ -333,8 +334,7 @@ if devAntDongle:
                 ant.SlaveTrainer_ChannelConfig(devAntDongle, clv.fe)
                 logfile.Console ('FE  slave channel %s opened; listening to master device %s' % (ant.channel_FE_s,  clv.fe))
 
-            if True or clv.vtx > 0:
-                if clv.vtx < 0: clv.vtx = 0 # Not found during pair, try anyway
+            if clv.vtx > 0:
                 ant.SlaveVTX_ChannelConfig(devAntDongle, clv.vtx)
                 logfile.Console ('VTX slave channel %s opened; listening to master device %s' % (ant.channel_VTX_s, clv.vtx))
 

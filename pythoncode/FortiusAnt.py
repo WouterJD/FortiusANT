@@ -2,7 +2,9 @@
 # Version info
 #-------------------------------------------------------------------------------
 WindowTitle = "Fortius Antifier v2.5"
-__version__ = "2020-04-20"
+__version__ = "2020-04-22"
+# 2020-04-22    Page16_TacxVortexSetPower only sent when data changed
+#               HeartRateT was not initialized
 # 2020-04-20    txtAntHRM used, i-Vortex paired
 # 2020-04-17    Added: Page54 FE_Capabilities
 # 2020-04-16    Write() replaced by Console() where needed
@@ -606,6 +608,10 @@ def Tacx2Dongle(self):
     TargetPower             = 100           #   manual mode
     UserAndBikeWeight       = 75 + 10       # defined according the standard (data page 51)
 #   testWeight              = 10            # used to test SendToTrainer()
+
+    HeartRateT              = 0             # Values returned by Trainer
+    SpeedKmhT               = 0
+    CadenceT                = 0
     
     Cadence                 = 0
     CurrentPower            = 0
@@ -613,6 +619,10 @@ def Tacx2Dongle(self):
     PedalEcho               = 0
     Resistance              = 0
     SpeedKmh                = 0
+    
+    FE_commandTime          = 0             # Timestamp of last received command
+    VTX_commandTime         = 0             # Same, as sent to Tacx i-Vortex
+
     
     #---------------------------------------------------------------------------
     # Initialize antHRM and antFE module
@@ -634,7 +644,7 @@ def Tacx2Dongle(self):
                     SimulateReceiveFromTrainer (TargetPower, CurrentPower)
                 if clv.gui: SetTacxMsg(self, GetTrainerMsg + PowerModeActive)
 
-            elif clv.Tacx_iVortex:         # Data is received from ANT messages
+            elif clv.Tacx_iVortex:         # VTX Data is received from ANT messages
                 pass            
 
             else:
@@ -723,12 +733,13 @@ def Tacx2Dongle(self):
             if False and clv.SimulateTrainer:   # I DO NOT REMEMBER NOW
                 pass                            # WHY THIS IS NOT DONE LIKE THIS
 
-            elif clv.Tacx_iVortex and VTX_VortexID:
+            elif clv.Tacx_iVortex and VTX_VortexID and VTX_commandTime != FE_commandTime:
+                VTX_commandTime = FE_commandTime    # Only send when changed
                 Resistance = usbTrainer.Power2Resistance(TargetPower, SpeedKmh, Cadence)
                 info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, VTX_VortexID, TargetPower) # Resistance?
                 messages.append ( ant.ComposeMessage (ant.msgID_BroadcastData, info) )
 
-            else:
+            elif devTrainer:
                 usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeResistance, \
                     TargetMode, TargetPower, TargetGrade, PowercurveFactor, \
                     UserAndBikeWeight, \
@@ -774,6 +785,7 @@ def Tacx2Dongle(self):
                         # Data page 48 (0x30) Basic resistance
                         #-------------------------------------------------------
                         if   DataPageNumber == 48:                  
+                            FE_commandTime = time.time()
                             TargetMode            = gui.mode_Basic
                             TargetGradeFromDongle = 0
                             TargetPowerFromDongle = ant.msgUnpage48_BasicResistance(info) * 1000  # n % of maximum of 1000Watt
@@ -782,6 +794,7 @@ def Tacx2Dongle(self):
                         # Data page 49 (0x31) Target Power
                         #-------------------------------------------------------
                         elif   DataPageNumber == 49:                  
+                            FE_commandTime        = time.time()
                             TargetMode            = gui.mode_Power
                             TargetGradeFromDongle = 0
                             TargetPowerFromDongle = ant.msgUnpage49_TargetPower(info)
@@ -809,6 +822,7 @@ def Tacx2Dongle(self):
                                     logfile.Write('PowerMode: Grade info ignored')
                                 pass
                             else:
+                                FE_commandTime        = time.time()
                                 TargetMode            = gui.mode_Grade
                                 TargetGradeFromDongle = ant.msgUnpage51_TrackResistance(info)
                                 TargetPowerFromDongle = 0
