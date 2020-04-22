@@ -974,6 +974,8 @@ def msgPage00_TacxVortexDataSpeed (Channel, Power, Speed, Cadence):
     format = sc.big_endian +    fChannel + fDataPageNumber +    fPower +    fSpeed + fReserved + fCadence
     info   = struct.pack(format, Channel ,  DataPageNumber , int(Power), int(Speed),          int(Cadence))
 
+    # print('msgPage00_TacxVortexDataSpeed', info, Channel, Power, Speed, Cadence)
+
     return info
 
 def msgUnpage00_TacxVortexDataSpeed (info):
@@ -1126,6 +1128,22 @@ def msgUnpage02_TacxVortexDataVersion (info):
 #                                                      rrrrrrrrrrr cal
 #                                                                     vtxid
 # ------------------------------------------------------------------------------
+def msgPage03_TacxVortexDataCalibration (Channel, Calibration, VortexID):
+    DataPageNumber      = 3
+
+    fChannel            = sc.unsigned_char  #0 First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # payload[0] First byte of the ANT+ datapage
+    fReserved           = sc.pad * 4        # payload[1, 2, 3, 4] 
+    fCalibration        = sc.unsigned_char  # payload[5]
+    fVortexID           = sc.unsigned_short # payload[6, 7]
+
+    format= sc.big_endian +     fChannel + fDataPageNumber + fReserved + fCalibration + fVortexID
+    info   = struct.pack(format, Channel,   DataPageNumber,               Calibration,   VortexID)
+
+    # print('msgPage03_TacxVortexDataCalibration', info, Channel, Calibration, VortexID)
+
+    return info
+
 def msgUnpage03_TacxVortexDataCalibration (info):
     nChannel            = 0
     fChannel            = sc.unsigned_char  #0 First byte of the ANT+ message content
@@ -1264,8 +1282,8 @@ def msgPage16_TacxVortexSetPower (Channel, VortexID, Power):
     fNoCalibrationData  = sc.unsigned_char
     fPower              = sc.unsigned_short
 
-    format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fSubcommand + fNoCalibrationData + fPower
-    info   = struct.pack(format, Channel,   DataPageNumber,   VortexID,   0xAA,      0,            0,                   Power)
+    format = sc.big_endian +    fChannel + fDataPageNumber +   fVortexID + fCommand + fSubcommand + fNoCalibrationData + fPower
+    info   = struct.pack(format, Channel,   DataPageNumber, int(VortexID),  0xAA,      0,            0,               int(Power))
 
     return info
 

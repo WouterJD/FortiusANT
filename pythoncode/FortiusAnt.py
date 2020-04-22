@@ -736,6 +736,7 @@ def Tacx2Dongle(self):
 
             elif clv.Tacx_iVortex and VTX_VortexID and VTX_commandTime != FE_commandTime:
                 VTX_commandTime = FE_commandTime    # Only send when changed
+
                 Resistance = usbTrainer.Power2Resistance(TargetPower, SpeedKmh, Cadence)
                 info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, VTX_VortexID, TargetPower) # Resistance?
                 messages.append ( ant.ComposeMessage (ant.msgID_BroadcastData, info) )
@@ -794,7 +795,7 @@ def Tacx2Dongle(self):
                         #-------------------------------------------------------
                         # Data page 49 (0x31) Target Power
                         #-------------------------------------------------------
-                        elif   DataPageNumber == 49:                  
+                        elif   DataPageNumber == 49:
                             FE_commandTime        = time.time()
                             TargetMode            = gui.mode_Power
                             TargetGradeFromDongle = 0
@@ -940,6 +941,7 @@ def Tacx2Dongle(self):
                     # VTX_s = Tacx i-Vortex trainer
                     #-----------------------------------------------------------
                     elif Channel == ant.channel_VTX_s:
+                        # logfile.Console ('i-Vortex Page=%s %s' % (DataPageNumber, info))
                         #-------------------------------------------------------
                         # Ask what device is paired
                         #-------------------------------------------------------
@@ -954,32 +956,36 @@ def Tacx2Dongle(self):
                             VTX_UsingVirtualSpeed, CurrentPower, VTX_Speed, VTX_CalibrationState, Cadence = \
                                 ant.msgUnpage00_TacxVortexDataSpeed(info)
                             SpeedKmh = round( VTX_Speed / ( 100 * 1000 / 3600 ), 1)
-                            logfile.Console ('i-Vortex Page=%s UsingVirtualSpeed=%s Power=%s Speed=%s State=%s Cadence=%s' % \
-                                (DataPageNumber, VTX_UsingVirtualSpeed, CurrentPower, SpeedKmh, VTX_CalibrationState, Cadence) )
+                            if debug.on(debug.Function):
+                                logfile.Write ('i-Vortex Page=%s UsingVirtualSpeed=%s Power=%s Speed=%s State=%s Cadence=%s' % \
+                                    (DataPageNumber, VTX_UsingVirtualSpeed, CurrentPower, SpeedKmh, VTX_CalibrationState, Cadence) )
 
                         #-------------------------------------------------------
                         # Data page 01 msgUnpage01_TacxVortexDataSerial
                         #-------------------------------------------------------
                         elif DataPageNumber == 1:
                             VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm = ant.msgUnpage01_TacxVortexDataSerial(info)
-                            logfile.Console ('i-Vortex Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % \
-                                (DataPageNumber, VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm) )
+                            if debug.on(debug.Function):
+                                logfile.Write ('i-Vortex Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % \
+                                    (DataPageNumber, VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm) )
 
                         #-------------------------------------------------------
                         # Data page 02 msgUnpage02_TacxVortexDataVersion
                         #-------------------------------------------------------
                         elif DataPageNumber == 2:
                             VTX_Major, VTX_Minor, VTX_Build = ant.msgUnpage02_TacxVortexDataVersion(info)
-                            logfile.Console ('i-Vortex Page=%s Major=%s Minor=%s Build=%s' % \
-                                (DataPageNumber, VTX_Major, VTX_Minor, VTX_Build))
+                            if debug.on(debug.Function):
+                                logfile.Write ('i-Vortex Page=%s Major=%s Minor=%s Build=%s' % \
+                                    (DataPageNumber, VTX_Major, VTX_Minor, VTX_Build))
 
                         #-------------------------------------------------------
                         # Data page 03 msgUnpage03_TacxVortexDataCalibration
                         #-------------------------------------------------------
                         elif DataPageNumber == 3:
                             VTX_Calibration, VTX_VortexID = ant.msgUnpage03_TacxVortexDataCalibration(info)
-                            logfile.Console ('i-Vortex Page=%s Calibration=%s VortexID=%s' % \
-                                (DataPageNumber, VTX_Calibration, VTX_VortexID))
+                            if debug.on(debug.Function):
+                                logfile.Write ('i-Vortex Page=%s Calibration=%s VortexID=%s' % \
+                                    (DataPageNumber, VTX_Calibration, VTX_VortexID))
 
                         #-------------------------------------------------------
                         # Other data pages
@@ -1100,7 +1106,8 @@ def Tacx2Dongle(self):
     #---------------------------------------------------------------------------
     if not (clv.manual or clv.manualGrade):
         ant.ResetDongle(devAntDongle)
-    usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeStop, 0, False, False, \
+    if devTrainer:
+        usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeStop, 0, False, False, \
                              0, 0, 0, 0, 0, 0, clv.SimulateTrainer)
 
     return True

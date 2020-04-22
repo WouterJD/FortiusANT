@@ -320,17 +320,19 @@ if devAntDongle:
             #-----------------------------------------------------------------------
             logfile.Console ("ExplorANT: We're simulating master ANT+ devices")
 
-            hrm.Initialize()
-            fe.Initialize()
+            if clv.hrm >= 0:
+                hrm.Initialize()
+                ant.HRM_ChannelConfig(devAntDongle)
+                logfile.Console ('HRM master channel %s opened; device %s (act as an HRM)' % (ant.channel_HRM, ant.DeviceNumber_HRM))
 
-            ant.HRM_ChannelConfig(devAntDongle)
-            logfile.Console ('HRM master channel %s opened; device %s (act as an HRM)' % (ant.channel_HRM, ant.DeviceNumber_HRM))
+            if clv.fe  >= 0:
+                fe.Initialize()
+                ant.Trainer_ChannelConfig(devAntDongle)
+                logfile.Console ('FE  master channel %s opened; device %s (act as a Tacx Trainer)' % (ant.channel_FE, ant.DeviceNumber_FE))
 
-            ant.Trainer_ChannelConfig(devAntDongle)
-            logfile.Console ('FE  master channel %s opened; device %s (act as a Tacx Trainer)' % (ant.channel_FE, ant.DeviceNumber_FE))
-
-            ant.VTX_ChannelConfig(devAntDongle)
-            logfile.Console ('VTX master channel %s opened; device %s (act as a Tacx -Vortex)' % (ant.channel_VTX, ant.DeviceNumber_VTX))
+            if clv.vtx >= 0:
+                ant.VTX_ChannelConfig(devAntDongle)
+                logfile.Console ('VTX master channel %s opened; device %s (act as a Tacx -Vortex)' % (ant.channel_VTX, ant.DeviceNumber_VTX))
 
         else:
             if clv.hrm > 0:
@@ -349,8 +351,8 @@ if devAntDongle:
         # Get info from the devices
         # ----------------------------------------------------------------------
         logfile.Console ("Listening, press Ctrl-C to exit")
-        try:
-        # if True:
+        #try:
+        if True:
             RunningSwitch       = True
             
             HRM_s_count         = 0
@@ -385,6 +387,8 @@ if devAntDongle:
             TargetPower  	    = 100   # For SimulateTrainer
             CurrentPower	    = 100
             
+            EventCounter        = 0
+            
             while RunningSwitch == True:
                 StartTime = time.time()
                 #---------------------------------------------------------------
@@ -393,17 +397,28 @@ if devAntDongle:
                 messages     = []
 
                 if clv.SimulateTrainer:
-                    if False:
+                    if True:
                         SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
                             SimulateReceiveFromTrainer (TargetPower, CurrentPower)
                     else:
                         Cadence, CurrentPower, SpeedKmh, HeartRate = 98, 234, 35.6, 123     # Always the same, ennoying but predictable
 
-                    messages.append(hrm.BroadcastHeartrateMessage (devAntDongle, HeartRate))
-                    messages.append(fe.BroadcastTrainerDataMessage(devAntDongle, Cadence, CurrentPower, SpeedKmh, HeartRate))
+                    if clv.hrm >= 0:
+                        messages.append(hrm.BroadcastHeartrateMessage (devAntDongle, HeartRate))
 
-                    messages.append ( ant.ComposeMessage (ant.msgID_BroadcastData, \
-                                        ant.msgPage00_TacxVortexDataSpeed (ant.channel_VTX, CurrentPower, SpeedKmh, Cadence)))
+                    if clv.fe >= 0:
+                        messages.append(fe.BroadcastTrainerDataMessage(devAntDongle, Cadence, CurrentPower, SpeedKmh, HeartRate))
+
+                    if clv.vtx >= 0:
+                        EventCounter += 1
+                        if EventCounter == 64: EventCounter = 0
+                        
+                        if EventCounter % 64 < 4:  # Transmit 4 times (0, 1, 2, 3) Page 3
+                            messages.append ( ant.ComposeMessage (ant.msgID_BroadcastData, \
+                                                ant.msgPage03_TacxVortexDataCalibration (ant.channel_VTX, 0, ant.DeviceNumber_VTX)))
+                        else:                       # Transmit 60 times (4...63)    Page 0
+                            messages.append ( ant.ComposeMessage (ant.msgID_BroadcastData, \
+                                                ant.msgPage00_TacxVortexDataSpeed (ant.channel_VTX, CurrentPower, SpeedKmh, Cadence)))
 
                 #---------------------------------------------------------------
                 # Receive data
@@ -551,8 +566,8 @@ if devAntDongle:
                                 VTX_UsingVirtualSpeed, VTX_Power, VTX_Speed, VTX_CalibrationState, VTX_Cadence = \
                                     ant.msgUnpage00_TacxVortexDataSpeed(info)
                                 VTX_Speed = round( VTX_Speed / ( 100 * 1000 / 3600 ), 1)
-                                logfile.Console ('i-Vortex Page=%s UsingVirtualSpeed=%s Power=%s Speed=%s State=%s Cadence=%s' % \
-                                    (DataPageNumber, VTX_UsingVirtualSpeed, VTX_Power, VTX_Speed, VTX_CalibrationState, VTX_Cadence) )
+                                # logfile.Console ('i-Vortex Page=%s UsingVirtualSpeed=%s Power=%s Speed=%s State=%s Cadence=%s' % \
+                                #   (DataPageNumber, VTX_UsingVirtualSpeed, VTX_Power, VTX_Speed, VTX_CalibrationState, VTX_Cadence) )
 
                             #---------------------------------------------------
                             # Data page 01 msgUnpage01_TacxVortexDataSerial
@@ -578,8 +593,8 @@ if devAntDongle:
                             elif DataPageNumber == 3:
                                 Unknown = False
                                 VTX_Calibration, VTX_VortexID = ant.msgUnpage03_TacxVortexDataCalibration(info)
-                                logfile.Console ('i-Vortex Page=%s Calibration=%s VortexID=%s' % \
-                                    (DataPageNumber, VTX_Calibration, VTX_VortexID))
+                                # logfile.Console ('i-Vortex Page=%s Calibration=%s VortexID=%s' % \
+                                #    (DataPageNumber, VTX_Calibration, VTX_VortexID))
 
                         #-------------------------------------------------------
                         # VTX = Cycle Training Program (e.g. Zwift, Trainer Road)
@@ -587,9 +602,8 @@ if devAntDongle:
                         #
                         #-------------------------------------------------------
                         elif Channel == ant.channel_VTX:
-                            print('channel_VTX', DataPageNumber, hex(info))
                             VTX_Channel, VTX_DataPageNumber, VTX_VortexID, VTX_Command, VTX_Subcommand, VTX_NoCalibrationData, VTX_Power = \
-                                msgUnpage16_TacxVortexSetPower(info)
+                                ant.msgUnpage16_TacxVortexSetPower(info)
                             Unknown = False
 
                     elif id == ant.msgID_AcknowledgedData:
@@ -699,10 +713,10 @@ if devAntDongle:
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     ant.SendToDongle([msg], devAntDongle, '', False)
                     
-        except KeyboardInterrupt:
-            logfile.Console ("Listening stopped")
-        except Exception as e:
-            logfile.Console ("Listening stopped due to exception: " + str(e))
+        # except KeyboardInterrupt:
+            # logfile.Console ("Listening stopped")
+        # except Exception as e:
+            # logfile.Console ("Listening stopped due to exception: " + str(e))
         #---------------------------------------------------------------
         # Free channel
         #---------------------------------------------------------------
