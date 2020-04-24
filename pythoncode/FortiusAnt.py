@@ -1,8 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v2.5"
-__version__ = "2020-04-22c"
+WindowTitle = "Fortius Antifier v2.6"
+__version__ = "2020-04-24"
+# 2020-04-24    Recheck & document of TargetMode/Power/Grade/Resistance
+#               Some calculations relocated
 # 2020-04-22    Page16_TacxVortexSetPower sent every 0.25 second
 # 2020-04-22    Crash because frame used instead of self
 # 2020-04-22    Page16_TacxVortexSetPower only sent when data changed
@@ -354,12 +356,14 @@ def Runoff(self):
     #4. Rolldown timer will start automatically when you hit 40kph, so stop pedalling quickly!
     #''')
     self.RunningSwitch = True
+    CycleTime = 0.25            # Seconds, default = 0.25 (inspired by 4Hz ANT+)
+    # CycleTime = 0.01
     while self.RunningSwitch == True:
         StartTime = time.time()
         #-----------------------------------------------------------------------
         # Get data from trainer
         #-----------------------------------------------------------------------
-        Error, SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
+        Error, SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis = \
             usbTrainer.ReceiveFromTrainer(devTrainer)
         if   Buttons == usbTrainer.EnterButton:     pass
         elif Buttons == usbTrainer.DownButton:      TargetPower -= 50          # Subtract 50 Watts for calibration test
@@ -370,14 +374,11 @@ def Runoff(self):
         #-----------------------------------------------------------------------
         # Show what happens
         #-----------------------------------------------------------------------
-        if debug.on(debug.Application): logfile.Write ("Trainer runoff: SpeedKmh=%s PedalEcho=%s hr=%s CurrentPower=%s cad=%s res=%s" % \
-            (SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetPower))
-        
         if Error == "Not Found":
             SetValues(self, 0, 0, 0, 0, 0, 0, 0, 0, 0)
             SetTacxMsg(self, "Check if trainer is powered on")
         else:
-            SetValues(self, SpeedKmh, Cadence, CurrentPower, TargetMode, TargetPower, TargetGrade, Resistance, HeartRate, 0)
+            SetValues(self, SpeedKmh, Cadence, CurrentPower, TargetMode, TargetPower, TargetGrade, TargetResistance, HeartRate, 0)
             if not rolldown or rolldown_time == 0:
                 SetTacxMsg(self, "Cycle to above 40kph (then stop)")
             else:
@@ -421,9 +422,37 @@ def Runoff(self):
             #
             # case 2. Cadence = 120 and Cycle time (in seconds) = 0.25
             #       angle = .25 * 6 * 120 = 180 degrees
+            #
+            # case 2. Cadence = 120 and Cycle time (in seconds) = 0.01
+            #       angle = .01 * 6 * 120 = 1.80 degrees
             #---------------------------------------------------------------------
-            SleepTime = 0.25 - (time.time() - StartTime)
+            SleepTime = CycleTime - (time.time() - StartTime)
             if SleepTime > 0: time.sleep(SleepTime)
+        #-------------------------------------------------------------------------
+        # #48 Frequency of data capture - sufficient for pedal stroke analysis?
+        #
+        # If we want to do pedal stroke analysis, we should measure every
+        # pedal-cycle multiple times per rotation.
+        # 
+        # Number of measurements/sec = (cadence * 360/angle) / 60 = 6 * cadence / angle
+        # ==> Cycle time (in seconds) = angle / (6 * cadence)
+        # ==> Angle = Cycle time (in seconds) * 6 * cadence
+        #
+        # case 1. Cadence = 120 and Angle = 1 degree
+        #       Cycle time (in seconds) = 1 / (6 * 120) = 1.3889 ms
+        #
+        # case 2. Cadence = 120 and Cycle time (in seconds) = 0.25
+        #       angle = .25 * 6 * 120 = 180 degrees
+        #
+        # case 2. Cadence = 120 and Cycle time (in seconds) = 0.01
+        #       angle = .01 * 6 * 120 = 1.80 degrees
+        #-------------------------------------------------------------------------
+        # For now, do some test-prints if short cycletime is set
+        #-------------------------------------------------------------------------
+        if debug.on(debug.Application): logfile.Console ( \
+            "Runoff: Sleep(% 4.3fs), Pedecho=%s, Cadence=%3s, Speed=%4.1fkm/h, Power=%4.1fW, Res=%4s %s" % \
+            (SleepTime, PedalEcho, Cadence, SpeedKmh, CurrentPower, TargetResistance, Error) \
+                                                        )
     return True
     
 # ------------------------------------------------------------------------------
@@ -530,7 +559,7 @@ def Tacx2Dongle(self):
             #-------------------------------------------------------------------------
             usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeCalibrate, \
                         False, False, False, False, False, False, False, False, False, False)
-            Error, SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, Resistance, Buttons, Axis = \
+            Error, SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis = \
                         usbTrainer.ReceiveFromTrainer(devTrainer)
 
             #-------------------------------------------------------------------------
@@ -541,14 +570,14 @@ def Tacx2Dongle(self):
             # First reading on 'my' Fortius shows a positive number, then goes negative
             # so ignore the first x readings before deciding it will not work.
             #-------------------------------------------------------------------------
-            # print(StartPedalling, SpeedKmh, Resistance)
-            if Resistance > 0:
+            # print(StartPedalling, SpeedKmh, CurrentResistance)
+            if CurrentResistance > 0:
                 Counter += 1
                 if Counter == 10:
                     logfile.Console('Calibration stopped because of unexpected resistance value')
                     break
 
-            if Resistance < 0 and SpeedKmh > 0: # Calibration is started (with pedal kick)
+            if CurrentResistance < 0 and SpeedKmh > 0: # Calibration is started (with pedal kick)
                 #---------------------------------------------------------------------
                 # Show progress (when calibrating is started)
                 # This changes the message from "Start Pedalling" to "Calibrating"
@@ -558,7 +587,7 @@ def Tacx2Dongle(self):
                     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start calibration')
                     SetTacxMsg(self, "* * * * C A L I B R A T I N G * * * *")
                     StartPedalling = False
-                SetValues(self, SpeedKmh, int(CountDown/4), round(CurrentPower * -1,0), gui.mode_Power, 0, 0, Resistance * -1, 0, 0)
+                SetValues(self, SpeedKmh, int(CountDown/4), round(CurrentPower * -1,0), gui.mode_Power, 0, 0, CurrentResistance * -1, 0, 0)
 
                 # ------------------------------------------------------------------
                 # Average power over the last 20 readings
@@ -566,12 +595,12 @@ def Tacx2Dongle(self):
                 # At least 30 seconds but not longer than the countdown time (8 minutes)
                 # Note that the limits are empiracally established.
                 # ------------------------------------------------------------------
-                ResistanceArray = numpy.append(ResistanceArray, Resistance * -1) # Add new value to array
-                ResistanceArray = numpy.delete(ResistanceArray, 0)               # Remove oldest from array
+                ResistanceArray = numpy.append(ResistanceArray, CurrentResistance * -1) # Add new value to array
+                ResistanceArray = numpy.delete(ResistanceArray, 0)                      # Remove oldest from array
                 
                 if CountDown < (120 * 4 - 30) and numpy.min(ResistanceArray) > 0:
                     if (numpy.max(ResistanceArray) - numpy.min(ResistanceArray) ) < 30 or CountDown <= 0:
-                        Calibrate = Resistance * -1
+                        Calibrate = CurrentResistance * -1
                         if debug.on(debug.Function): logfile.Write('Tacx2Dongle; calibration ended %s' % Calibrate)
 
                 CountDown -= 0.25                   # If not started, no count down!
@@ -597,30 +626,48 @@ def Tacx2Dongle(self):
     #---------------------------------------------------------------------------
     # Initialize variables
     #---------------------------------------------------------------------------
-    TargetMode              = gui.mode_Power
-    TargetGradeFromDongle   = 0
-    TargetPowerFromDongle   = 100           # set initial Target Power
-    TargetPowerTime         = 0             # Time that last TargetPower received
-    PowerModeActive         = ''            # Text showing in userinterface
+    #                       Receive     Send        ANT+        ANT+        FortiusANT
+    #                       from        To          like        like        
+    #                       Trainer     Trainer     Zwift       Vortex      
+    #
+    # TargetMode            .           Use         Set         .           .
+    # TargetGrade           .           Use         Set         .           .
+    # TargetPower           .           Use         Set         Use         .
+    # 
+    # PowercurveFactor      .           Use         .           .           Set
+    # UserAndBikeWeight     .           Use         .           .           Set
+    # 
+    # Axis                  Set         .           .           .           Use
+    # Buttons               Set         .           .           .           Use
+    # Cadence               Set         Use?        Use         Set         Show
+    # Calibrate             .           Use         .           .           .
+    # CurrentPower          Set         .           Use         Set         Show
+    # PedalEcho             Set         Use         .           .           .
+    # SpeedKmh              Set         Use         Use         Set         Show
+    # TargetResistance      Set         .           .           Calc        Show
+    #---------------------------------------------------------------------------
+    TargetMode              = gui.mode_Power# Start with power mode
+    TargetGrade             = 0             # no grade
+    TargetPower             = 100           # and 100Watts
+
+    TargetGradeFromDongle   = 0             # Target from Zwift is parked "here"
+    TargetPowerFromDongle   = 100           # and used when not in manual mode.
 
     PowercurveFactor        = 1             # 1.1 causes higher load
                                             # 0.9 causes lower load
     
-    TargetGrade             = 0             # different sets used to implement
-    TargetPower             = 100           #   manual mode
     UserAndBikeWeight       = 75 + 10       # defined according the standard (data page 51)
-#   testWeight              = 10            # used to test SendToTrainer()
 
-    HeartRateT              = 0             # Values returned by Trainer
-    SpeedKmhT               = 0
-    CadenceT                = 0
-    
     Cadence                 = 0
     CurrentPower            = 0
+    CurrentResistance       = 0
     HeartRate               = 0
     PedalEcho               = 0
-    Resistance              = 0
     SpeedKmh                = 0
+    TargetResistance        = 0
+
+    TargetPowerTime         = 0             # Time that last TargetPower received
+    PowerModeActive         = ''            # Text showing in userinterface
     
     #---------------------------------------------------------------------------
     # Initialize antHRM and antFE module
@@ -638,24 +685,26 @@ def Tacx2Dongle(self):
             # TRAINER- SHOULD WRITE THEN READ 70MS LATER REALLY
             #-------------------------------------------------------------------
             if clv.SimulateTrainer:
-                SpeedKmh, PedalEcho, HeartRateT, CurrentPower, Cadence, Resistance, CurrentResistance, Buttons, Axis = \
+                SpeedKmh, PedalEcho, HeartRateT, CurrentPower, Cadence, x, xx, Buttons, Axis = \
                     SimulateReceiveFromTrainer (TargetPower, CurrentPower)
                 if clv.gui: SetTacxMsg(self, GetTrainerMsg + PowerModeActive)
 
-            elif clv.Tacx_iVortex:         # VTX Data is received from ANT messages
+            elif clv.Tacx_iVortex:  # VTX Data is received from ANT messages
+                                    # TargetResistance is not returned by Vortex
+                TargetResistance = usbTrainer.Power2Resistance(TargetPower, SpeedKmh, Cadence)
                 pass            
 
             else:
-                Error, SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, CurrentResistance, Buttons, Axis = \
+                Error, SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, TargetResistance, CurrentResistance, Buttons, Axis = \
                     usbTrainer.ReceiveFromTrainer(devTrainer)
-                if CurrentPower < 0: CurrentPower = 0       # No negative value defined for ANT message Page25 (#)
-                
-                CurrentPower /= clv.PowerFactor
+
+                if CurrentPower < 0: CurrentPower = 0 # No negative value defined for ANT message Page25 (#)
+                CurrentPower /= clv.PowerFactor       # Note that's a calibration option!
                 #---------------------------------------------------------------
                 # Show results
                 #---------------------------------------------------------------
                 if Error == "Not Found":
-                    SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Resistance, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0, 0
+                    SpeedKmhT, PedalEcho, HeartRateT, CurrentPower, CadenceT, Buttons, Axis = 0, 0, 0, 0, 0, 0, 0
                     SetTacxMsg(self, 'Cannot read from trainer')
                 else:
                     if clv.gui: SetTacxMsg(self, GetTrainerMsg + PowerModeActive)
@@ -674,32 +723,31 @@ def Tacx2Dongle(self):
             #-------------------------------------------------------------------
             if clv.hrm == None:
                 # print('Set heartrate from trainer', HeartRateT)
-                HeartRate = HeartRateT  
-
+                HeartRate = HeartRateT
+            
             #-------------------------------------------------------------------
             # In manual-mode, power can be incremented or decremented
             # In all modes, operation can be stopped.
+            #
+            # TargetMode  is set here (manual mode) or received from ANT+ (Zwift)
+            # TargetPower and TargetGrade are set in this section only!
             #-------------------------------------------------------------------
             if clv.manual:
                 TargetMode = gui.mode_Power
+                PowercurveFactor = 1                        # Only for resistance mode!
                 if   Buttons == usbTrainer.EnterButton:     pass
-                elif Buttons == usbTrainer.DownButton:      TargetPower -= 50   # testWeight -= 10 to test effect of Weight
-                elif Buttons == usbTrainer.UpButton:        TargetPower += 50   # testWeight += 10
+                elif Buttons == usbTrainer.DownButton:      TargetPower -= 50
+                elif Buttons == usbTrainer.UpButton:        TargetPower += 50
                 elif Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
                 else:                                       pass
             elif clv.manualGrade:                           # 2020-01-23 new option
                 TargetMode = gui.mode_Grade
+                PowercurveFactor = 1                        # Only for resistance mode!
                 if   Buttons == usbTrainer.EnterButton:     pass
                 elif Buttons == usbTrainer.DownButton:      TargetGrade -= 1
                 elif Buttons == usbTrainer.UpButton:        TargetGrade += 1
                 elif Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
                 else:                                       pass
-                #--------------------------------------------------------------
-                # Translate "grade" to TargetPower for display purpose only
-                # The trainer will only use Grade, because of TargetMode
-                #--------------------------------------------------------------
-                r = usbTrainer.Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence)
-                TargetPower = usbTrainer.Resistance2Power(r, SpeedKmh)
             else:
                 if   Buttons == usbTrainer.EnterButton:                             pass
                 elif Buttons == usbTrainer.DownButton and PowercurveFactor > 0.3:   PowercurveFactor /= 1.1
@@ -718,6 +766,16 @@ def Tacx2Dongle(self):
 
                 else:
                     logfile.Console("Unsupported TargetMode %s" % TargetMode)
+            #------------------------------------------------------------------
+            # Translate "grade" to TargetPower for display purpose only
+            # The trainer will only use Grade, because of TargetMode
+            # Note that this recalculation occurs every cycle again, since
+            #       required power may change with speed, for same grade
+            #------------------------------------------------------------------
+            if TargetMode == gui.mode_Grade:
+                r = usbTrainer.Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence)
+                r *= PowercurveFactor
+                TargetPower = usbTrainer.Resistance2Power(r, SpeedKmh)
 
             #-------------------------------------------------------------------
             # Prepare
@@ -732,7 +790,7 @@ def Tacx2Dongle(self):
                 pass                            # WHY THIS IS NOT DONE LIKE THIS
 
             elif clv.Tacx_iVortex and VTX_VortexID:
-                Resistance = usbTrainer.Power2Resistance(TargetPower, SpeedKmh, Cadence)
+                # Resistance = usbTrainer.Power2Resistance(TargetPower, SpeedKmh, Cadence)
                 info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, VTX_VortexID, TargetPower) # Resistance?
                 messages.append ( ant.ComposeMessage (ant.msgID_BroadcastData, info) )
 
@@ -821,15 +879,6 @@ def Tacx2Dongle(self):
                                 TargetGradeFromDongle = ant.msgUnpage51_TrackResistance(info)
                                 TargetPowerFromDongle = 0
                                 PowerModeActive       = ''
-                                
-                                #-------------------------------------------------------
-                                # 2020-01-22 Translate "grade" to TargetPower for
-                                # display purpose on the console only
-                                # The trainer will only use Grade, because of TargetMode
-                                #-------------------------------------------------------
-                                r = usbTrainer.Grade2Resistance(TargetGradeFromDongle, UserAndBikeWeight, SpeedKmh, Cadence)
-                                r *= PowercurveFactor
-                                TargetPowerFromDongle = usbTrainer.Resistance2Power(r, SpeedKmh)
                             
                         #-------------------------------------------------------
                         # Data page 55 User configuration
@@ -1072,8 +1121,7 @@ def Tacx2Dongle(self):
             #-------------------------------------------------------------------
             # Show progress
             #-------------------------------------------------------------------
-            TargetPower = round(TargetPower,0)
-            SetValues(self, SpeedKmh, Cadence, round(CurrentPower,0), TargetMode, TargetPower, TargetGrade, Resistance, HeartRate, Teeth)
+            SetValues(self, SpeedKmh, Cadence, round(CurrentPower,0), TargetMode, round(TargetPower,0), TargetGrade, TargetResistance, HeartRate, Teeth)
                 
             #-------------------------------------------------------------------
             # WAIT        So we do not cycle faster than 4 x per second
