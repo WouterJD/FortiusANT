@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-22b"
+__version__ = "2020-04-28"
+# 2020-04-28    crash when checksum incorrect; conditions were in wrong sequence
+#               causing   IndexError: array index out of range
+#                   in    while trv[skip] != 0xa4 and skip < len(trv):
 # 2020-04-22    channel numbers changed into 0...7
 # 2020-04-22    unmsg51_ChannelID() returned incorrect TransmissionType
 #               channel_VTX = 4 (was 5, not intended)
@@ -599,7 +602,7 @@ def ReadFromDongle(devAntDongle, drop):
             # Each message starts with a4; skip characters if not
             #---------------------------------------------------------------
             skip = start
-            while trv[skip] != 0xa4 and skip < len(trv):
+            while skip < len(trv) and trv[skip] != 0xa4:
                 skip += 1
             if skip != start:
                 logfile.Console("ReadFromDongle %s characters skipped " % (skip - start))
