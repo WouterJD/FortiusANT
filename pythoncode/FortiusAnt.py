@@ -3,6 +3,7 @@
 #-------------------------------------------------------------------------------
 WindowTitle = "Fortius Antifier v2.6"
 __version__ = "2020-04-24"
+# 2020-04-28    HeartRateT not defined when using i-Vortex
 # 2020-04-24    Recheck & document of TargetMode/Power/Grade/Resistance
 #               Some calculations relocated
 # 2020-04-22    Page16_TacxVortexSetPower sent every 0.25 second
@@ -692,6 +693,7 @@ def Tacx2Dongle(self):
             elif clv.Tacx_iVortex:  # VTX Data is received from ANT messages
                                     # TargetResistance is not returned by Vortex
                 TargetResistance = usbTrainer.Power2Resistance(TargetPower, SpeedKmh, Cadence)
+                HeartRateT = 0
                 pass            
 
             else:
