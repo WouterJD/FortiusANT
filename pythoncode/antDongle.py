@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-28"
+__version__ = "2020-04-29"
+# 2020-04-29    msgUnpage00_TacxVortexDataSpeed, speed corrected (0x03ff)
 # 2020-04-28    crash when checksum incorrect; conditions were in wrong sequence
 #               causing   IndexError: array index out of range
 #                   in    while trv[skip] != 0xa4 and skip < len(trv):
@@ -1007,7 +1008,7 @@ def msgUnpage00_TacxVortexDataSpeed (info):
     UsingVirtualSpeed   = (tuple[nPower] & 0x8000) >> 15 # B 1000 0000 0000 0000
     CalibrationState    = (tuple[nPower] & 0x6000) >> 13 # B 0110 0000 0000 0000
     Power               =  tuple[nPower] & 0x07ff        # B 0000 0111 1111 1111
-    Speed               =  tuple[nSpeed] & 0xffff
+    Speed               =  tuple[nSpeed] & 0x03ff        # B 0000 0011 1111 1111
     Cadence             =  tuple[nCadence]
 
     return UsingVirtualSpeed, Power, Speed, CalibrationState, Cadence
