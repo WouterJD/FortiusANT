@@ -16,8 +16,8 @@ network             ='!'       #  network (= big-endian) standard    none
 
 
 #                   Format        C Type                 Python type         Standard size   Notes
-pad                 ='x'       #  pad byte               no value    
-char                ='c'       #  char                   string of length    1               (1)  
+pad                 ='x'       #  pad byte               no value
+char                ='c'       #  char                   string of length    1               (1)
 signed_char         ='b'       #  signed char            integer             1               (3)
 unsigned_char       ='B'       #  unsigned char          integer             1               (3)
 boolean             ='?'       #  _Bool                  bool                1               (1)
@@ -31,6 +31,6 @@ long_long           ='q'       #  long long              integer             8 
 unsigned_long_long  ='Q'       #  unsigned long long     integer             8               (2), (3)
 float               ='f'       #  float                  float               4               (4)
 double              ='d'       #  double                 float               8               (4)
-char_array          ='s'       #  char[]                 string    
-char_array2         ='p'       #  char[]                 string    
+char_array          ='s'       #  char[]                 string
+char_array2         ='p'       #  char[]                 string
 void_ptr            ='P'       #  void *                 integer                             (5), (3)

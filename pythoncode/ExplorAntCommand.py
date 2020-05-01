@@ -1,8 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-20"
-# 2020-04-20    Added: -S -V 
+__version__ = "2020-05-01"
+# 2020-05-01    Added: vhu, no command line variable defined
+# 2020-04-23    Create() and Get() removed because it is weard
+# 2020-04-20    Added: -S -V
 # 2020-03-04    Command-line variables with values printed when debugging
 # 2020-02-18    -s added
 # 2020-01-29    first version
@@ -10,18 +12,6 @@ __version__ = "2020-04-20"
 import argparse
 import debug
 import logfile
-
-#-------------------------------------------------------------------------------
-# Realize clv to be program-global, by accessing through these two functions
-#-------------------------------------------------------------------------------
-def Create():
-    global clv
-    clv = CommandLineVariables()
-    return clv
-    
-def Get():
-    global clv
-    return clv
 
 #-------------------------------------------------------------------------------
 # E x p l o r   A N T   -   C o m m a n d L i n e V a r i a b l e s
@@ -33,10 +23,11 @@ class CommandLineVariables(object):
     autostart       = False
     debug           = 0
     dongle          = -1
-    hrm             = -1
-    fe              = -1
-    scs             = -1
-    vtx             = -1
+    hrm             = -1            # Heart rate monitor
+    fe              = -1            # Fitness equipment
+    scs             = -1            # Speed and cadence sensor
+    vtx             = -1            # i-Vortex
+    vhu             = -1            # i-Vortex Headunit
     SimulateTrainer = False
 
     #---------------------------------------------------------------------------
@@ -71,7 +62,7 @@ class CommandLineVariables(object):
             try:
                 self.debug = int(args.debug)
             except:
-                logfile.Write('Command line error; -d incorrect debugging flags=%s' % args.debug)
+                logfile.Console('Command line error; -d incorrect debugging flags=%s' % args.debug)
 
         #-----------------------------------------------------------------------
         # Get ANTdongle
@@ -80,7 +71,7 @@ class CommandLineVariables(object):
             try:
                 self.dongle = int(args.dongle)
             except:
-                logfile.Write('Command line error; -D incorrect dongle=%s' % args.dongle)
+                logfile.Console('Command line error; -D incorrect dongle=%s' % args.dongle)
         #-----------------------------------------------------------------------
         # Get HRM
         #-----------------------------------------------------------------------
@@ -88,7 +79,7 @@ class CommandLineVariables(object):
             try:
                 self.hrm = int(args.hrm)
             except:
-                logfile.Write('Command line error; -H incorrect HRM=%s' % args.hrm)
+                logfile.Console('Command line error; -H incorrect HRM=%s' % args.hrm)
         #-----------------------------------------------------------------------
         # Get FE
         #-----------------------------------------------------------------------
@@ -96,7 +87,7 @@ class CommandLineVariables(object):
             try:
                 self.fe = int(args.fe)
             except:
-                logfile.Write('Command line error; -F incorrect Fitness Equipment=%s' % args.fe)
+                logfile.Console('Command line error; -F incorrect Fitness Equipment=%s' % args.fe)
 
         #-----------------------------------------------------------------------
         # Get SCS
@@ -105,7 +96,7 @@ class CommandLineVariables(object):
             try:
                 self.scs = int(args.scs)
             except:
-                logfile.Write('Command line error; -S incorrect Speed Cadence Sensor=%s' % args.fe)
+                logfile.Console('Command line error; -S incorrect Speed Cadence Sensor=%s' % args.fe)
 
         #-----------------------------------------------------------------------
         # Get VTX
@@ -114,19 +105,19 @@ class CommandLineVariables(object):
             try:
                 self.vtx = int(args.vtx)
             except:
-                logfile.Write('Command line error; -V incorrect Tacx i-Vortex=%s' % args.fe)
+                logfile.Console('Command line error; -V incorrect Tacx i-Vortex=%s' % args.fe)
 
     def print(self):
         try:
             v = debug.on(debug.Any)     # Verbose: print all command-line variables with values
-            if      self.autostart:          logfile.Write ("-a")
-            if      self.SimulateTrainer:    logfile.Write ("-s")
-            if v or self.args.debug:         logfile.Write ("-d %s (%s)" % (self.debug,  bin(self.debug  ) ) )
-            if v or self.args.dongle:        logfile.Write ("-D %s (%s)" % (self.dongle, hex(self.dongle ) ) )
-            if v or self.args.hrm:           logfile.Write ("-H %s (%s)" % (self.hrm,    hex(self.hrm    ) ) )
-            if v or self.args.fe:            logfile.Write ("-F %s (%s)" % (self.fe,     hex(self.fe     ) ) )
-            if v or self.args.scs:           logfile.Write ("-S %s (%s)" % (self.scs,    hex(self.scs    ) ) )
-            if v or self.args.vtx:           logfile.Write ("-V %s (%s)" % (self.vtx,    hex(self.vtx    ) ) )
+            if      self.autostart:          logfile.Console ("-a")
+            if      self.SimulateTrainer:    logfile.Console ("-s")
+            if v or self.args.debug:         logfile.Console ("-d %s (%s)" % (self.debug,  bin(self.debug  ) ) )
+            if v or self.args.dongle:        logfile.Console ("-D %s (%s)" % (self.dongle, hex(self.dongle ) ) )
+            if v or self.args.hrm:           logfile.Console ("-H %s (%s)" % (self.hrm,    hex(self.hrm    ) ) )
+            if v or self.args.fe:            logfile.Console ("-F %s (%s)" % (self.fe,     hex(self.fe     ) ) )
+            if v or self.args.scs:           logfile.Console ("-S %s (%s)" % (self.scs,    hex(self.scs    ) ) )
+            if v or self.args.vtx:           logfile.Console ("-V %s (%s)" % (self.vtx,    hex(self.vtx    ) ) )
         except:
             pass # May occur when incorrect command line parameters, error already given before
 
@@ -134,5 +125,5 @@ class CommandLineVariables(object):
 # Main program to test the previous functions
 #-------------------------------------------------------------------------------
 if __name__ == "__main__":
-    Create()
-    Get().print()
+    clv = CommandLineVariables()
+    clv.print()

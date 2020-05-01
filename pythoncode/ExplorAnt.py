@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-22b"
+__version__ = "2020-05-01"
+# 2020-05-01    Added: Vortex Headunit
 # 2020-04-22    Miscellaneous improvements for Tacx i-Vortex
 #               Versions displayed on console
 # 2020-04-20    Tacx i-Vortex speed in km/h, TargetPower *20
@@ -39,7 +40,7 @@ import ExplorAntCommand  as cmd
 import logfile
 import usbTrainer
 
-from  FortiusAnt        import SimulateReceiveFromTrainer 
+from  FortiusAntBody     import SimulateReceiveFromTrainer
 
 class clsDeviceID(object):
     def __init__(self, Channel, DeviceType, DeviceNumber, DeviceTypeID, TransmissionType):
@@ -48,12 +49,11 @@ class clsDeviceID(object):
         self.DeviceNumber        = DeviceNumber
         self.DeviceTypeID        = DeviceTypeID
         self.TransmissionType    = TransmissionType
-        
+
 
 # ==============================================================================
 # Main program; Command line parameters
 # ==============================================================================
-global clv
 
 #-------------------------------------------------------------------------------
 # And go!
@@ -70,7 +70,7 @@ global clv
 # ------------------------------------------------------------------------------
 
 debug.deactivate()
-clv = cmd.Create()
+clv = cmd.CommandLineVariables()
 debug.activate(clv.debug)
 
 if True or debug.on(debug.Any):
@@ -109,7 +109,7 @@ if devAntDongle and not clv.SimulateTrainer:
     # We are going to look what MASTER devices there are
     #---------------------------------------------------------------------------
     logfile.Console ("ExplorANT: We're in slave mode, listening to master ANT+ devices")
-    
+
     #---------------------------------------------------------------------------
     # Initialize dongle
     #---------------------------------------------------------------------------
@@ -134,20 +134,22 @@ if devAntDongle and not clv.SimulateTrainer:
     # Ref: D00000652_ANT_Message_Protocol_and_Usage_Rev_5.1.pdf, page 29.
     # ref: AN02_Device_Pairing_Rev2.3.pdf
     #---------------------------------------------------------------------------
-    NrDevicesToPair = 10            # Must be > channel_VTX_s !!
+    NrDevicesToPair = 8 # Must be > channel_VTX_s !! AND LESS THAN CHANNEL_MAX
     print ('Open channels: ', end='')
     for i in range(0, NrDevicesToPair):
         print (i, end=' ')
         if i == ant.channel_VTX_s:
             ant.SlaveVTX_ChannelConfig(devAntDongle, 0)
+        elif i == ant.channel_VHU_s:
+            ant.SlaveVHU_ChannelConfig(devAntDongle, 0)
         else:
             DeviceNumber    =0
-            DeviceTypeID    =0 
+            DeviceTypeID    =0
             TransmissionType=0
             if i % 1 == 1: DeviceTypeID &= 0x80
             ant.SlavePair_ChannelConfig(devAntDongle, i, DeviceNumber, DeviceTypeID, TransmissionType)
     print ('')
-        
+
     deviceIDs = []
 
     # --------------------------------------------------------------------------
@@ -188,15 +190,15 @@ if devAntDongle and not clv.SimulateTrainer:
                 #---------------------------------------------------------------
                 # ChannelResponse: acknowledge message
                 #---------------------------------------------------------------
-                if id == ant.msgID_ChannelResponse: 
+                if id == ant.msgID_ChannelResponse:
                     Unknown = False
-                    
+
                 #---------------------------------------------------------------
                 # Message BroadcastData, provides a datapage from master
                 #---------------------------------------------------------------
                 elif id == ant.msgID_BroadcastData:
                     Unknown = False
-                    
+
                 #---------------------------------------------------------------
                 # ChannelID - the info from a Master device on the network
                 #---------------------------------------------------------------
@@ -204,7 +206,7 @@ if devAntDongle and not clv.SimulateTrainer:
                     Unknown = False
                     Channel, DeviceNumber, DeviceTypeID, TransmissionType = \
                         ant.unmsg51_ChannelID(info)
-                    
+
                     #-----------------------------------------------------------
                     # Check what DeviceType is discovered
                     #-----------------------------------------------------------
@@ -224,6 +226,10 @@ if devAntDongle and not clv.SimulateTrainer:
                         if clv.vtx <= 0: clv.vtx = DeviceNumber
                         DeviceType = 'VTX'
 
+                    elif DeviceTypeID == ant.DeviceTypeID_VHU:
+                        if clv.vhu <= 0: clv.vhu = DeviceNumber
+                        DeviceType = 'VHU'
+
                     else:
                         DeviceType = '?'
 
@@ -235,7 +241,7 @@ if devAntDongle and not clv.SimulateTrainer:
                     if DeviceNumber == 0:      # No device paired, request again
                         ant.SendToDongle([ant.msg4D_RequestMessage(Channel, ant.msgID_ChannelID)], \
                                         devAntDongle, '', False, False)
-                        pass                    
+                        pass
                     else:
                         d = deviceID
                         logfile.Write ("ExplorANT: %3s discovered on channel=%s, number=%5s typeID=%3s TrType=%3s" % \
@@ -245,7 +251,7 @@ if devAntDongle and not clv.SimulateTrainer:
                             logfile.Write('ExplorANT: added to list')
 
                             deviceIDs.append(deviceID)
-                            
+
                             #---------------------------------------------------
                             # Ask the found device for more info; page 70
                             #---------------------------------------------------
@@ -260,7 +266,7 @@ if devAntDongle and not clv.SimulateTrainer:
                 else:
                     logfile.Console ("Ignore message id=%s ch=%s page=%s" % (hex(id), Channel, DataPageNumber))
                     pass
-            
+
             #-------------------------------------------------------------------
             # Show some movement on screen during pairing
             #-------------------------------------------------------------------
@@ -272,9 +278,9 @@ if devAntDongle and not clv.SimulateTrainer:
             #-------------------------------------------------------------------
             SleepTime = 0.25 - (time.time() - StartTime)
             if SleepTime > 0: time.sleep(SleepTime)
-            
+
             pairingCounter -= 0.25              # Subtract quarter second
-                
+
     except KeyboardInterrupt:
         pass
     except Exception as e:
@@ -289,7 +295,7 @@ if devAntDongle and not clv.SimulateTrainer:
         logfile.Console (" %3s discovered on channel=%s, number=%5s typeID=%3s TrType=%3s" % \
             (d.DeviceType, d.Channel, d.DeviceNumber, d.DeviceTypeID, d.TransmissionType) )
     logfile.Console ("--------------------")
-    
+
     #---------------------------------------------------------------------------
     # Free pairing channels
     #---------------------------------------------------------------------------
@@ -299,18 +305,19 @@ if devAntDongle and not clv.SimulateTrainer:
         pass
     ant.SendToDongle(messages, devAntDongle)
     ant.ResetDongle (devAntDongle)                          # This one does the job
-    
+
 if devAntDongle:
     #---------------------------------------------------------------------------
     # If any channel specified and/or found: Open the device channels & listen.
     #---------------------------------------------------------------------------
     if clv.vtx < 0: clv.vtx = ant.DeviceNumber_VTX # Not found during pair, try anyway
-    if clv.SimulateTrainer or clv.hrm >= 0 or clv.fe >= 0 or clv.scs >= 0 or clv.vtx >= 0:
+    if clv.vhu < 0: clv.vhu = ant.DeviceNumber_VHU # Not found during pair, try anyway
+    if clv.SimulateTrainer or clv.hrm >= 0 or clv.fe >= 0 or clv.scs >= 0 or clv.vtx >= 0 or clv.vhu >= 0:
         # ----------------------------------------------------------------------
         # Calibrate ANT+ dongle (because reset was done!)
         # ----------------------------------------------------------------------
         ant.Calibrate(devAntDongle)
-        
+
         # ----------------------------------------------------------------------
         # Open channels
         # ----------------------------------------------------------------------
@@ -347,14 +354,18 @@ if devAntDongle:
                 ant.SlaveVTX_ChannelConfig(devAntDongle, clv.vtx)
                 logfile.Console ('VTX slave channel %s opened; listening to master device %s' % (ant.channel_VTX_s, 0))
 
+            if clv.vhu > 0:
+                ant.SlaveVHU_ChannelConfig(devAntDongle, clv.vhu)
+                logfile.Console ('VHU slave channel %s opened; listening to master device %s' % (ant.channel_VHU_s, 0))
+
         # ----------------------------------------------------------------------
         # Get info from the devices
         # ----------------------------------------------------------------------
         logfile.Console ("Listening, press Ctrl-C to exit")
-        #try:
-        if True:
+        try:
+        # if True:
             RunningSwitch       = True
-            
+
             HRM_s_count         = 0
             HRM_HeartRate       = -1
             HRM_page2_done      = False
@@ -367,7 +378,7 @@ if devAntDongle:
             FE_HeartRate        = -1
             FE_page80_done      = False
             FE_page81_done      = False
-            
+
             VTX_UsingVirtualSpeed, VTX_Power, VTX_Speed, VTX_CalibrationState, VTX_Cadence = 0,0,0,0,0
             VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm = 0,0,0,0
             VTX_Major, VTX_Minor, VTX_Build = 0,0,0
@@ -375,7 +386,7 @@ if devAntDongle:
             VortexData          = False # Can be used to test the Tacx Vortex Unpage functions
             VortexPower         = True  # Can be used to test the Tacx Vortex setPower function
             Power               = -1
-            
+
             listenCount         = 0
 
             dpBasicResistance   = 0     # Requests received from Trainer Road or Zwift
@@ -386,9 +397,9 @@ if devAntDongle:
 
             TargetPower  	    = 100   # For SimulateTrainer
             CurrentPower	    = 100
-            
+
             EventCounter        = 0
-            
+
             while RunningSwitch == True:
                 StartTime = time.time()
                 #---------------------------------------------------------------
@@ -412,7 +423,7 @@ if devAntDongle:
                     if clv.vtx >= 0:
                         EventCounter += 1
                         if EventCounter == 64: EventCounter = 0
-                        
+
                         if EventCounter % 64 < 4:  # Transmit 4 times (0, 1, 2, 3) Page 3
                             messages.append ( ant.ComposeMessage (ant.msgID_BroadcastData, \
                                                 ant.msgPage03_TacxVortexDataCalibration (ant.channel_VTX, 0, ant.DeviceNumber_VTX)))
@@ -427,7 +438,7 @@ if devAntDongle:
                     data = ant.SendToDongle(messages, devAntDongle, '', True, False)
                 else:
                     data = ant.ReadFromDongle(devAntDongle, False)
-                    
+
                 #---------------------------------------------------------------
                 # Simulate vortex data, just to test the loop
                 #---------------------------------------------------------------
@@ -457,7 +468,7 @@ if devAntDongle:
                     #-----------------------------------------------------------
                     # Message ChannelResponse, acknowledges a message
                     #-----------------------------------------------------------
-                    if id == ant.msgID_ChannelResponse: 
+                    if id == ant.msgID_ChannelResponse:
                         # Ignore
                         Unknown = False
 
@@ -495,12 +506,12 @@ if devAntDongle:
                                         HRM_Model      = Spec3
                                         logfile.Console ("HRM page=%s HWrevision=%s, SWversion=%s Model=%s" % \
                                                 (DataPageNumber, HRM_HWrevision, HRM_SWversion, HRM_Model))
-                                    
+
 
                             #---------------------------------------------------
                             # Data page 89   ??????????????????????????????
                             #---------------------------------------------------
-                            elif DataPageNumber == 89:    
+                            elif DataPageNumber == 89:
                                 Unknown = True
 
                         #-------------------------------------------------------
@@ -513,18 +524,18 @@ if devAntDongle:
                             #---------------------------------------------------
                             # Data page 16 (0x10) General FE data
                             #---------------------------------------------------
-                            if DataPageNumber == 16:    
+                            if DataPageNumber == 16:
                                 Unknown = False
                                 Channel, DataPageNumber, EquipmentType, ElapsedTime, DistanceTravelled, \
                                     FE_Speed, FE_HeartRate, Capabilities = \
                                     ant.msgUnpage16_GeneralFEdata(info)
-                                    
+
                                 FE_Speed = round( FE_Speed / ( 1000*1000/3600 ), 1)
 
                             #---------------------------------------------------
                             # Data page 25 (0x19) Trainer info
                             #---------------------------------------------------
-                            elif DataPageNumber == 25:    
+                            elif DataPageNumber == 25:
                                 Unknown = False
                                 Channel, DataPageNumber, xx_Event, FE_Cadence, xx_AccPower, FE_Power, xx_Flags = \
                                     ant.msgUnpage25_TrainerData(info)
@@ -532,7 +543,7 @@ if devAntDongle:
                             #---------------------------------------------------
                             # Data page 80 (0x50) Manufacturers info
                             #---------------------------------------------------
-                            elif DataPageNumber == 80:    
+                            elif DataPageNumber == 80:
                                 Unknown = False
                                 if FE_page80_done == False:
                                     FE_page80_done = True
@@ -614,13 +625,13 @@ if devAntDongle:
                             #-------------------------------------------------------
                             # Data page 48 (0x30) Basic resistance
                             #-------------------------------------------------------
-                            if   DataPageNumber == 48:                  
+                            if   DataPageNumber == 48:
                                 dpBasicResistance += 1
-                                
+
                             #-------------------------------------------------------
                             # Data page 49 (0x31) Target Power
                             #-------------------------------------------------------
-                            elif   DataPageNumber == 49:                  
+                            elif   DataPageNumber == 49:
                                 dpTargetPower += 1
 
                             #-------------------------------------------------------
@@ -628,7 +639,7 @@ if devAntDongle:
                             #-------------------------------------------------------
                             elif DataPageNumber == 51:
                                 dpTrackResistance += 1
-                                
+
                             #-------------------------------------------------------
                             # Data page 55 User configuration
                             #-------------------------------------------------------
@@ -642,7 +653,7 @@ if devAntDongle:
                                 dpRequestDatapage += 1
                                 SlaveSerialNumber, DescriptorByte1, DescriptorByte2, AckRequired, NrTimes, \
                                     RequestedPageNumber, CommandType = ant.msgUnpage70_RequestDataPage(info)
-                                
+
                                 info = False
                                 if   RequestedPageNumber == 80:
                                     info = ant.msgPage80_ManufacturerInfo(ant.channel_FE, 0xff, 0xff, \
@@ -664,7 +675,7 @@ if devAntDongle:
                                         data.append(d)
                                         NrTimes -= 1
                                     ant.SendToDongle(data, devAntDongle, comment, False)
-                                
+
                             #-------------------------------------------------------
                             # Other data pages
                             #-------------------------------------------------------
@@ -672,7 +683,7 @@ if devAntDongle:
                     if Unknown:
                         logfile.Console ("IGNORED!! msg=%s ch=%s p=%s info=%s" % \
                                         (hex(id), Channel, DataPageNumber, logfile.HexSpace(info)))
-            
+
                 #-------------------------------------------------------
                 # WAIT So we do not cycle faster than 4 x per second
                 #-------------------------------------------------------
@@ -712,11 +723,11 @@ if devAntDongle:
                     info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, VTX_VortexID, Power)
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     ant.SendToDongle([msg], devAntDongle, '', False)
-                    
-        # except KeyboardInterrupt:
-            # logfile.Console ("Listening stopped")
-        # except Exception as e:
-            # logfile.Console ("Listening stopped due to exception: " + str(e))
+
+        except KeyboardInterrupt:
+            logfile.Console ("Listening stopped")
+        except Exception as e:
+            logfile.Console ("Listening stopped due to exception: " + str(e))
         #---------------------------------------------------------------
         # Free channel
         #---------------------------------------------------------------

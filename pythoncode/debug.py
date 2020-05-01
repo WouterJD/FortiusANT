@@ -4,7 +4,8 @@ assert sys.version_info >= (3,5), "Python version >= 3.5 required"
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-03-04"
+__version__ = "2020-04-27"
+# 2020-04-27    MultiProcessing added
 # 2020-03-04    Python version check added
 #                   Will affect every module that includes debug.py
 # 2020-01-25    First version
@@ -19,7 +20,7 @@ Application    	= 0x01      # 1
 Function       	= 0x02      # 2
 Data1          	= 0x04      # 4			antDongle
 Data2          	= 0x08      # 8			usbTrainer
-Print          	= 0x10      # 16
+MultiProcessing = 0x10      # 16
 
 All	        	= 0xff      # 255		When setting, it's All
 Any				= All		#			When checing, it's Any
@@ -34,13 +35,13 @@ Any				= All		#			When checing, it's Any
 # returns:      true / false
 #-------------------------------------------------------------------------------
 def activate(pxDebug = All):
-    global xDebug 
+    global xDebug
     xDebug = int(pxDebug)
 
 def deactivate():
-    global xDebug 
+    global xDebug
     xDebug = No
-    
+
 #-------------------------------------------------------------------------------
 # debug
 #-------------------------------------------------------------------------------
@@ -59,7 +60,7 @@ def deactivate():
 # returns:      true / false
 #-------------------------------------------------------------------------------
 def on(pxRequired = All):
-    global xDebug 
+    global xDebug
 
     try:
         xDebug = xDebug
@@ -70,13 +71,13 @@ def on(pxRequired = All):
         return True
     else:
         return False
-	
+
 #-------------------------------------------------------------------------------
 # Main program to test the previous functions
 #-------------------------------------------------------------------------------
 if __name__ == "__main__":
     print ("Test of debug")
- 
+
     if on():				print ("Debugging is not initialized")
 
     deactivate()
@@ -104,4 +105,3 @@ if __name__ == "__main__":
     if on():				print ("Debugging is on")
 else:
     pass                    # We're included so do not take action!
- 

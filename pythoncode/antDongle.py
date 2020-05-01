@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-29"
+__version__ = "2020-05-01"
+# 2020-05-01    Added: SlaveVHU_ChannelConfig()
+#               Disabled: SCS because of lack of channel numbers
 # 2020-04-29    msgUnpage00_TacxVortexDataSpeed, speed corrected (0x03ff)
 # 2020-04-28    crash when checksum incorrect; conditions were in wrong sequence
 #               causing   IndexError: array index out of range
@@ -11,7 +13,7 @@ __version__ = "2020-04-29"
 #               channel_VTX = 4 (was 5, not intended)
 # 2020-04-20    Tacx i-Vortex data pages implemented, Command+Subcommand
 # 2020-04-18    Changed: Vortex frequency=2466
-#                        Calibrate() creates two networks, the default and 
+#                        Calibrate() creates two networks, the default and
 #                           an extra network for Tacx i-Vortex
 # 2020-04-17    Added: i-Vortex (VTX)
 # 2020-04-17    Added: Page54 FE_Capabilities to support Golden Cheetah
@@ -35,7 +37,7 @@ __version__ = "2020-04-29"
 # 2020-02-25    Tacx Neo constants used, trying to get Tacx Desktop App to pair
 #               with ExplorAnt(simulating) or FortiusAnt. No luck yet.
 # 2020-02-13    msgPage80_ManufacturerInfo and msgPage81_ProductInformation
-#                   now expect parameters in stead of using fixed constants 
+#                   now expect parameters in stead of using fixed constants
 #               todo: msgPage82_BatteryStatus
 # 2020-02-12    Different channels used for HRM and HRM_s (SCS and SCS_s)
 #               so that ExplorANT can use both simultaneously
@@ -72,7 +74,7 @@ import FortiusAntCommand    as cmd
 #-------------------------------------------------------------------------------
 # Our own choice what channels are used
 #
-# A different channel is used for HRM as HRM_d, even though usually a device 
+# A different channel is used for HRM as HRM_d, even though usually a device
 # will be either one or the other. ExplorANT can be both.
 #-------------------------------------------------------------------------------
 # M A X #   c h a n n e l s   m a y   b e   8   s o   b e w a r e   h e r e !
@@ -80,17 +82,24 @@ import FortiusAntCommand    as cmd
 channel_FE          = 0        # ANT+ channel for Fitness Equipment
 channel_HRM         = 1        # ANT+ channel for Heart Rate Monitor
 channel_VTX         = 2        # ANT+ Channel for Tacx i-Vortex
-channel_SCS         = 3        # ANT+ Channel for Speed Cadence Sensor
 
 channel_FE_s        = 4        # ANT+ channel for Fitness Equipment    (slave=Cycle Training Program)
 channel_HRM_s       = 5        # ANT+ channel for Heart Rate Monitor   (slave=display)
 channel_VTX_s       = 6        # ANT+ Channel for Tacx i-Vortex        (slave=Cycle Training Program)
-channel_SCS_s       = 7        # ANT+ Channel for Speed Cadence Sensor (slave=display)
+channel_VHU_s       = 7        # ANT+ Channel for Tacx i-Vortex Headunit
+
+
+# There are only 8 channels available and Speed Cadence Sensor is not used
+# Fixed channel assignment is not handy therefore, but since we do not use
+# SCS, park them for later
+channel_SCS         = -1       # ANT+ Channel for Speed Cadence Sensor
+channel_SCS_s       = -1       # ANT+ Channel for Speed Cadence Sensor (slave=display)
 
 DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
 DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT uses and
 DeviceNumber_HRM    = 57592    #       slaves (TrainerRoad, Zwift, ExplorANT) will find.
-DeviceNumber_VTX    = 57593    #       
+DeviceNumber_VTX    = 57593    #
+DeviceNumber_VHU    = 57594    #
 
 ModelNumber_FE      = 2875     # short antifier-value=0x8385, Tacx Neo=2875
 SerialNumber_FE     = 19590705 # int   1959-7-5
@@ -184,7 +193,9 @@ DeviceTypeID_FE         = DeviceTypeID_fitness_equipment
 DeviceTypeID_HRM        = DeviceTypeID_heart_rate
 DeviceTypeID_SCS        = DeviceTypeID_bike_speed_cadence
 DeviceTypeID_VTX        = 61            # Tacx i-Vortex
-                                        # 0x3d      according TotalReverse
+                                        # 0x3d  according TotalReverse
+DeviceTypeID_VHU        = 0x3e          # Thanks again to TotalReverse
+# https://github.com/WouterJD/FortiusANT/issues/46#issuecomment-616838329
 
 TransmissionType_IC     = 0x01          # 5.2.3.1   Transmission Type
 TransmissionType_IC_GDP = 0x05          #           0x01 = Independant Channel
@@ -192,6 +203,7 @@ TransmissionType_IC_GDP = 0x05          #           0x01 = Independant Channel
 TransmitPower_0dBm      = 0x03          # 9.4.3     Output Power Level Settings
 RfFrequency_2457Mhz     =   57          # 9.5.2.6   Channel RF Frequency
 RfFrequency_2466Mhz     =   66          # used for Tacx i-Vortex only
+RfFrequency_2478Mhz     = 0x4e          # used for Tacx i-Vortex Headunit
 #-------------------------------------------------------------------------------
 # C a l c C h e c k s u m
 #-------------------------------------------------------------------------------
@@ -205,7 +217,7 @@ RfFrequency_2466Mhz     =   66          # used for Tacx i-Vortex only
 #-------------------------------------------------------------------------------
 def calc_checksum(message):
     return CalcChecksum (message)           # alias for compatibility
-    
+
 def CalcChecksum (message):
     xor_value = 0
     length    = message[1]                  # byte 1; length of info
@@ -217,7 +229,7 @@ def CalcChecksum (message):
 
 
     return bytes([xor_value])
-  
+
 #-------------------------------------------------------------------------------
 # Standard dongle commands
 # Observation: all commands have two bytes 00 00 for which purpose is unclear
@@ -229,9 +241,9 @@ def CalcChecksum (message):
 #-------------------------------------------------------------------------------
 def Calibrate(devAntDongle):
   if debug.on(debug.Data1): logfile.Write ("Calibrate()")
-  
+
   ResetDongle(devAntDongle)
-  
+
   messages=[
     msg4D_RequestMessage        (0, msgID_Capabilities),   # request max channels
 #   msg4A_ResetSystem           (),
@@ -241,15 +253,15 @@ def Calibrate(devAntDongle):
                                                            # network for Tacx i-Vortex
   ]
   SendToDongle(messages,devAntDongle)
-  
+
 def SlavePair_ChannelConfig(devAntDongle, channel_pair, \
                             DeviceNumber=0, DeviceTypeID=0, TransmissionType=0):
                             # Slave, by default full wildcards ChannelID, see msg51 comment
   if debug.on(debug.Data1): logfile.Write ("SlavePair_ChannelConfig()")
   messages=[
     msg42_AssignChannel         (channel_pair, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
-    msg51_ChannelID             (channel_pair, DeviceNumber, DeviceTypeID, TransmissionType), 
-    msg45_ChannelRfFrequency    (channel_pair, RfFrequency_2457Mhz), 
+    msg51_ChannelID             (channel_pair, DeviceNumber, DeviceTypeID, TransmissionType),
+    msg45_ChannelRfFrequency    (channel_pair, RfFrequency_2457Mhz),
     msg43_ChannelPeriod         (channel_pair, ChannelPeriod=0x1f86),
     msg60_ChannelTransmitPower  (channel_pair, TransmitPower_0dBm),
     msg4B_OpenChannel           (channel_pair)
@@ -261,7 +273,7 @@ def Trainer_ChannelConfig(devAntDongle):
   messages=[
     msg42_AssignChannel         (channel_FE, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
     msg51_ChannelID             (channel_FE, DeviceNumber_FE, DeviceTypeID_FE, TransmissionType_IC_GDP),
-    msg45_ChannelRfFrequency    (channel_FE, RfFrequency_2457Mhz), 
+    msg45_ChannelRfFrequency    (channel_FE, RfFrequency_2457Mhz),
     msg43_ChannelPeriod         (channel_FE, ChannelPeriod=0x2000),                                     # 4 Hz
     msg60_ChannelTransmitPower  (channel_FE, TransmitPower_0dBm),
     msg4B_OpenChannel           (channel_FE)
@@ -273,7 +285,7 @@ def SlaveTrainer_ChannelConfig(devAntDongle, DeviceNumber):
   messages=[
     msg42_AssignChannel         (channel_FE_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
     msg51_ChannelID             (channel_FE_s, DeviceNumber, DeviceTypeID_FE, TransmissionType_IC_GDP),
-    msg45_ChannelRfFrequency    (channel_FE_s, RfFrequency_2457Mhz), 
+    msg45_ChannelRfFrequency    (channel_FE_s, RfFrequency_2457Mhz),
     msg43_ChannelPeriod         (channel_FE_s, ChannelPeriod=0x2000),                                     # 4 Hz
     msg60_ChannelTransmitPower  (channel_FE_s, TransmitPower_0dBm),
     msg4B_OpenChannel           (channel_FE_s),
@@ -286,7 +298,7 @@ def HRM_ChannelConfig(devAntDongle):
   messages=[
     msg42_AssignChannel         (channel_HRM, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
     msg51_ChannelID             (channel_HRM, DeviceNumber_HRM, DeviceTypeID_HRM, TransmissionType_IC),
-    msg45_ChannelRfFrequency    (channel_HRM, RfFrequency_2457Mhz), 
+    msg45_ChannelRfFrequency    (channel_HRM, RfFrequency_2457Mhz),
     msg43_ChannelPeriod         (channel_HRM, ChannelPeriod=0x1f86),
     msg60_ChannelTransmitPower  (channel_HRM, TransmitPower_0dBm),
     msg4B_OpenChannel           (channel_HRM)
@@ -298,7 +310,7 @@ def SlaveHRM_ChannelConfig(devAntDongle, DeviceNumber):
   messages=[
     msg42_AssignChannel         (channel_HRM_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
     msg51_ChannelID             (channel_HRM_s, DeviceNumber, DeviceTypeID_HRM, TransmissionType_IC),
-    msg45_ChannelRfFrequency    (channel_HRM_s, RfFrequency_2457Mhz), 
+    msg45_ChannelRfFrequency    (channel_HRM_s, RfFrequency_2457Mhz),
     msg43_ChannelPeriod         (channel_HRM_s, ChannelPeriod=0x1f86),
     msg60_ChannelTransmitPower  (channel_HRM_s, TransmitPower_0dBm),
     msg4B_OpenChannel           (channel_HRM_s),
@@ -307,11 +319,12 @@ def SlaveHRM_ChannelConfig(devAntDongle, DeviceNumber):
   SendToDongle(messages, devAntDongle, '')
 
 def SlaveSCS_ChannelConfig(devAntDongle, DeviceNumber):
+  assert channel_SCS_s > 0       # Channel must be positive integer
   if debug.on(debug.Data1): logfile.Write ("SlaveSCS_ChannelConfig()")
   messages=[
     msg42_AssignChannel         (channel_SCS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
     msg51_ChannelID             (channel_SCS_s, DeviceNumber, DeviceTypeID_SCS, TransmissionType_IC),
-    msg45_ChannelRfFrequency    (channel_SCS_s, RfFrequency_2457Mhz), 
+    msg45_ChannelRfFrequency    (channel_SCS_s, RfFrequency_2457Mhz),
     msg43_ChannelPeriod         (channel_SCS_s, ChannelPeriod=0x1f86),
     msg60_ChannelTransmitPower  (channel_SCS_s, TransmitPower_0dBm),
     msg4B_OpenChannel           (channel_SCS_s),
@@ -324,7 +337,7 @@ def VTX_ChannelConfig(devAntDongle):                         # Pretend to be a T
   messages=[
     msg42_AssignChannel         (channel_VTX, ChannelType_BidirectionalTransmit, NetworkNumber=0x01),
     msg51_ChannelID             (channel_VTX, DeviceNumber_VTX, DeviceTypeID_VTX, TransmissionType_IC),
-    msg45_ChannelRfFrequency    (channel_VTX, RfFrequency_2466Mhz), 
+    msg45_ChannelRfFrequency    (channel_VTX, RfFrequency_2466Mhz),
     msg43_ChannelPeriod         (channel_VTX, ChannelPeriod=0x2000),
     msg60_ChannelTransmitPower  (channel_VTX, TransmitPower_0dBm),
     msg4B_OpenChannel           (channel_VTX),
@@ -337,11 +350,24 @@ def SlaveVTX_ChannelConfig(devAntDongle, DeviceNumber):     # Listen to a Tacx i
   messages=[
     msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
     msg51_ChannelID             (channel_VTX_s, DeviceNumber, DeviceTypeID_VTX, TransmissionType_IC),
-    msg45_ChannelRfFrequency    (channel_VTX_s, RfFrequency_2466Mhz), 
+    msg45_ChannelRfFrequency    (channel_VTX_s, RfFrequency_2466Mhz),
     msg43_ChannelPeriod         (channel_VTX_s, ChannelPeriod=0x2000),
     msg60_ChannelTransmitPower  (channel_VTX_s, TransmitPower_0dBm),
     msg4B_OpenChannel           (channel_VTX_s),
 #   msg4D_RequestMessage        (channel_VTX_s, msgID_ChannelID) # Note that answer may be in logfile only
+  ]
+  SendToDongle(messages, devAntDongle, '')
+
+def SlaveVHU_ChannelConfig(devAntDongle, DeviceNumber):     # Listen to a Tacx i-Vortex Headunit
+  if debug.on(debug.Data1): logfile.Write ("SlaveVHU_ChannelConfig()")
+  messages=[
+    msg42_AssignChannel         (channel_VHU_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
+    msg51_ChannelID             (channel_VHU_s, DeviceNumber, DeviceTypeID_VHU, TransmissionType_IC),
+    msg45_ChannelRfFrequency    (channel_VHU_s, RfFrequency_2478Mhz),
+    msg43_ChannelPeriod         (channel_VHU_s, ChannelPeriod=0x2000),
+    msg60_ChannelTransmitPower  (channel_VHU_s, TransmitPower_0dBm),
+    msg4B_OpenChannel           (channel_VHU_s),
+#   msg4D_RequestMessage        (channel_VHU_s, msgID_ChannelID) # Note that answer may be in logfile only
   ]
   SendToDongle(messages, devAntDongle, '')
 
@@ -355,7 +381,7 @@ def PowerDisplay_unused(devAntDongle):
   "a4 03 43 00 f6 1f 0d",                     # 43 msg period
   "a4 02 71 00 00 d7",                        # 71 Set Proximity Search chann number 0 search threshold 0
   "a4 02 63 00 0a cf",                        # 63 low priority search channel number 0 timeout 0
-  "a4 02 44 00 02 e0",                        # 44 Host Command/Response 
+  "a4 02 44 00 02 e0",                        # 44 Host Command/Response
   "a4 01 4b 00 ee"                            # 4b ANT_OpenChannel message ID channel = 0 D00001229_Fitness_Modules_ANT+_Application_Note_Rev_3.0.pdf
   ]
   SendToDongle(stringl, devAntDongle, '')
@@ -385,7 +411,7 @@ def EnumerateAll():
 #       print (device)
         s = "manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
                 (device.manufacturer, device.product, \
-                 hex(device.idVendor), hex(device.idProduct), device.idProduct) 
+                 hex(device.idVendor), hex(device.idProduct), device.idProduct)
         logfile.Console(s.replace('\0',''))
 
         i = 0
@@ -395,7 +421,7 @@ def EnumerateAll():
                 for ep in intf:
                     pass
     logfile.Console("--------------------")
-  
+
 #-------------------------------------------------------------------------------
 # G e t D o n g l e
 #-------------------------------------------------------------------------------
@@ -443,10 +469,10 @@ def GetDongle(p=None):
             # Try all dongles of this type
             #-------------------------------------------------------------------
             for devAntDongle in devAntDongles:
-                if debug.on(debug.Function): 
+                if debug.on(debug.Function):
                     s = "GetDongle - Try dongle: manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
                         (devAntDongle.manufacturer, devAntDongle.product, \
-                        hex(devAntDongle.idVendor), hex(devAntDongle.idProduct), devAntDongle.idProduct) 
+                        hex(devAntDongle.idVendor), hex(devAntDongle.idProduct), devAntDongle.idProduct)
                     logfile.Console(s.replace('\0',''))
                 if debug.on(debug.Data1 | debug.Function):
                     logfile.Print (devAntDongle)
@@ -499,12 +525,12 @@ def GetDongle(p=None):
         # If found, don't try the next type
         #-----------------------------------------------------------------------
         if found_available_ant_stick: break
-  
+
     #---------------------------------------------------------------------------
     # Done
     #---------------------------------------------------------------------------
     if found_available_ant_stick == False:
-        devAntDongle = False 
+        devAntDongle = False
     if debug.on(debug.Function): logfile.Write ("GetDongle() returns: " + msg)
     return devAntDongle, msg
 
@@ -533,7 +559,7 @@ def SendToDongle(messages, devAntDongle, comment='', receive=True, drop=True):
         try:
             if debug.on(debug.Data1): logfile.Write('devAntDongle.write(0x01,%s)' % logfile.HexSpace(message))
             devAntDongle.write(0x01,message)    # input:   endpoint address, buffer, timeout
-                                                # returns: 
+                                                # returns:
         except Exception as e:
             logfile.Console("devAntDongle.write exception: " + str(e))
 
@@ -609,7 +635,7 @@ def ReadFromDongle(devAntDongle, drop):
                 logfile.Console("ReadFromDongle %s characters skipped " % (skip - start))
                 start = skip
             #---------------------------------------------------------------
-            # Second character in the buffer (element in trv) is length of 
+            # Second character in the buffer (element in trv) is length of
             # the info; add four for synch, len, id and checksum
             #---------------------------------------------------------------
             length = trv[start+1] + 4
@@ -640,7 +666,7 @@ def ReadFromDongle(devAntDongle, drop):
             # Next buffer in trv
             #---------------------------------------------------------------
             start += length
-       
+
     # too much if debug.on(debug.Function): logfile.Write ("ReadFromDongle() returns: " + logfile.HexSpaceL(data))
     return data
 
@@ -659,10 +685,10 @@ def ComposeMessage(id, info):
     # Add the checksum
     # (antifier added \00\00 after each message for unknown reason)
     #---------------------------------------------------------------------------
-    data += calc_checksum(data)    
-    
+    data += calc_checksum(data)
+
     return data
-    
+
 def DecomposeMessage(d):
     synch    = d[0]
     length   = d[1]
@@ -710,9 +736,9 @@ def DecomposeMessage(d):
 # returns   none
 #-------------------------------------------------------------------------------
 def DongleDebugMessage(text, d):
-    if debug.on(debug.Data1): 
+    if debug.on(debug.Data1):
         synch, length, id, info, checksum, rest, Channel, p = DecomposeMessage(d)
-        
+
         #-----------------------------------------------------------------------
         # info_ is the payload of the message
         # Channel and p are filled, but only valid for some messages
@@ -723,10 +749,10 @@ def DongleDebugMessage(text, d):
         # First add readable name (id_) to id
         #-----------------------------------------------------------------------
         if   id == msgID_ANTversion             : id_ = 'ANT version'
-        
+
         elif id == msgID_BroadcastData          : id_ = 'Broadcast Data'
         elif id == msgID_AcknowledgedData       : id_ = 'Acknowledged Data'
-        
+
         elif id == msgID_ChannelResponse        : id_ = 'Channel Response'
         elif id == msgID_Capabilities           : id_ = 'Capabilities'
         elif id == msgID_UnassignChannel        : id_ = 'Unassign Channel'
@@ -761,7 +787,7 @@ def DongleDebugMessage(text, d):
 
         elif id == msgID_ChannelID:
                            extra = " (ch=%s, nr=%s, ID=%s, tt=%s)" % (unmsg51_ChannelID(info))
-                           
+
         elif id == msgID_BroadcastData or id == msgID_AcknowledgedData:
                                                       # Pagenumber in Payload
             if   p        <   0: pass
@@ -798,7 +824,7 @@ def DongleDebugMessage(text, d):
 
         else:
             Channel = -1                                        # There is no channel number for this message
-        
+
         #-----------------------------------------------------------------------
         # extra is the explanation of info
         # - if already filled, do not change
@@ -816,7 +842,7 @@ def DongleDebugMessage(text, d):
         if debug.on(debug.Data1):
             logfile.Write ("%s synch=%s, len=%2s, id=%s %-21s, check=%4s, info=%s%s" % \
                     (text,hex(synch), length, hex(id), id_, hex(checksum),  info_, extra))
-                  
+
 # ==============================================================================
 # ANT+ message interface
 # ==============================================================================
@@ -849,7 +875,7 @@ def msg43_ChannelPeriod(ChannelNumber, ChannelPeriod):
     return msg
 
 # ------------------------------------------------------------------------------
-# A N T   M e s s a g e   45   C h a n n e l R f F r e q u e n c y 
+# A N T   M e s s a g e   45   C h a n n e l R f F r e q u e n c y
 # ------------------------------------------------------------------------------
 def msg45_ChannelRfFrequency(ChannelNumber, RfFrequency):
     format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_char
@@ -932,13 +958,13 @@ def msg60_ChannelTransmitPower(ChannelNumber, TransmitPower):
 def unmsg64_ChannelResponse(info):
     nChannel            = 0
     fChannel            = sc.unsigned_char
-    
+
     nInitiatingMessageID= 1
     fInitiatingMessageID= sc.unsigned_char
-    
+
     nResponseCode       = 2
     fResponseCode       = sc.unsigned_char
-    
+
     format = sc.no_alignment + fChannel + fInitiatingMessageID + fResponseCode
     tuple  = struct.unpack (format, info)
 
@@ -972,8 +998,8 @@ def msgPage00_TacxVortexDataSpeed (Channel, Power, Speed, Cadence):
     fDataPageNumber     = sc.unsigned_char  # payload[0]        First byte of the ANT+ datapage
     fPower              = sc.unsigned_short # payload[1 and 2]  Watts, big-endian
     fSpeed              = sc.unsigned_short # payload[3 and 4]  cm/s, big-endian
-    fReserved           = sc.pad * 2        # payload[5 and 6] 
-    fCadence            = sc.unsigned_char  # payload[7] 
+    fReserved           = sc.pad * 2        # payload[5 and 6]
+    fCadence            = sc.unsigned_char  # payload[7]
 
     format = sc.big_endian +    fChannel + fDataPageNumber +    fPower +    fSpeed + fReserved + fCadence
     info   = struct.pack(format, Channel ,  DataPageNumber , int(Power), int(Speed),          int(Cadence))
@@ -995,10 +1021,10 @@ def msgUnpage00_TacxVortexDataSpeed (info):
     nSpeed              = 3
     fSpeed              = sc.unsigned_short # payload[3 and 4]  cm/s, big-endian
 
-    fReserved           = sc.pad * 2        # payload[5 and 6] 
+    fReserved           = sc.pad * 2        # payload[5 and 6]
 
     nCadence            = 4
-    fCadence            = sc.unsigned_char  # payload[7] 
+    fCadence            = sc.unsigned_char  # payload[7]
 
     format= sc.big_endian + fChannel + fDataPageNumber + fPower + fSpeed + fReserved + fCadence
     tuple = struct.unpack (format, info)
@@ -1091,7 +1117,7 @@ def msgUnpage02_TacxVortexDataVersion (info):
     nDataPageNumber     = 1
     fDataPageNumber     = sc.unsigned_char  # payload[0] First byte of the ANT+ datapage
 
-    fReserved           = sc.pad * 3        # payload[1, 2, 3] 
+    fReserved           = sc.pad * 3        # payload[1, 2, 3]
 
     nMajor              = 2
     fMajor              = sc.unsigned_char  # payload[4]
@@ -1137,7 +1163,7 @@ def msgPage03_TacxVortexDataCalibration (Channel, Calibration, VortexID):
 
     fChannel            = sc.unsigned_char  #0 First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # payload[0] First byte of the ANT+ datapage
-    fReserved           = sc.pad * 4        # payload[1, 2, 3, 4] 
+    fReserved           = sc.pad * 4        # payload[1, 2, 3, 4]
     fCalibration        = sc.unsigned_char  # payload[5]
     fVortexID           = sc.unsigned_short # payload[6, 7]
 
@@ -1155,7 +1181,7 @@ def msgUnpage03_TacxVortexDataCalibration (info):
     nDataPageNumber     = 1
     fDataPageNumber     = sc.unsigned_char  # payload[0] First byte of the ANT+ datapage
 
-    fReserved           = sc.pad * 4        # payload[1, 2, 3, 4] 
+    fReserved           = sc.pad * 4        # payload[1, 2, 3, 4]
 
     nCalibration        = 2
     fCalibration        = sc.unsigned_char  # payload[5]
@@ -1215,7 +1241,7 @@ def msgPage16_TacxVortexStartCalibration (Channel, VortexID):
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
     fVortexID           = sc.unsigned_short
-    fCommand            = sc.unsigned_char  # 0x00 
+    fCommand            = sc.unsigned_char  # 0x00
     fSubcommand         = sc.unsigned_char  # 0xFF signals calibration start
     fReserved           = sc.pad * 3
 
@@ -1253,9 +1279,9 @@ def msgPage16_TacxVortexSetCalibrationValue (Channel, VortexID, CalibrationValue
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
     fVortexID           = sc.unsigned_short
-    fCommand            = sc.unsigned_char  # 
+    fCommand            = sc.unsigned_char  #
     fSubcommand         = sc.unsigned_char  # 0x7F signals calibration start
-    fCalibrationValue   = sc.unsigned_char  
+    fCalibrationValue   = sc.unsigned_char
     fReserved           = sc.pad * 2
 
     format = sc.big_endian +    fChannel + fDataPageNumber + fVortexID + fCommand + fSubcommand + fCalibrationValue + fReserved
@@ -1394,7 +1420,7 @@ def msgUnpage25_TrainerData(info):
 
     format= sc.no_alignment + fChannel + fDataPageNumber + fEvent + fCadence + fAccPower + fInstPower + fFlags
     tuple = struct.unpack (format, info)
-    
+
     return tuple[0], tuple[1], tuple[2], tuple[3], tuple[4], tuple[5], tuple[6]
 
 # ------------------------------------------------------------------------------
@@ -1406,12 +1432,12 @@ def msgUnpage25_TrainerData(info):
 def msgUnpage48_BasicResistance(info):
     nChannel            = 0
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
-    
+
     nDataPageNumber     = 1
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
-    
+
     fReserved           = sc.pad * 6
-    
+
     nTotalResistance    = 2
     fTotalResistance    = sc.unsigned_char
 
@@ -1419,7 +1445,7 @@ def msgUnpage48_BasicResistance(info):
     tuple  = struct.unpack (format, info)
 
     rtn = tuple[nTotalResistance] * 0.005    # 0 ... 100%
-    
+
     return rtn
 
 # ------------------------------------------------------------------------------
@@ -1431,18 +1457,18 @@ def msgUnpage48_BasicResistance(info):
 def msgUnpage49_TargetPower(info):
     nChannel            = 0
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
-    
+
     nDataPageNumber     = 1
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
-    
+
     fReserved           = sc.pad * 5
-    
+
     nTargetPower        = 2
     fTargetPower        = sc.unsigned_short # units of 0.25Watt
 
     format = sc.no_alignment + fChannel + fDataPageNumber + fReserved + fTargetPower
     tuple  = struct.unpack (format, info)
-    
+
     rtn = tuple[nTargetPower] / 4      # returns units of 1Watt
 
     return rtn
@@ -1456,24 +1482,24 @@ def msgUnpage49_TargetPower(info):
 def msgUnpage51_TrackResistance(info):
     nChannel            = 0
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
-    
+
     nDataPageNumber     = 1
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
-    
+
     fReserved           = sc.pad * 4
-    
+
     nGrade              = 2
     fGrade              = sc.unsigned_short
-    
+
     nRollingResistance  = 3
     fRollingResistance  = sc.unsigned_char
-    
+
     format = sc.no_alignment + fChannel + fDataPageNumber + fReserved + fGrade + fRollingResistance
     tuple  = struct.unpack (format, info)
-    
+
     Grade = tuple[nGrade]
     rtn   = Grade * 0.01 - 200          # -200% - 200%, units 0.01%
-    
+
 #   rtn  *= 2.5                         # Empirically...
                                         # This was entered when creating the file
                                         # but never tested / properly verified
@@ -1491,13 +1517,13 @@ def msgUnpage51_TrackResistance(info):
 def msgUnpage55_UserConfiguration(info):
     nChannel            = 0
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
-    
+
     nDataPageNumber     = 1
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
-    
+
     nUserWeight         = 2
     fUserWeight         = sc.unsigned_short
-    
+
     fReserved           = sc.pad
 
     nBicycleInfo        = 3
@@ -1505,21 +1531,21 @@ def msgUnpage55_UserConfiguration(info):
 
     nBicycleWheelDiameter= 4
     fBicycleWheelDiameter= sc.unsigned_char
-    
+
     nGearRatio          = 5
     fGearRatio          = sc.unsigned_char
-    
+
     format = sc.no_alignment + fChannel + fDataPageNumber + fUserWeight + fReserved + fBicycleInfo + fBicycleWheelDiameter + fGearRatio
     tuple  = struct.unpack (format, info)
-    
+
     UserWeigth                = tuple[nUserWeight] * 0.01                # 0 ... 655.34 kg
-    
+
     BicycleInfo               = tuple[nBicycleInfo]
     BicyleWheelDiameterOffset = (BicycleInfo & 0x000f)                   # 0 - 10 mm
     BicycleWeigth             = (BicycleInfo & 0xfff0) / 16 * 0.05       # 0 - 50 kg
-    
+
     BicyleWheelDiameter       = tuple[nBicycleWheelDiameter] * 0.01      # 0 - 2.54m
-    
+
     GearRatio                 = tuple[nGearRatio] * 0.03                 # 0.03 - 7.65
 
     return UserWeigth, BicycleWeigth, BicyleWheelDiameter, GearRatio
@@ -1549,19 +1575,19 @@ def msgPage70_RequestDataPage(Channel, SlaveSerialNumber, DescriptorByte1, \
 
     info  = struct.pack (format,  Channel,   DataPageNumber,   SlaveSerialNumber,   DescriptorByte1,  \
                 DescriptorByte2,   NrTimes,               RequestedPageNumber,   CommandType)
-    
+
     return info
 
 def msgUnpage70_RequestDataPage(info):
     nChannel            = 0
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
-    
+
     nDataPageNumber     = 1
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
-    
+
     nSlaveSerialNumber  = 2
     fSlaveSerialNumber  = sc.unsigned_short
-    
+
     nDescriptorByte1    = 3
     fDescriptorByte1    = sc.unsigned_char
 
@@ -1570,18 +1596,18 @@ def msgUnpage70_RequestDataPage(info):
 
     nReqTransmissionResp= 5
     fReqTransmissionResp= sc.unsigned_char
-    
+
     nRequestedPageNumber= 6
     fRequestedPageNumber= sc.unsigned_char
-    
+
     nCommandType        = 7
     fCommandType        = sc.unsigned_char
-    
+
     format = sc.no_alignment + fChannel + fDataPageNumber + fSlaveSerialNumber + \
              fDescriptorByte1 + fDescriptorByte2 + fReqTransmissionResp + \
              fRequestedPageNumber + fCommandType
     tuple  = struct.unpack (format, info)
-    
+
     ReqTranmissionResponse = tuple[nReqTransmissionResp]
     AckRequired         = ReqTranmissionResponse & 0x80
     NrTimes             = ReqTranmissionResponse & 0x7f
@@ -1609,7 +1635,7 @@ def msgPage54_FE_Capabilities(Channel, Reserved1, Reserved2, Reserved3, Reserved
 
     format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fReserved2 + fReserved3 + fReserved4 + fMaximumResistance + fCapabilitiesBits
     info  = struct.pack (format,  Channel,   DataPageNumber,   Reserved1 ,  Reserved2 ,  Reserved3 ,  Reserved4 ,  MaximumResistance,   CapabilitiesBits)
-    
+
     return info
 
 # ------------------------------------------------------------------------------
@@ -1617,7 +1643,7 @@ def msgPage54_FE_Capabilities(Channel, Reserved1, Reserved2, Reserved3, Reserved
 # ------------------------------------------------------------------------------
 # Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
 # D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
-# Common Data Page 80: (0x50) Manufacturers Information          
+# Common Data Page 80: (0x50) Manufacturers Information
 # ------------------------------------------------------------------------------
 def msgPage80_ManufacturerInfo(Channel, Reserved1, Reserved2, HWrevision, ManufacturerID, ModelNumber):
     DataPageNumber      = 80
@@ -1639,7 +1665,7 @@ def msgPage80_ManufacturerInfo(Channel, Reserved1, Reserved2, HWrevision, Manufa
     #
     format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fReserved2 + fHWrevision + fManufacturerID + fModelNumber
     info  = struct.pack (format,  Channel,   DataPageNumber,   Reserved1,   Reserved2,   HWrevision,   ManufacturerID,   ModelNumber)
-    
+
     return info
 
 def msgUnpage80_ManufacturerInfo(info):
@@ -1653,7 +1679,7 @@ def msgUnpage80_ManufacturerInfo(info):
 
     format= sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fReserved2 + fHWrevision + fManufacturerID + fModelNumber
     tuple = struct.unpack (format, info)
-    
+
     return tuple[0], tuple[1], tuple[2], tuple[3], tuple[4], tuple[5], tuple[6]
 
 # ------------------------------------------------------------------------------
@@ -1661,7 +1687,7 @@ def msgUnpage80_ManufacturerInfo(info):
 # ------------------------------------------------------------------------------
 # Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
 # D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
-# Common Data Page 81: (0x51) Product Information          
+# Common Data Page 81: (0x51) Product Information
 # ------------------------------------------------------------------------------
 def msgPage81_ProductInformation(Channel, Reserved1, SWrevisionSupp, SWrevisionMain, SerialNumber):
     DataPageNumber      = 81
@@ -1675,7 +1701,7 @@ def msgPage81_ProductInformation(Channel, Reserved1, SWrevisionSupp, SWrevisionM
 
     format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fSWrevisionSupp + fSWrevisionMain + fSerialNumber
     info  = struct.pack (format,  Channel,   DataPageNumber,   Reserved1,   SWrevisionSupp,   SWrevisionMain,   SerialNumber)
-    
+
     return info
 
 def msgUnpage81_ProductInformation(info):
@@ -1688,11 +1714,11 @@ def msgUnpage81_ProductInformation(info):
 
     format= sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fSWrevisionSupp + fSWrevisionMain + fSerialNumber
     tuple = struct.unpack (format, info)
-    
+
     return tuple[0], tuple[1], tuple[2], tuple[3], tuple[4], tuple[5]
 
 # ------------------------------------------------------------------------------
-# P a g e 8 2   B a t t e r y S t a t u s 
+# P a g e 8 2   B a t t e r y S t a t u s
 # ------------------------------------------------------------------------------
 # Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
 # D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
@@ -1715,7 +1741,7 @@ def msgPage82_BatteryStatus(Channel):
                 fCumulativeTime1 + fCumulativeTime2 + fCumulativeTime3 + \
                 fBatteryVoltage + fDescriptiveBitField
     info  = struct.pack (format, Channel, DataPageNumber, 0xff, 0x00, 0,0,0, 0, 0x0f | 0x10 | 0x00)
-    
+
     return info
 
 # ------------------------------------------------------------------------------
@@ -1741,7 +1767,7 @@ def msgPage_Hrm (Channel, DataPageNumber, Spec1, Spec2, Spec3, HeartBeatEventTim
     fHeartBeatEventTime = sc.unsigned_short
     fHeartBeatCount     = sc.unsigned_char
     fHeartRate          = sc.unsigned_char
-    
+
     format      = sc.no_alignment + fChannel + fDataPageNumber + fSpec1 + fSpec2 + fSpec3 + fHeartBeatEventTime +  fHeartBeatCount + fHeartRate
     info        = struct.pack (format, Channel, DataPageNumber,   Spec1,   Spec2,   Spec3,   HeartBeatEventTime,    HeartBeatCount,   HeartRate)
 
@@ -1756,10 +1782,10 @@ def msgUnpage_Hrm (info):
     fHeartBeatEventTime = sc.unsigned_short #5
     fHeartBeatCount     = sc.unsigned_char  #6
     fHeartRate          = sc.unsigned_char  #7
-    
+
     format      = sc.no_alignment + fChannel + fDataPageNumber + fSpec1 + fSpec2 + fSpec3 + fHeartBeatEventTime +  fHeartBeatCount + fHeartRate
     tuple = struct.unpack (format, info)
-    
+
     return tuple[0], tuple[1], tuple[2], tuple[3], tuple[4], tuple[5], tuple[6], tuple[7]
 
 #-------------------------------------------------------------------------------
@@ -1786,7 +1812,7 @@ if __name__ == "__main__":
             print(i, logfile.HexSpace(messages[i]))
             if messages[i] == binascii.unhexlify(stringl[i].replace(' ','')): print("equal")
             else:                                                             print("unequal ***********")
-            
+
 
         print("Trainer_ChannelConfig---------------------------------------------------")
         stringl=[
@@ -1800,7 +1826,7 @@ if __name__ == "__main__":
         messages=[
         msg42_AssignChannel         (channel_FE, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
         msg51_ChannelID             (channel_FE, 0x00cf, DeviceTypeID_FE, TransmissionType_IC_GDP),             # [cf] device number 207
-        msg45_ChannelRfFrequency    (channel_FE, RfFrequency_2457Mhz), 
+        msg45_ChannelRfFrequency    (channel_FE, RfFrequency_2457Mhz),
         msg43_ChannelPeriod         (channel_FE, ChannelPeriod=0x2000),
         msg60_ChannelTransmitPower  (channel_FE, TransmitPower_0dBm),
         msg4B_OpenChannel           (channel_FE)
@@ -1824,7 +1850,7 @@ if __name__ == "__main__":
         messages=[
         msg42_AssignChannel         (channel_HRM, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
         msg51_ChannelID             (channel_HRM, 0x0065, DeviceTypeID_HRM, TransmissionType_IC),           # [65] device number 101
-        msg45_ChannelRfFrequency    (channel_HRM, RfFrequency_2457Mhz), 
+        msg45_ChannelRfFrequency    (channel_HRM, RfFrequency_2457Mhz),
         msg43_ChannelPeriod         (channel_HRM, ChannelPeriod=0x1f86),
         msg60_ChannelTransmitPower  (channel_HRM, TransmitPower_0dBm),
         msg4B_OpenChannel           (channel_HRM)
@@ -1835,7 +1861,7 @@ if __name__ == "__main__":
             print(i, logfile.HexSpace(messages[i]))
             if messages[i] == binascii.unhexlify(stringl[i].replace(' ','')): print("equal")
             else:                                                             print("unequal ***********")
-            
+
 
         print("ResetDongle-------------------------------------------------------------")
         stringl =[
@@ -1852,17 +1878,17 @@ if __name__ == "__main__":
     elif False:
         debug.activate()
         EnumerateAll()
-        
+
         print('----- # I have this one (sending ANT data)')
-        d, msg = GetDongle(4104)        
+        d, msg = GetDongle(4104)
         print(msg)
-        
+
         print('----- # I have this one, used for Trainer Road and Zwift')
-        d, msg = GetDongle(4105)        
+        d, msg = GetDongle(4105)
         print(msg)
-        
+
         print('----- # This is the USB-interface to the trainer')
-        d, msg = GetDongle(0x1932)        
+        d, msg = GetDongle(0x1932)
         print(msg)
     else:
         # test Tacx Vortex Unpage() functions
@@ -1876,12 +1902,12 @@ if __name__ == "__main__":
         data=binascii.unhexlify(info.replace(' ',''))
         S1, S2, Serial, Alarm = msgUnpage01_TacxVortexDataSerial(data)
         print ('i-Vortex Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % (1, S1, S2, Serial, Alarm) )
-        
+
         info="07 02 00 61 83 00 02 00 07"               # TACX_VORTEX_DATA_VERSION
         data=binascii.unhexlify(info.replace(' ',''))
         Major, Minor, Build = msgUnpage02_TacxVortexDataVersion(data)
         print ('i-Vortex Page=%s Major=%s Minor=%s Build=%s' % (2, Major, Minor, Build))
-        
+
         info="07 03 ff ff ff ff 0e 30 b0"               # TACX_VORTEX_DATA_CALIBRATION
         data=binascii.unhexlify(info.replace(' ',''))
         Calibration, VortexID = msgUnpage03_TacxVortexDataCalibration(data)

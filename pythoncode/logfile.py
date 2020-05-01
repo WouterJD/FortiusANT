@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-17"
+__version__ = "2020-04-28"
+# 2020-04-28    Logfile flushed as well
 # 2020-04-17    Open() provides suffix option
 # 2020-04-16    Console() introduced
 # 2020-04-15    HexSpace() supports int
@@ -32,7 +33,7 @@ import debug
 #-------------------------------------------------------------------------------
 def Open(prefix='FortiusANT', suffix=''):
     global fLogfile
-    
+
     if debug.on():
         if len(suffix) > 0 and suffix[0] != '.':
             suffix = '.' + suffix
@@ -77,20 +78,22 @@ def Print(*objects, sep=' ', end='\n'):
 #-------------------------------------------------------------------------------
 def Console (logText):
     Write(logText, True)
-    
+
 def Write (logText, console=False):
     logText = datetime.utcnow().strftime('%H:%M:%S,%f')[0:12] + ": " + logText
     if console: print (logText)
     sys.stdout.flush()
-    
+
     if debug.on():
         try:
             test = fLogfile
         except:
             Open()                  # if module not initiated, open implicitly
-    
+
     try:
-        if debug.on(): fLogfile.write(logText + "\n")         # \r\n
+        if debug.on():
+            fLogfile.write(logText + "\n")         # \r\n
+            fLogfile.flush()
     except:
 #       print ("logfile.Write (" + logText + ") called, but logfile is not opened.")
         pass
@@ -108,7 +111,7 @@ def Close():
 # HexSpace
 #-------------------------------------------------------------------------------
 # input         buffer;         e.g. "\01\02\03\04"
-# 
+#
 # description   convert buffer into readable string
 #
 # returns       string          e.g. "01 02 03 04"

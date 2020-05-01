@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-20"
+__version__ = "2020-04-30"
+# 2020-04-30    Added: PedalStrokeAnalysis
+# 2020-04-28    Added: clv=self, cmd.Get() used in usbTrainer. TODO.
 # 2020-04-20    Added: -t i-Vortex
 # 2020-04-16    Write() replaced by Console()
 # 2020-04-10    Added: -P PowerMode
@@ -18,13 +20,8 @@ import debug
 import logfile
 
 #-------------------------------------------------------------------------------
-# Realize clv to be program-global, by accessing through these two functions
+# Realize clv to be program-global, by accessing through this function.
 #-------------------------------------------------------------------------------
-def Create():
-    global clv
-    clv = CommandLineVariables()
-    return clv
-    
 def Get():
     global clv
     return clv
@@ -50,9 +47,10 @@ class CommandLineVariables(object):
     hrm             = None       # introduced 2020-02-09; None=not specified, numeric=HRM device, -1=no HRM
     manual          = False
     manualGrade     = False
+    PedalStrokeAnalysis = False
     PowerMode       = False      # introduced 2020-04-10; When specified Grade-commands are ignored xx seconds after Power-commands
     scs             = None       # introduced 2020-02-10; None=not specified, numeric=SCS device
-    
+
     tyre            = __tyre__   # m        tyre circumference
     fL              = __fL__     # teeth    chain wheel front / large
     fS              = __fS__     # teeth    chain wheel front / small
@@ -70,11 +68,14 @@ class CommandLineVariables(object):
     # Define and process command line
     #---------------------------------------------------------------------------
     def __init__(self):
+        global clv
+        clv = self
         #-----------------------------------------------------------------------
         # Define and process command line
         #-----------------------------------------------------------------------
         parser = argparse.ArgumentParser(description='Program to broadcast data from USB Tacx Fortius trainer, and to receive resistance data for the trainer')
         parser.add_argument('-a','--autostart', help='Automatically start',                                 required=False, action='store_true')
+        parser.add_argument('-A','--PedalStrokeAnalysis', help='Pedal Stroke Analysis',                     required=False, action='store_true')
         s = '%s,%s/%s,%s/%s' % (self.__tyre__, self.__fL__, self.__fS__, self.__rS__, self.__rL__)
         parser.add_argument('-b','--bicycle',   help='Bicycle definition, default=' + s,                    required=False, default=False)
         parser.add_argument('-d','--debug',     help='Show debugging data',                                 required=False, default=False)
@@ -98,21 +99,22 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         # Booleans; either True or False
         #-----------------------------------------------------------------------
-        self.autostart       = args.autostart
-        self.gui             = args.gui
-        self.manual          = args.manual
-        self.manualGrade     = args.manualGrade
-        self.calibrate       = args.calibrate
-        self.PowerMode       = args.PowerMode
-        self.SimulateTrainer = args.simulate
-        
+        self.autostart              = args.autostart
+        self.gui                    = args.gui
+        self.manual                 = args.manual
+        self.manualGrade            = args.manualGrade
+        self.calibrate              = args.calibrate
+        self.PowerMode              = args.PowerMode
+        self.PedalStrokeAnalysis    = args.PedalStrokeAnalysis
+        self.SimulateTrainer        = args.simulate
+
         if self.manual and self.manualGrade:
             logfile.Console("-m and -M are mutually exclusive; manual power selected")
             self.manualGrade = False        # Mutually exclusive
-        
+
         if (self.manual or self.manualGrade) and self.SimulateTrainer:
             logfile.Console("-m/-M and -s both specified, most likely for program test purpose")
-        
+
         #-----------------------------------------------------------------------
         # Bicycle definition to be parsed; three parameters
         # format=tyre,chainring,cassette, e.g. "2.096,50/34,15/25"
@@ -129,7 +131,7 @@ class CommandLineVariables(object):
                 except:
                     logfile.Console('Command line error; -b incorrect tyre=%s' % b[0])
                     self.tyre = self.__tyre__
-            
+
             #-------------------------------------------------------------------
             # parameter2: Chainring, large/small separated by /
             # format=large/small, e.g. 50/34
@@ -252,10 +254,18 @@ class CommandLineVariables(object):
                 logfile.Console('Command line error; -t incorrect value=%s' % args.TacxType)
                 args.TacxType = False
 
+        #-----------------------------------------------------------------------
+        # Check pedal stroke analysis
+        #-----------------------------------------------------------------------
+        if args.PedalStrokeAnalysis and (not args.gui or self.Tacx_iVortex):
+            logfile.Console("Pedal stroke analysis is not possible in console mode or this Tacx type")
+            self.PedalStrokeAnalysis = False
+
     def print(self):
         try:
             v = debug.on(debug.Any)     # Verbose: print all command-line variables with values
             if      self.autostart:          logfile.Console("-a")
+            if      self.PedalStrokeAnalysis:logfile.Console("-A")
             if v or self.args.bicycle:       logfile.Console("-b %s,%s/%s,%s/%s" % (self.tyre, self.fL, self.fS, self.rS, self.rL))
             if v or self.args.debug:         logfile.Console("-d %s (%s)" % (self.debug, bin(self.debug) ) )
             if v or self.args.ftp:           logfile.Console("-f %s" % self.ftp )
@@ -277,13 +287,12 @@ class CommandLineVariables(object):
 # Main program to test the previous functions
 #-------------------------------------------------------------------------------
 if __name__ == "__main__":
-    Create()
-    clv=Get()
+    clv=CommandLineVariables()
     clv.print()
-    
+
     print('HRM', clv.hrm)
     print('SCS', clv.scs)
-    
+
     if clv.hrm == None:
         print("----hrm none")
     else:
