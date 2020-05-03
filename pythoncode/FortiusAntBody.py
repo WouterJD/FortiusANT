@@ -1171,14 +1171,14 @@ def Tacx2Dongle(self):
            break
         except usb.core.USBError as e:
             if e.errno == 19 or e.errno == 32:
-                if debug.on(debug.Data2): logfile.Write("Dongle deconnexion caught. Trying to reconnect...")
+                if debug.on(debug.Data2): logfile.Console("Dongle deconnexion caught. Trying to reconnect...")
                 time.sleep(0.1)
                 devAntDongle = None
                 if LocateHW(self):
-                    if debug.on(debug.Data2): logfile.Write("Dongle successfully reconnected. Continuing.")
+                    if debug.on(debug.Data2): logfile.Console("Dongle successfully reconnected. Continuing.")
                     continue
                 else:
-                    if debug.on(debug.Data2): logfile.Write("Dongle unreachable. Exiting.")
+                    if debug.on(debug.Data2): logfile.Console("Dongle unreachable. Exiting.")
                     break
         
     #---------------------------------------------------------------------------
