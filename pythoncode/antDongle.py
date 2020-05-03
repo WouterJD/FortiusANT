@@ -481,7 +481,13 @@ def GetDongle(p=None):
                 #---------------------------------------------------------------
                 # Initialize the dongle
                 #---------------------------------------------------------------
-                try:                                            # check if in use
+                try:
+                    if debug.on(debug.Function): logfile.Write("GetDongle - Detach kernel drivers")
+                    for config in devAntDongle:
+                        for i in range(config.bNumInterfaces):
+                            if devAntDongle.is_kernel_driver_active(i):
+                                devAntDongle.detach_kernel_driver(i)
+                    
                     if debug.on(debug.Function): logfile.Write ("GetDongle - Set configuration")
                     devAntDongle.set_configuration()
 
