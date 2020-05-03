@@ -434,6 +434,61 @@ def Runoff(self):
                     (PowerCount, PowerEqual, PowerEqual * 100 /PowerCount))
     return True
     
+
+
+
+#---------------------------------------------------------------------------
+# Initialize antDongle
+# Open channels:
+#    one to transmit the trainer info (Fitness Equipment)
+#    one to transmit heartrate info   (HRM monitor)
+#    one to interface with Tacx i-Vortex (VTX)
+#
+# And if you want a dedicated Speed Cadence Sensor, implement like this...
+#---------------------------------------------------------------------------
+def InitializeDongle(self):
+    global devAntDongle
+    if not (clv.manual or clv.manualGrade):
+        #ant.ResetDongle(devAntDongle)             # reset dongle
+        ant.Calibrate(devAntDongle)               # calibrate ANT+ dongle
+        ant.Trainer_ChannelConfig(devAntDongle)   # Create ANT+ master channel for FE-C
+        
+        if clv.hrm == None:
+            ant.HRM_ChannelConfig(devAntDongle)   # Create ANT+ master channel for HRM
+        else:
+            #---------------------------------------------------------------------------
+            # Create ANT+ slave channel for HRM;   0: auto pair, nnn: defined HRM
+            #---------------------------------------------------------------------------
+            ant.SlaveHRM_ChannelConfig(devAntDongle, clv.hrm)
+
+            #---------------------------------------------------------------------------
+            # Request what DeviceID is paired to the HRM-channel
+            # No pairing-loop: HRM perhaps not yet active and avoid delay
+            #---------------------------------------------------------------------------
+            msg = ant.msg4D_RequestMessage(ant.channel_HRM_s, ant.msgID_ChannelID)
+            ant.SendToDongle([msg], devAntDongle, '', False, False)
+
+        if clv.Tacx_iVortex:
+            #---------------------------------------------------------------------------
+            # Create ANT+ slave channel for VTX
+            #---------------------------------------------------------------------------
+            ant.SlaveVTX_ChannelConfig(devAntDongle, 0)
+
+            #---------------------------------------------------------------------------
+            # Request what DeviceID is paired to the VTX-channel
+            # No pairing-loop: VTX perhaps not yet active and avoid delay
+            #---------------------------------------------------------------------------
+            msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
+            ant.SendToDongle([msg], devAntDongle, '', False, False)
+
+        if clv.scs != None:
+            ant.SlaveSCS_ChannelConfig(devAntDongle, clv.scs)   # Create ANT+ slave channel for SCS
+                                                    # 0: auto pair, nnn: defined SCS
+            pass
+
+    if not clv.gui: logfile.Console ("Ctrl-C to exit")
+
+
 # ------------------------------------------------------------------------------
 # T a c x 2 D o n g l e
 # ------------------------------------------------------------------------------
@@ -455,6 +510,8 @@ def Runoff(self):
 def Tacx2Dongle(self):
     global devAntDongle, devTrainer, GetTrainerMsg
 
+    InitializeDongle(self)
+
     AntHRMpaired = False
     AntVTXpaired = False
     VTX_VortexID = 0
@@ -465,54 +522,6 @@ def Tacx2Dongle(self):
     pdaInfo       = []          # Collection of (time, power)
     LastPedalEcho = 0           # Flag that cadence sensor was seen
 
-    #---------------------------------------------------------------------------
-    # Initialize antDongle
-    # Open channels:
-    #    one to transmit the trainer info (Fitness Equipment)
-    #    one to transmit heartrate info   (HRM monitor)
-    #    one to interface with Tacx i-Vortex (VTX)
-    #
-    # And if you want a dedicated Speed Cadence Sensor, implement like this...
-    #---------------------------------------------------------------------------
-    if not (clv.manual or clv.manualGrade):
-        #ant.ResetDongle(devAntDongle)             # reset dongle
-        ant.Calibrate(devAntDongle)               # calibrate ANT+ dongle
-        ant.Trainer_ChannelConfig(devAntDongle)   # Create ANT+ master channel for FE-C
-        
-        if clv.hrm == None:
-            ant.HRM_ChannelConfig(devAntDongle)   # Create ANT+ master channel for HRM
-        else:
-            #---------------------------------------------------------------------------
-            # Create ANT+ slave channel for HRM;   0: auto pair, nnn: defined HRM
-            #---------------------------------------------------------------------------
-            ant.SlaveHRM_ChannelConfig(devAntDongle, clv.hrm)
-
-            #---------------------------------------------------------------------------
-            # Request what DeviceID is paired to the HRM-channel
-            # No pairing-loop: HRM perhaps not yet active and avoid delay
-            #---------------------------------------------------------------------------
-            msg = ant.msg4D_RequestMessage(ant.channel_HRM_s, ant.msgID_ChannelID)
-            ant.SendToDongle([msg], devAntDongle, '', False, False)
-    
-        if clv.Tacx_iVortex:
-            #---------------------------------------------------------------------------
-            # Create ANT+ slave channel for VTX
-            #---------------------------------------------------------------------------
-            ant.SlaveVTX_ChannelConfig(devAntDongle, 0)
-
-            #---------------------------------------------------------------------------
-            # Request what DeviceID is paired to the VTX-channel
-            # No pairing-loop: VTX perhaps not yet active and avoid delay
-            #---------------------------------------------------------------------------
-            msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
-            ant.SendToDongle([msg], devAntDongle, '', False, False)
-
-        if clv.scs != None:
-            ant.SlaveSCS_ChannelConfig(devAntDongle, clv.scs)   # Create ANT+ slave channel for SCS
-                                                  # 0: auto pair, nnn: defined SCS
-            pass
-    
-    if not clv.gui: logfile.Console ("Ctrl-C to exit")
 
     #---------------------------------------------------------------------------
     # Loop control
@@ -1176,6 +1185,7 @@ def Tacx2Dongle(self):
                 devAntDongle = None
                 if LocateHW(self):
                     if debug.on(debug.Data2): logfile.Console("Dongle successfully reconnected. Continuing.")
+                    InitializeDongle(self)
                     continue
                 else:
                     if debug.on(debug.Data2): logfile.Console("Dongle unreachable. Exiting.")
