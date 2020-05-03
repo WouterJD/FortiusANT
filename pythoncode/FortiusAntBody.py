@@ -475,7 +475,7 @@ def Tacx2Dongle(self):
     # And if you want a dedicated Speed Cadence Sensor, implement like this...
     #---------------------------------------------------------------------------
     if not (clv.manual or clv.manualGrade):
-        ant.ResetDongle(devAntDongle)             # reset dongle
+        #ant.ResetDongle(devAntDongle)             # reset dongle
         ant.Calibrate(devAntDongle)               # calibrate ANT+ dongle
         ant.Trainer_ChannelConfig(devAntDongle)   # Create ANT+ master channel for FE-C
         
@@ -673,8 +673,8 @@ def Tacx2Dongle(self):
         CycleTime = CycleTimeANT    # Seconds, default = 0.25 (inspired by 4Hz ANT+)
 
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start main loop')
-    try:
-        while self.RunningSwitch == True:
+    while self.RunningSwitch == True:
+        try:
             StartTime = time.time()
             #-------------------------------------------------------------------
             # ANT process is done once every 250ms
@@ -1166,8 +1166,20 @@ def Tacx2Dongle(self):
             EventCounter += 1           # Increment and ...
             EventCounter &= 0xff        # maximize to 255
             
-    except KeyboardInterrupt:
-        logfile.Console ("Stopped")
+        except KeyboardInterrupt:
+           logfile.Console ("Stopped")
+           break
+        except usb.core.USBError as e:
+            if e.errno == 19 or e.errno == 32:
+                if debug.on(debug.Data2): logfile.Write("Dongle deconnexion caught. Trying to reconnect...")
+                time.sleep(0.1)
+                devAntDongle = None
+                if LocateHW(self):
+                    if debug.on(debug.Data2): logfile.Write("Dongle successfully reconnected. Continuing.")
+                    continue
+                else:
+                    if debug.on(debug.Data2): logfile.Write("Dongle unreachable. Exiting.")
+                    break
         
     #---------------------------------------------------------------------------
     # Stop devices

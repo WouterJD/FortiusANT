@@ -568,6 +568,7 @@ def SendToDongle(messages, devAntDongle, comment='', receive=True, drop=True):
                                                 # returns:
         except Exception as e:
             logfile.Console("devAntDongle.write exception: " + str(e))
+            raise e
 
         #-----------------------------------------------------------------------
         # Read all responses
@@ -621,6 +622,7 @@ def ReadFromDongle(devAntDongle, drop):
                 pass
             else:
                 logfile.Console("devAntDongle.read exception: " + str(e))
+                raise e
 
         # --------------------------------------------------------------------------
         # Handle content returned by .read()
