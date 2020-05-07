@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-01"
+__version__ = "2020-05-07"
+# 2020-05-07    clsAntDongle encapsulates all functions
+#               and implements dongle recovery
 # 2020-05-01    Added: Vortex Headunit
 # 2020-04-22    Miscellaneous improvements for Tacx i-Vortex
 #               Versions displayed on console
@@ -101,10 +103,10 @@ if clv.dongle > 0:
 else:
     p = None            # Take the default
 
-devAntDongle, msg = ant.GetDongle(p)
-logfile.Console (msg)
+AntDongle = ant.clsAntDongle(p)
+logfile.Console (AntDongle.Message)
 
-if devAntDongle and not clv.SimulateTrainer:
+if AntDongle.OK and not clv.SimulateTrainer:
     #---------------------------------------------------------------------------
     # We are going to look what MASTER devices there are
     #---------------------------------------------------------------------------
@@ -113,7 +115,7 @@ if devAntDongle and not clv.SimulateTrainer:
     #---------------------------------------------------------------------------
     # Initialize dongle
     #---------------------------------------------------------------------------
-    ant.Calibrate(devAntDongle)                          # calibrate ANT+ dongle
+    AntDongle.Calibrate()                          # calibrate ANT+ dongle
 
     #---------------------------------------------------------------------------
     # Create ANT+ slave channels for pairing to a master device (HRM, FE, ...)
@@ -121,7 +123,7 @@ if devAntDongle and not clv.SimulateTrainer:
     # A channel with a wild-card is established when a master-device found.
     # After that moment, no other device will be seen on that channel.
     #
-    # If ant.SlaveHRM_ChannelConfig(devAntDongle, 0) is used, the first HRM will
+    # If ant.SlaveHRM_ChannelConfig(0) is used, the first HRM will
     # be found and not a list of HRM's.
     #
     # Therefore, open as many channels as devices you want to find.
@@ -139,15 +141,15 @@ if devAntDongle and not clv.SimulateTrainer:
     for i in range(0, NrDevicesToPair):
         print (i, end=' ')
         if i == ant.channel_VTX_s:
-            ant.SlaveVTX_ChannelConfig(devAntDongle, 0)
+            AntDongle.SlaveVTX_ChannelConfig(0)
         elif i == ant.channel_VHU_s:
-            ant.SlaveVHU_ChannelConfig(devAntDongle, 0)
+            AntDongle.SlaveVHU_ChannelConfig(0)
         else:
             DeviceNumber    =0
             DeviceTypeID    =0
             TransmissionType=0
             if i % 1 == 1: DeviceTypeID &= 0x80
-            ant.SlavePair_ChannelConfig(devAntDongle, i, DeviceNumber, DeviceTypeID, TransmissionType)
+            AntDongle.SlavePair_ChannelConfig(i, DeviceNumber, DeviceTypeID, TransmissionType)
     print ('')
 
     deviceIDs = []
@@ -166,7 +168,7 @@ if devAntDongle and not clv.SimulateTrainer:
         messages = []
         for i in range(0, NrDevicesToPair):
             messages.append (ant.msg4D_RequestMessage(i, ant.msgID_ChannelID) )
-        ant.SendToDongle(messages, devAntDongle, '', False, False)
+        AntDongle.Write(messages, False, False)
 
         print ('Wait for responses from channel what device is paired: ', end='')
         while RunningSwitch == True and pairingCounter > 0:
@@ -174,7 +176,7 @@ if devAntDongle and not clv.SimulateTrainer:
             #-------------------------------------------------------------------
             # Receive response from channels
             #-------------------------------------------------------------------
-            data = ant.ReadFromDongle(devAntDongle, False)
+            data = AntDongle.Read(False)
 
             #-------------------------------------------------------------------
             # Only handle ChannelID messages and ignore everyting else
@@ -239,8 +241,8 @@ if devAntDongle and not clv.SimulateTrainer:
                     deviceID = clsDeviceID(Channel, DeviceType, DeviceNumber, DeviceTypeID, TransmissionType)
                     # print (Channel, end=' ')
                     if DeviceNumber == 0:      # No device paired, request again
-                        ant.SendToDongle([ant.msg4D_RequestMessage(Channel, ant.msgID_ChannelID)], \
-                                        devAntDongle, '', False, False)
+                        AntDongle.Write([ant.msg4D_RequestMessage(Channel, ant.msgID_ChannelID)], \
+                                        False, False)
                         pass
                     else:
                         d = deviceID
@@ -257,7 +259,7 @@ if devAntDongle and not clv.SimulateTrainer:
                             #---------------------------------------------------
                             info = ant.msgPage70_RequestDataPage(Channel, ant.DeviceNumber_EA, 255, 255, 1, 70, 0)
                             d    = ant.ComposeMessage (ant.msgID_AcknowledgedData, info)
-                            ant.SendToDongle([d], devAntDongle, '', False)
+                            AntDongle.Write([d], False)
                         else:
                             print('*', end=' ')
                             logfile.Write('ExplorANT: already in list')
@@ -303,10 +305,10 @@ if devAntDongle and not clv.SimulateTrainer:
     for i in range(0, NrDevicesToPair):
         messages.append ( ant.msg41_UnassignChannel(i) )    # Does not have much effect
         pass
-    ant.SendToDongle(messages, devAntDongle)
-    ant.ResetDongle (devAntDongle)                          # This one does the job
+    AntDongle.Write(messages)
+    AntDongle.ResetDongle ()                          # This one does the job
 
-if devAntDongle:
+while AntDongle.OK:
     #---------------------------------------------------------------------------
     # If any channel specified and/or found: Open the device channels & listen.
     #---------------------------------------------------------------------------
@@ -316,7 +318,7 @@ if devAntDongle:
         # ----------------------------------------------------------------------
         # Calibrate ANT+ dongle (because reset was done!)
         # ----------------------------------------------------------------------
-        ant.Calibrate(devAntDongle)
+        AntDongle.Calibrate()
 
         # ----------------------------------------------------------------------
         # Open channels
@@ -329,33 +331,33 @@ if devAntDongle:
 
             if clv.hrm >= 0:
                 hrm.Initialize()
-                ant.HRM_ChannelConfig(devAntDongle)
+                AntDongle.HRM_ChannelConfig()
                 logfile.Console ('HRM master channel %s opened; device %s (act as an HRM)' % (ant.channel_HRM, ant.DeviceNumber_HRM))
 
             if clv.fe  >= 0:
                 fe.Initialize()
-                ant.Trainer_ChannelConfig(devAntDongle)
+                AntDongle.Trainer_ChannelConfig()
                 logfile.Console ('FE  master channel %s opened; device %s (act as a Tacx Trainer)' % (ant.channel_FE, ant.DeviceNumber_FE))
 
             if clv.vtx >= 0:
-                ant.VTX_ChannelConfig(devAntDongle)
+                AntDongle.VTX_ChannelConfig()
                 logfile.Console ('VTX master channel %s opened; device %s (act as a Tacx -Vortex)' % (ant.channel_VTX, ant.DeviceNumber_VTX))
 
         else:
             if clv.hrm > 0:
-                ant.SlaveHRM_ChannelConfig(devAntDongle, clv.hrm)
+                AntDongle.SlaveHRM_ChannelConfig(clv.hrm)
                 logfile.Console ('HRM slave channel %s opened; listening to master device %s' % (ant.channel_HRM_s, clv.hrm))
 
             if clv.fe  > 0:
-                ant.SlaveTrainer_ChannelConfig(devAntDongle, clv.fe)
+                AntDongle.SlaveTrainer_ChannelConfig(clv.fe)
                 logfile.Console ('FE  slave channel %s opened; listening to master device %s' % (ant.channel_FE_s,  clv.fe))
 
             if clv.vtx > 0:
-                ant.SlaveVTX_ChannelConfig(devAntDongle, clv.vtx)
+                AntDongle.SlaveVTX_ChannelConfig(clv.vtx)
                 logfile.Console ('VTX slave channel %s opened; listening to master device %s' % (ant.channel_VTX_s, 0))
 
             if clv.vhu > 0:
-                ant.SlaveVHU_ChannelConfig(devAntDongle, clv.vhu)
+                AntDongle.SlaveVHU_ChannelConfig(clv.vhu)
                 logfile.Console ('VHU slave channel %s opened; listening to master device %s' % (ant.channel_VHU_s, 0))
 
         # ----------------------------------------------------------------------
@@ -400,7 +402,7 @@ if devAntDongle:
 
             EventCounter        = 0
 
-            while RunningSwitch == True:
+            while RunningSwitch == True and not AntDongle.DongleReconnected:
                 StartTime = time.time()
                 #---------------------------------------------------------------
                 # Simulate HRM, FE-S, VTX (master device, broadcasting data)
@@ -415,10 +417,10 @@ if devAntDongle:
                         Cadence, CurrentPower, SpeedKmh, HeartRate = 98, 234, 35.6, 123     # Always the same, ennoying but predictable
 
                     if clv.hrm >= 0:
-                        messages.append(hrm.BroadcastHeartrateMessage (devAntDongle, HeartRate))
+                        messages.append(hrm.BroadcastHeartrateMessage (HeartRate))
 
                     if clv.fe >= 0:
-                        messages.append(fe.BroadcastTrainerDataMessage(devAntDongle, Cadence, CurrentPower, SpeedKmh, HeartRate))
+                        messages.append(fe.BroadcastTrainerDataMessage(Cadence, CurrentPower, SpeedKmh, HeartRate))
 
                     if clv.vtx >= 0:
                         EventCounter += 1
@@ -435,9 +437,9 @@ if devAntDongle:
                 # Receive data
                 #---------------------------------------------------------------
                 if clv.SimulateTrainer and len(messages) > 0:
-                    data = ant.SendToDongle(messages, devAntDongle, '', True, False)
+                    data = AntDongle.Write(messages, True, False)
                 else:
-                    data = ant.ReadFromDongle(devAntDongle, False)
+                    data = AntDongle.Read( False)
 
                 #---------------------------------------------------------------
                 # Simulate vortex data, just to test the loop
@@ -674,7 +676,7 @@ if devAntDongle:
                                     while (NrTimes):
                                         data.append(d)
                                         NrTimes -= 1
-                                    ant.SendToDongle(data, devAntDongle, comment, False)
+                                    AntDongle.Write(data, False)
 
                             #-------------------------------------------------------
                             # Other data pages
@@ -722,7 +724,7 @@ if devAntDongle:
                     logfile.Console('ExplorANT: Set Tacx Vortex power %s' % Power)
                     info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, VTX_VortexID, Power)
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
-                    ant.SendToDongle([msg], devAntDongle, '', False)
+                    AntDongle.Write([msg], False)
 
         except KeyboardInterrupt:
             logfile.Console ("Listening stopped")
@@ -734,10 +736,17 @@ if devAntDongle:
         messages = []
         if clv.hrm > 0: messages.append ( ant.msg41_UnassignChannel(ant.channel_HRM_s) )
         if clv.fe  > 0: messages.append ( ant.msg41_UnassignChannel(ant.channel_FE_s ) )
-        ant.SendToDongle(messages, devAntDongle)
+        AntDongle.Write(messages)
         #---------------------------------------------------------------
         # Release dongle
-        #---------------------------------------------------------------
-        ant.ResetDongle (devAntDongle)
+        #-----------------------------------------------------------------------
+        AntDongle.ResetDongle ()
+    #---------------------------------------------------------------------------
+    # Quit "while AntDongle.OK"
+    #---------------------------------------------------------------------------
+    if AntDongle.DongleReconnected:
+        AntDongle.ApplicationRestart()
+    else:
+        break
 logfile.Console ("We're done")
 logfile.Console ("--------------------")

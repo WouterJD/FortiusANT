@@ -2,6 +2,7 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-05-07"
+# 2020-05-07    devAntDongle not needed, not used
 # 2020-05-07    pylint error free
 # 2020-02-18    First version, split-off from FortiusAnt.py
 #-------------------------------------------------------------------------------
@@ -28,7 +29,7 @@ def Initialize():
 #
 # Returns:      fedata; next message to be broadcasted on ANT+ channel
 # ------------------------------------------------------------------------------
-def BroadcastTrainerDataMessage (devAntDongle, Cadence, CurrentPower, SpeedKmh, HeartRate):
+def BroadcastTrainerDataMessage (Cadence, CurrentPower, SpeedKmh, HeartRate):
     global EventCounter, AccumulatedPower, AccumulatedTimeCounter, DistanceTravelled, AccumulatedLastTime
     #---------------------------------------------------------------------------
     # Prepare data to be sent to ANT+
