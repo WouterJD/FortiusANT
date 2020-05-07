@@ -2,7 +2,8 @@
 # Version info
 #-------------------------------------------------------------------------------
 WindowTitle = "Fortius Antifier v2.6"
-__version__ = "2020-04-28"
+__version__ = "2020-05-08"
+# 2020-05-08    Usage of clsTacxTrainer
 # 2020-04-28    Created from FortiusAnt.py
 #               Now only contains the Tacx2Dongle() basics.
 #               Startup, GUI and Multiprocessing are in FortiusAnt.py
@@ -168,10 +169,10 @@ CycleTimeANT  = 0.25
 # Initialize globals
 # ------------------------------------------------------------------------------
 def Initialize(pclv):
-    global clv, devAntDongle, devTrainer
+    global clv, devAntDongle, TacxTrainer
     clv          = pclv
     devAntDongle = False
-    devTrainer   = False
+    TacxTrainer  = False
     
 # ==============================================================================
 # Here we go, this is the real work what's all about!
@@ -191,17 +192,13 @@ def Initialize(pclv):
 # Returns:      The actual status of the headunit buttons
 # ------------------------------------------------------------------------------
 def IdleFunction(self):
-    global devTrainer, devAntDongle
+    global devAntDongle, TacxTrainer
     Buttons = 0
-    if devTrainer != False:
+    if TacxTrainer != False:
         TargetPower = 100
-        Error, SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis = \
-            usbTrainer.ReceiveFromTrainer(devTrainer)
+        TacxTrainer.Refresh()
         WaitForButton0(self, Buttons)
-        usbTrainer.SendToTrainer(devTrainer, usbTrainer.modeResistance, \
-            mode_Power, TargetPower, False, 1, -1, \
-            PedalEcho, SpeedKmh, Cadence, 0, False)
-    return Buttons
+    return TacxTrainer.Buttons
 
 # ------------------------------------------------------------------------------
 # W a i t F o r B u t t o n 0
@@ -218,11 +215,10 @@ def IdleFunction(self):
 # Returns:      None
 # ------------------------------------------------------------------------------
 def WaitForButton0(self, Buttons):
-    global devTrainer, devAntDongle
-    while Buttons:
+    global devTrainer, TacxTrainer
+    while TacxTrainer.Buttons:
         time.sleep(0.1)
-        Error, SpeedKmh, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis = \
-            usbTrainer.ReceiveFromTrainer(devTrainer)
+        TacxTrainer.Refresh()
 
 # ------------------------------------------------------------------------------
 # L o c a t e H W
@@ -239,7 +235,7 @@ def WaitForButton0(self, Buttons):
 # Returns:      True if TRAINER and DONGLE found
 # ------------------------------------------------------------------------------
 def LocateHW(self):
-    global devTrainer, devAntDongle, GetTrainerMsg
+    global TacxTrainer, devAntDongle, GetTrainerMsg
     if debug.on(debug.Application): logfile.Write ("Scan for hardware")
 
     #---------------------------------------------------------------------------
@@ -257,18 +253,9 @@ def LocateHW(self):
     # Get Trainer and find trainer model for Windows and Linux
     #---------------------------------------------------------------------------
     if debug.on(debug.Application): logfile.Write ("Get USB trainer")
-    if not devTrainer:
-        if clv.SimulateTrainer:
-            GetTrainerMsg = "Simulated Trainer"
-            self.SetMessages(Tacx=GetTrainerMsg)
-
-        elif clv.Tacx_iVortex:
-            GetTrainerMsg = "Pair with Tacx i-Vortex"
-            self.SetMessages(Tacx=GetTrainerMsg)
-
-        else:
-            devTrainer, GetTrainerMsg = usbTrainer.GetTrainer()
-            self.SetMessages(Tacx=GetTrainerMsg)
+    if not TacxTrainer:
+        TacxTrainer = usbTrainer.clsTacxTrainer.GetTrainer(clv, devAntDongle)
+        self.SetMessages(Tacx=TacxTrainer.Message)
 
     #---------------------------------------------------------------------------
     # Show where the heartrate comes from 
@@ -283,7 +270,7 @@ def LocateHW(self):
     #---------------------------------------------------------------------------
     if debug.on(debug.Application): logfile.Write ("Scan for hardware - end")
     if (clv.manual or clv.manualGrade or devAntDongle) and \
-       (clv.SimulateTrainer or clv.Tacx_iVortex or devTrainer): 
+       (clv.SimulateTrainer or clv.Tacx_iVortex or TacxTrainer): 
         return True
     else:
         return False
