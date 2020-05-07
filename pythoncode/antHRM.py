@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-18"
+__version__ = "2020-05-07"
+# 2020-05-07    pylint error free
 # 2020-02-18    First version, split-off from FortiusAnt.py
 #-------------------------------------------------------------------------------
 import time
@@ -52,21 +53,21 @@ def BroadcastHeartrateMessage (devAntDongle, HeartRate):
         Spec1           = 0xff              # Reserved
         Spec2           = 0xff              # Reserved
         Spec3           = 0xff              # Reserved
-        comment         = "(HR data p0)"
+        # comment       = "(HR data p0)"
 
     elif EventCounter % 64 <= 59:           # Transmit 4 times (56, 57, 58, 59) Page 2 = Manufacturer info
         DataPageNumber  = 2
         Spec1           = ant.Manufacturer_garmin
         Spec2           = (ant.SerialNumber_HRM & 0x00ff)      # Serial Number LSB
         Spec3           = (ant.SerialNumber_HRM & 0xff00) >> 8 # Serial Number MSB     # 1959-07-05
-        comment         = "(HR data p2)"
+        # comment       = "(HR data p2)"
 
     elif EventCounter % 64 <= 63:           # Transmit 4 times (60, 61, 62, 63) Page 3 = Product information
         DataPageNumber  = 3
         Spec1           = ant.HWrevision_HRM
         Spec2           = ant.SWversion_HRM
         Spec3           = ant.ModelNumber_HRM
-        comment         = "(HR data p3)"
+        # comment       = "(HR data p3)"
         
     info   = ant.msgPage_Hrm (ant.channel_HRM, PageChangeToggle | DataPageNumber, Spec1, Spec2, Spec3, HeartBeatEventTime, HeartBeatCounter, HeartRate)
     hrdata = ant.ComposeMessage (ant.msgID_BroadcastData, info)

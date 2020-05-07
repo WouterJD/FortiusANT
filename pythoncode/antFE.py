@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-02-18"
+__version__ = "2020-05-07"
+# 2020-05-07    pylint error free
 # 2020-02-18    First version, split-off from FortiusAnt.py
 #-------------------------------------------------------------------------------
 import time
@@ -47,7 +48,7 @@ def BroadcastTrainerDataMessage (devAntDongle, Cadence, CurrentPower, SpeedKmh, 
         #      D00001198_-_ANT+_Common_Data_Pages_Rev_3.1%20.pdf 
         #      page 28 byte 4,5,6,7- 15=dynastream, 89=tacx
         #-----------------------------------------------------------------------
-        comment = "(Manufacturer's info packet)"
+        # comment = "(Manufacturer's info packet)"
         info    = ant.msgPage80_ManufacturerInfo(ant.channel_FE, 0xff, 0xff, \
                     ant.HWrevision_FE, ant.Manufacturer_tacx, ant.ModelNumber_FE)
         fedata  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
@@ -56,7 +57,7 @@ def BroadcastTrainerDataMessage (devAntDongle, Cadence, CurrentPower, SpeedKmh, 
         #-----------------------------------------------------------------------
         # Send first and second product info packet
         #-----------------------------------------------------------------------
-        comment = "(Product info packet)"
+        # comment = "(Product info packet)"
         info    = ant.msgPage81_ProductInformation(ant.channel_FE, 0xff, \
                     ant.SWrevisionSupp_FE, ant.SWrevisionMain_FE, ant.SerialNumber_FE)
         fedata  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
@@ -75,7 +76,7 @@ def BroadcastTrainerDataMessage (devAntDongle, Cadence, CurrentPower, SpeedKmh, 
             AccumulatedLastTime     = time.time()                           # Reset last loop time
             DistanceTravelled       = 0
 
-        comment = "(General fe data)"
+        # comment = "(General fe data)"
         # Note: AccumulatedTimeCounter as first parameter,
         #       To be checked whether it should be AccumulatedTime (in 0.25 s)
         info    = ant.msgPage16_GeneralFEdata (ant.channel_FE, AccumulatedTimeCounter, DistanceTravelled, SpeedKmh*1000*1000/3600, HeartRate)
@@ -85,7 +86,7 @@ def BroadcastTrainerDataMessage (devAntDongle, Cadence, CurrentPower, SpeedKmh, 
         #-----------------------------------------------------------------------
         # Send specific trainer data
         #-----------------------------------------------------------------------
-        comment = "(Specific trainer data)"
+        # comment = "(Specific trainer data)"
         info    = ant.msgPage25_TrainerData(ant.channel_FE, EventCounter, Cadence, AccumulatedPower, CurrentPower)
         fedata  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
 

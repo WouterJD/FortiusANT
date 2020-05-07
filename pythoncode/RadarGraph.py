@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-01"
+__version__ = "2020-05-07"
+# 2020-05-07    pylint error free
 # 2020-05-01    First version
 #-------------------------------------------------------------------------------
 
@@ -73,7 +74,7 @@ class clsRadarGraph():
 
             Power     = int( i[1] )
             d = (Angle, Power)
-            s = ""
+            # s = ""
             # logfile.Write('Angle=%3s power=%5s Time=%s' % (Angle, Power, i[0]))
             data.append(d)
         self.ShowRadarGraph(data)
@@ -114,9 +115,9 @@ class clsRadarGraph():
         # Draw the graph axis and "bulls-eye" with rings at 25%, 50%, 75% and
         # 100% positions
         # ----------------------------------------------------------------------
-        dc.SetPen(wx.Pen("black", 1))
+        dc.SetPen(wx.Pen("black", 1))                                               # pylint: disable=maybe-no-member
 
-        dc.SetBrush(wx.Brush(wx.Colour(139,193,227)))
+        dc.SetBrush(wx.Brush(wx.Colour(139,193,227)))                               # pylint: disable=maybe-no-member
         dc.DrawCircle(self.cx, self.cy, int(1.00 * self.radius100) )
 
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
@@ -124,11 +125,11 @@ class clsRadarGraph():
         dc.DrawCircle(self.cx, self.cy, int(0.50 * self.radius100) )
         dc.DrawCircle(self.cx, self.cy, int(0.25 * self.radius100) )
 
-        dc.SetFont(wx.Font( int(12 * self.wh/300), wx.SWISS, wx.NORMAL, wx.NORMAL))
+        dc.SetFont(wx.Font( int(12 * self.wh/300), wx.SWISS, wx.NORMAL, wx.NORMAL)) # pylint: disable=maybe-no-member
         tw, th = dc.GetTextExtent(self.title)
         dc.DrawText( self.title, int(self.cx - tw/2 ), int(self.cy - th) )
 
-        dc.SetFont(wx.Font( int(8 * self.wh/300), wx.SWISS, wx.NORMAL, wx.NORMAL))
+        dc.SetFont(wx.Font( int(8 * self.wh/300), wx.SWISS, wx.NORMAL, wx.NORMAL))  # pylint: disable=maybe-no-member
         tw, th = dc.GetTextExtent("100%")
         dc.DrawText( "%sW" % int(0.25 * self.maxval), int(self.cx + 0.25 * self.radius100 - tw), self.cy)
         dc.DrawText( "%sW" % int(0.50 * self.maxval), int(self.cx + 0.50 * self.radius100 - tw), self.cy)
@@ -138,7 +139,7 @@ class clsRadarGraph():
         # ----------------------------------------------------------------------
         # Draw cross lines (horizontal, vertical)
         # ----------------------------------------------------------------------
-        dc.SetPen(wx.Pen("black", 2))
+        dc.SetPen(wx.Pen("black", 2))                                               # pylint: disable=maybe-no-member
         dc.DrawLine(int(self.cx-self.radius100 * 1.1), int(self.cy), int(self.cx+self.radius100 * 1.1), int(self.cy))
         dc.DrawLine(int(self.cx), int(self.cy-self.radius100 * 1.1), int(self.cx), int(self.cy+self.radius100 * 1.1))
 
@@ -148,18 +149,19 @@ class clsRadarGraph():
         # dc.SetBrush(wx.Brush("forest green"))
         # dc.SetBrush(wx.Brush(wx.Colour(139,193,227)))
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        dc.SetPen(wx.Pen("red", 3))
+        dc.SetPen(wx.Pen("red", 3))            # pylint: disable=maybe-no-member
         dc.DrawPolygon(self.polypoints)
         
 # ------------------------------------------------------------------------------
 # Demo- and testcode
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
-    class TestFrame(wx.Frame):
+    class TestFrame(wx.Frame):                 # pylint: disable=maybe-no-member
         power  = [] # Array with power-tuples
         step   = 9  # Degrees. Good values: 1, 9, 15, 18, 30, 90
 
         def __init__(self):
+            # pylint: disable=maybe-no-member
             wx.Frame.__init__(self, None, title="Double Buffered Drawing", size=(680,680))
             # ------------------------------------------------------------------
             # This is what another program could do:
@@ -169,7 +171,7 @@ if __name__ == "__main__":
             # Fill list and show it 
             for i in range(0,360,int(self.step)):
                 self.power.append((i, random.randint(75, 125)))
-            self.RadarGraph.Show(self.power)
+            self.RadarGraph.Show(self.power)    # pylint: disable=maybe-no-member
 
             # ------------------------------------------------------------------
             # Get the paint event to draw the RadarGraph
@@ -187,11 +189,11 @@ if __name__ == "__main__":
         def OnTimeout(self, evt):
             for i, p in enumerate(self.power):
                 self.power[i] = (p[0], p[1] + random.uniform(-15, 15))
-            self.RadarGraph.Show(self.power)
+            self.RadarGraph.Show(self.power)          # pylint: disable=maybe-no-member
             self.Refresh()
             
         def OnPaint(self, event):
-            self.RadarGraph.OnPaint(wx.PaintDC(self))
+            self.RadarGraph.OnPaint(wx.PaintDC(self)) # pylint: disable=maybe-no-member
             
     # --------------------------------------------------------------------------
     # Startup

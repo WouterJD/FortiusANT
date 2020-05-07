@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-01"
+__version__ = "2020-05-07"
+# 2020-05-07    pylint error free
 # 2020-05-01    Added: SlaveVHU_ChannelConfig()
 #               Disabled: SCS because of lack of channel numbers
 # 2020-04-29    msgUnpage00_TacxVortexDataSpeed, speed corrected (0x03ff)
@@ -60,7 +61,7 @@ import os
 import platform
 import re
 if platform.system() == 'False':
-    import serial
+    import serial                   # pylint: disable=import-error
 import struct
 import usb.core
 import time
@@ -418,7 +419,7 @@ def EnumerateAll():
         for cfg in device:          # Do not understand this construction; see pyusb tutorial
             i += 1
             for intf in cfg:
-                for ep in intf:
+                for _ep in intf:
                     pass
     logfile.Console("--------------------")
 
@@ -501,7 +502,7 @@ def GetDongle(p=None):
                     if debug.on(debug.Function): logfile.Write ("GetDongle - Check for an ANT+ reply")
                     msg = "No expected reply from dongle"
                     for s in reply:
-                        synch, length, id, info, checksum, rest, c, d = DecomposeMessage(s)
+                        synch, length, id, _info, _checksum, _rest, _c, _d = DecomposeMessage(s)
                         if synch==0xa4 and length==0x01 and id==0x6f:
                             found_available_ant_stick = True
                             msg = "Using %s dongle" %  devAntDongle.manufacturer # dongle[1]
@@ -715,8 +716,8 @@ def DecomposeMessage(d):
     #      be implemented as soon as we will use msgID_BurstData
     #---------------------------------------------------------------------------
     if id == msgID_BurstData:
-        SequenceNumber = (Channel & 0b11100000) >> 5 # Upper 3 bits
-        Channel        =  Channel & 0b00011111       # Lower 5 bits
+        _SequenceNumber = (Channel & 0b11100000) >> 5 # Upper 3 bits
+        Channel         =  Channel & 0b00011111       # Lower 5 bits
 
     return synch, length, id, info, checksum, rest, Channel, DataPageNumber
 
@@ -737,7 +738,7 @@ def DecomposeMessage(d):
 #-------------------------------------------------------------------------------
 def DongleDebugMessage(text, d):
     if debug.on(debug.Data1):
-        synch, length, id, info, checksum, rest, Channel, p = DecomposeMessage(d)
+        synch, length, id, info, checksum, _rest, Channel, p = DecomposeMessage(d)
 
         #-----------------------------------------------------------------------
         # info_ is the payload of the message
@@ -1029,8 +1030,8 @@ def msgUnpage00_TacxVortexDataSpeed (info):
     format= sc.big_endian + fChannel + fDataPageNumber + fPower + fSpeed + fReserved + fCadence
     tuple = struct.unpack (format, info)
 
-    Channel             =  tuple[nChannel]
-    DataPageNumber      =  tuple[nDataPageNumber]
+    _Channel            =  tuple[nChannel]
+    _DataPageNumber     =  tuple[nDataPageNumber]
     UsingVirtualSpeed   = (tuple[nPower] & 0x8000) >> 15 # B 1000 0000 0000 0000
     CalibrationState    = (tuple[nPower] & 0x6000) >> 13 # B 0110 0000 0000 0000
     Power               =  tuple[nPower] & 0x07ff        # B 0000 0111 1111 1111
@@ -1084,8 +1085,8 @@ def msgUnpage01_TacxVortexDataSerial (info):
     format= sc.big_endian + fChannel + fDataPageNumber + fS1 + fS2 + fS3 + fSerial + fAlarm
     tuple = struct.unpack (format, info)
 
-    Channel             =  tuple[nChannel]
-    DataPageNumber      =  tuple[nDataPageNumber]
+    _Channel            =  tuple[nChannel]
+    _DataPageNumber     =  tuple[nDataPageNumber]
     S1                  =  tuple[nS1]
     S2                  =  tuple[nS2]
     Serial              =  tuple[nS3] * 256 * 256 + tuple[nSerial]
@@ -1131,8 +1132,8 @@ def msgUnpage02_TacxVortexDataVersion (info):
     format= sc.big_endian + fChannel + fDataPageNumber + fReserved + fMajor + fMinor + fBuild
     tuple = struct.unpack (format, info)
 
-    Channel             =  tuple[nChannel]
-    DataPageNumber      =  tuple[nDataPageNumber]
+    _Channel            =  tuple[nChannel]
+    _DataPageNumber     =  tuple[nDataPageNumber]
     Major               =  tuple[nMajor]
     Minor               =  tuple[nMinor]
     Build               =  tuple[nBuild]
@@ -1192,8 +1193,8 @@ def msgUnpage03_TacxVortexDataCalibration (info):
     format= sc.big_endian + fChannel + fDataPageNumber + fReserved + fCalibration + fVortexID
     tuple = struct.unpack (format, info)
 
-    Channel             =  tuple[nChannel]
-    DataPageNumber      =  tuple[nDataPageNumber]
+    _Channel            =  tuple[nChannel]
+    _DataPageNumber     =  tuple[nDataPageNumber]
     Calibration         =  tuple[nCalibration]
     VortexID            =  tuple[nVortexID]
 
@@ -1318,8 +1319,6 @@ def msgPage16_TacxVortexSetPower (Channel, VortexID, Power):
     return info
 
 def msgUnpage16_TacxVortexSetPower (info):
-    DataPageNumber      = 16
-
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
     fVortexID           = sc.unsigned_short
@@ -1430,10 +1429,10 @@ def msgUnpage25_TrainerData(info):
 # Data page 48 (0x30) Basic Resistance
 # ------------------------------------------------------------------------------
 def msgUnpage48_BasicResistance(info):
-    nChannel            = 0
+    _nChannel           = 0
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
 
-    nDataPageNumber     = 1
+    _nDataPageNumber    = 1
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
 
     fReserved           = sc.pad * 6
@@ -1455,10 +1454,10 @@ def msgUnpage48_BasicResistance(info):
 # Data page 49 (0x31) Target Power
 # ------------------------------------------------------------------------------
 def msgUnpage49_TargetPower(info):
-    nChannel            = 0
+    _nChannel           = 0
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
 
-    nDataPageNumber     = 1
+    _nDataPageNumber    = 1
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
 
     fReserved           = sc.pad * 5
@@ -1480,10 +1479,10 @@ def msgUnpage49_TargetPower(info):
 # Data page 51 (0x33) Target `Resistance
 # ------------------------------------------------------------------------------
 def msgUnpage51_TrackResistance(info):
-    nChannel            = 0
+    _nChannel           = 0
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
 
-    nDataPageNumber     = 1
+    _nDataPageNumber    = 1
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
 
     fReserved           = sc.pad * 4
@@ -1491,7 +1490,7 @@ def msgUnpage51_TrackResistance(info):
     nGrade              = 2
     fGrade              = sc.unsigned_short
 
-    nRollingResistance  = 3
+    _nRollingResistance = 3
     fRollingResistance  = sc.unsigned_char
 
     format = sc.no_alignment + fChannel + fDataPageNumber + fReserved + fGrade + fRollingResistance
@@ -1515,10 +1514,10 @@ def msgUnpage51_TrackResistance(info):
 # Data page 55 (0x37) User Configuration
 # ------------------------------------------------------------------------------
 def msgUnpage55_UserConfiguration(info):
-    nChannel            = 0
+    _nChannel           = 0
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
 
-    nDataPageNumber     = 1
+    _nDataPageNumber    = 1
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
 
     nUserWeight         = 2
@@ -1541,7 +1540,7 @@ def msgUnpage55_UserConfiguration(info):
     UserWeigth                = tuple[nUserWeight] * 0.01                # 0 ... 655.34 kg
 
     BicycleInfo               = tuple[nBicycleInfo]
-    BicyleWheelDiameterOffset = (BicycleInfo & 0x000f)                   # 0 - 10 mm
+    _BicyleWheelDiameterOffset= (BicycleInfo & 0x000f)                   # 0 - 10 mm
     BicycleWeigth             = (BicycleInfo & 0xfff0) / 16 * 0.05       # 0 - 50 kg
 
     BicyleWheelDiameter       = tuple[nBicycleWheelDiameter] * 0.01      # 0 - 2.54m
@@ -1579,10 +1578,10 @@ def msgPage70_RequestDataPage(Channel, SlaveSerialNumber, DescriptorByte1, \
     return info
 
 def msgUnpage70_RequestDataPage(info):
-    nChannel            = 0
+    _nChannel           = 0
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
 
-    nDataPageNumber     = 1
+    _nDataPageNumber    = 1
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
 
     nSlaveSerialNumber  = 2

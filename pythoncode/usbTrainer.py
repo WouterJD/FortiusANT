@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-28"
+__version__ = "2020-05-07"
+# 2020-05-07    pylint error free
 # 2020-04-28    FortiusAntGui; only two constants imported (I do not want a link here with GUI)
 # 2020-04-16    Write() replaced by Console() where needed
 # 2020-04-15    Message changed "Connected to Tacx Trainer"
@@ -83,7 +84,7 @@ modeCalibrate   = 3
 # path to firmware files; since 29-3-2020 in same folder as .py or .exe
 #-------------------------------------------------------------------------------
 if getattr(sys, 'frozen', False):
-    dirname = sys._MEIPASS
+    dirname = sys._MEIPASS                     # pylint: disable=maybe-no-member
 else:
     dirname = os.path.dirname(__file__)
 
@@ -499,7 +500,7 @@ def GetTrainer():
                 fxload.loadHexFirmware(dev, fortius_fw)
                 if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
                 time.sleep(5)
-                dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=tt_FortiusB)
+                dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=tt_FortiusSB)
                 if dev != None:
                     msg = "GetTrainer - Fortius head unit initialised"
                     trainer_type = tt_FortiusSB
@@ -706,12 +707,12 @@ def ReceiveFromTrainer(devTrainer):
         #---------------------------------------------------------------------------
         # Define buffer format
         #---------------------------------------------------------------------------
-        nDeviceSerial       =  0                # 0...1
+        #nDeviceSerial      =  0                # 0...1
         fDeviceSerial       = sc.unsigned_short
 
         fFiller2_7          = sc.pad * ( 7 - 1) # 2...7
 
-        nYearProduction     =  1                # 8
+        #nYearProduction    =  1                # 8
         fYearProduction     = sc.unsigned_char
 
         fFiller9_11         = sc.pad * (11 - 8) # 9...11
@@ -722,28 +723,28 @@ def ReceiveFromTrainer(devTrainer):
         nButtons            =  3                # 13
         fButtons            = sc.unsigned_char
 
-        nHeartDetect        =  4                # 14
+        #nHeartDetect       =  4                # 14
         fHeartDetect        = sc.unsigned_char
 
-        nErrorCount         =  5                # 15
+        #nErrorCount        =  5                # 15
         fErrorCount         = sc.unsigned_char
 
-        nAxis0              =  6                # 16-17
+        #nAxis0             =  6                # 16-17
         fAxis0              = sc.unsigned_short
 
         nAxis1              =  7                # 18-19
         fAxis1              = sc.unsigned_short
 
-        nAxis2              =  8                # 20-21
+        #nAxis2             =  8                # 20-21
         fAxis2              = sc.unsigned_short
 
-        nAxis3              =  9                # 22-23
+        #nAxis3             =  9                # 22-23
         fAxis3              = sc.unsigned_short
 
-        nHeader             = 10                # 24-27
+        #nHeader            = 10                # 24-27
         fHeader             = sc.unsigned_int
 
-        nDistance           = 11                # 28-31
+        #nDistance          = 11                # 28-31
         fDistance           = sc.unsigned_int
 
         nSpeed              = 12                # 32, 33            Wheel speed (Speed = WheelSpeed / SpeedScale in km/h)
@@ -768,13 +769,13 @@ def ReceiveFromTrainer(devTrainer):
 
         fFiller45           = sc.pad            # 45
 
-        nModeEcho           = 17                # 46
+        #nModeEcho          = 17                # 46
         fModeEcho           = sc.unsigned_char
 
-        nChecksumLSB        = 18                # 47
+        #nChecksumLSB       = 18                # 47
         fChecksumLSB        = sc.unsigned_char
 
-        nChecksumMSB        = 19                # 48
+        #nChecksumMSB       = 19                # 48
         fChecksumMSB        = sc.unsigned_char
 
         fFiller49_63        = sc.pad * (63 - 48)# 49...63
@@ -790,7 +791,7 @@ def ReceiveFromTrainer(devTrainer):
         # Buffer must be 64 characters (struct.calcsize(format)),
         # Note that tt_FortiusSB returns 48 bytes only; append with dummy
         #---------------------------------------------------------------------------
-        for v in range( 64 - len(data) ):
+        for _v in range( 64 - len(data) ):
             data.append(0)
 
         #---------------------------------------------------------------------------
@@ -824,7 +825,7 @@ def ReceiveFromTrainer(devTrainer):
         nHeartRate          = 3                 # 4
         fHeartRate          = sc.unsigned_char
 
-        nStopWatch          = 4
+        #nStopWatch         = 4
         fStopWatch          = sc.unsigned_int   # 5,6,7,8
 
         nCurrentResistance  = 5                 # 9
@@ -833,31 +834,31 @@ def ReceiveFromTrainer(devTrainer):
         nPedalSensor        = 6                 # 10
         fPedalSensor        = sc.unsigned_char
 
-        nAxis0              = 7                 # 11
+        #nAxis0             = 7                 # 11
         fAxis0              = sc.unsigned_char
 
         nAxis1              = 8                 # 12
         fAxis1              = sc.unsigned_char
 
-        nAxis2              = 9                 # 13
+        #nAxis2             = 9                 # 13
         fAxis2              = sc.unsigned_char
 
-        nAxis3              = 10                # 14
+        #nAxis3             = 10                # 14
         fAxis3              = sc.unsigned_char
 
-        nCounter            = 11                # 15
+        #nCounter           = 11                # 15
         fCounter            = sc.unsigned_char
 
-        nWheelCount         = 12                # 16
+        #nWheelCount        = 12                # 16
         fWheelCount         = sc.unsigned_char
 
-        nYearProduction     = 13                # 17
+        #nYearProduction    = 13                # 17
         fYearProduction     = sc.unsigned_char
 
-        nDeviceSerial       = 14                # 18, 19
+        #nDeviceSerial      = 14                # 18, 19
         fDeviceSerial       = sc.unsigned_short
 
-        nFirmwareVersion    = 15                # 20
+        #nFirmwareVersion   = 15                # 20
         fFirmwareVersion    = sc.unsigned_char
 
         #---------------------------------------------------------------------------
