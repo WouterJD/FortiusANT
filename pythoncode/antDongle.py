@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-05-07"
+__version__ = "2020-05-08"
+# 2020-05-08    Linux: detach_kernel_driver added 
 # 2020-05-07    clsAntDongle encapsulates all functions
 # 2020-05-07    pylint error free
 # 2020-05-01    Added: SlaveVHU_ChannelConfig()
@@ -302,6 +303,16 @@ class clsAntDongle():
                     # Initialize the dongle
                     #-------------------------------------------------------
                     try:                                   # check if in use
+                        #-------------------------------------------------------
+                        # As suggested by @ElDonad Elie Donadio
+                        #-------------------------------------------------------
+                        if os.name == 'posix':
+                            if debug.on(debug.Function): logfile.Write("GetDongle - Detach kernel drivers")
+                            for config in self.devAntDongle:
+                                for i in range(config.bNumInterfaces):
+                                    if self.devAntDongle.is_kernel_driver_active(i):
+                                        self.devAntDongle.detach_kernel_driver(i)
+                        #-------------------------------------------------------
                         if debug.on(debug.Function): logfile.Write ("GetDongle - Set configuration")
                         self.devAntDongle.set_configuration()
 
