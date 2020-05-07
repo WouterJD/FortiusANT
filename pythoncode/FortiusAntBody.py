@@ -3,6 +3,7 @@
 #-------------------------------------------------------------------------------
 WindowTitle = "Fortius Antifier v2.6"
 __version__ = "2020-05-07"
+# 2020-05-07    Target*** variables global to survive Restart
 # 2020-05-07    clsAntDongle encapsulates all functions
 #               and implements dongle recovery
 # 2020-04-28    Created from FortiusAnt.py
@@ -458,15 +459,17 @@ def Runoff(self):
 # ------------------------------------------------------------------------------
 def Tacx2Dongle(self):
     global AntDongle, devTrainer, GetTrainerMsg
+    Restart = False
     while True:
-        Tacx2DongleSub(self)
+        Tacx2DongleSub(self, Restart)
         if AntDongle.DongleReconnected:
             self.SetMessages(Dongle=AntDongle.Message)
             AntDongle.ApplicationRestart()
+            Restart = True
         else:
             break
 
-def Tacx2DongleSub(self):
+def Tacx2DongleSub(self, Restart):
     global AntDongle, devTrainer, GetTrainerMsg
 
     AntHRMpaired = False
@@ -647,12 +650,14 @@ def Tacx2DongleSub(self):
     # SpeedKmh              Set         Use         Use         Set         Show
     # TargetResistance      Set         .           .           Calc        Show
     #---------------------------------------------------------------------------
-    TargetMode              = mode_Power    # Start with power mode
-    TargetGrade             = 0             # no grade
-    TargetPower             = 100           # and 100Watts
+    global TargetMode, TargetGrade, TargetPower, TargetGradeFromDongle, TargetPowerFromDongle
+    if not Restart:
+        TargetMode              = mode_Power    # Start with power mode
+        TargetGrade             = 0             # no grade
+        TargetPower             = 100           # and 100Watts
 
-    TargetGradeFromDongle   = 0             # Target from Zwift is parked "here"
-    TargetPowerFromDongle   = 100           # and used when not in manual mode.
+        TargetGradeFromDongle   = 0             # Target from Zwift is parked "here"
+        TargetPowerFromDongle   = 100           # and used when not in manual mode.
 
     PowercurveFactor        = 1             # 1.1 causes higher load
                                             # 0.9 causes lower load
