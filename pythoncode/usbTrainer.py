@@ -113,21 +113,23 @@ class clsTacxTrainer():
 
     UserAndBikeWeight       = 75 + 10       # defined according the standard (data page 51)
 
-    Cadence                 = None          # below variables provided by trainer
-    CurrentPower            = None
-    CurrentResistance       = None
-    HeartRate               = None
-    PedalEcho               = None
-    SpeedKmh                = None
-    TargetResistanceFT      = None          # Returned from trainer
-    WheelSpeed              = None
+    Axis                    = 0
+    Buttons                 = 0
+    Cadence                 = 0             # below variables provided by trainer
+    CurrentPower            = 0
+    CurrentResistance       = 0
+    HeartRate               = 0
+    PedalEcho               = 0
+    SpeedKmh                = 0
+    TargetResistanceFT      = 0             # Returned from trainer
+    WheelSpeed              = 0
 
     clv                     = None          # Command line variables
     PowercurveFactor        = 1             #
 
     # USB devices only:
-    Headunit                = None
-    Calibrate               = None
+    Headunit                = 0
+    Calibrate               = 0
     SpeedScale              = None          # To be set in sub-class
     #---------------------------------------------------------------------------
     # G e t T r a i n e r
@@ -261,13 +263,13 @@ class clsTacxTrainer():
     # Functions from external to provide data
     #---------------------------------------------------------------------------
     def SetPower(self, Power):
-        self.TargetMode         = mode_power    # pylint: disable=undefined-variable
+        self.TargetMode         = mode_Power
         self.TargetGrade        = None          # .Refresh() must be called
         self.TargetPower        = Power
         self.TargetResistance   = None          # .Refresh() must be called
 
     def SetGrade(self, Grade):
-        self.TargetMode         = mode_grade    # pylint: disable=undefined-variable
+        self.TargetMode         = mode_Grade
         self.TargetGrade        = Grade
         self.TargetPower        = None          # .Refresh() must be called
         self.TargetResistance   = None          # .Refresh() must be called
@@ -295,12 +297,12 @@ class clsTacxTrainer():
     def Refresh(self, TacxMode=modeResistance):
         self.ReceiveFromTrainer()
 
-        assert (self.TargetMode in (mode_power, mode_grade))# pylint: disable=undefined-variable
+        assert (self.TargetMode in (mode_Power, mode_Grade))
 
-        if self.TargetMode == mode_power:                   # pylint: disable=undefined-variable
+        if self.TargetMode == mode_Power:
             self.TargetResistance = self.Power2Resistance(self.TargetPower)
 
-        elif self.TargetMode == mode_grade:                 # pylint: disable=undefined-variable
+        elif self.TargetMode == mode_Grade:
             self.Grade2Power()
             self.TargetResistance = self.Power2Resistance(self.TargetPower)
 

@@ -193,12 +193,12 @@ def Initialize(pclv):
 # ------------------------------------------------------------------------------
 def IdleFunction(self):
     global devAntDongle, TacxTrainer
-    Buttons = 0
+    rtn = 0
     if TacxTrainer != False:
-        TargetPower = 100
         TacxTrainer.Refresh()
-        WaitForButton0(self, Buttons)
-    return TacxTrainer.Buttons
+        WaitForButton0(self, TacxTrainer.Buttons)
+        rtn = TacxTrainer.Buttons
+    return rtn
 
 # ------------------------------------------------------------------------------
 # W a i t F o r B u t t o n 0
