@@ -95,11 +95,11 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 #-------------------------------------------------------------------------------
 # Class inheritance:
 # ------------------
-# clsTacxTrainer ->                     clsSimulatedTrainer
-#                -> clsTacxUsbTrainer   clsHeadUnitLegacyUsb
-#                                                               ...|-> clsUsbTrainer.headunit
-#                -> clsHeadUnitNew -> clsHeadUnitNewUsb          .../
-#                                 -> clsHeadUnitNewAntVortex
+# clsTacxTrainer ------------------------> clsSimulatedTrainer
+#                   clsTacxUsb-----------> clsTacxLegacyUsbTrainer
+#                           +------------>
+#                -> clsTacxNewInterface -> clsTacxNewUsbTrainer
+#                                       -> clsTacxAntVortexTrainer
 #-------------------------------------------------------------------------------
 # c l s T a c x T r a i n e r           The parent for all trainers
 #-------------------------------------------------------------------------------
@@ -326,11 +326,13 @@ class clsTacxTrainer():
     #---------------------------------------------------------------------------
     # Functions to be defined in sub-class
     #---------------------------------------------------------------------------
-    def ReceiveFromTrainer(self):
+    def SendToTrainer(self, TacxMode):                  # no return
         raise NotImplementedError
-    def Power2Resistance(self, P):
+    def ReceiveFromTrainer(self):                       # No return
         raise NotImplementedError
-    def Resistance2Power(self, R):             
+    def Power2Resistance(self, Power):                  # returns Resistance
+        raise NotImplementedError
+    def Resistance2Power(self, Resistance):             # returns Power
         raise NotImplementedError
 
     #---------------------------------------------------------------------------
@@ -421,15 +423,31 @@ class clsTacxTrainer():
     def Speed2Wheel(self, SpeedKmh):
         return round(SpeedKmh * self.SpeedScale, 0)
     
+#-------------------------------------------------------------------------------
+# c l s T a c x U s b T r a i n e r
+#-------------------------------------------------------------------------------
+# The idea was to separate the USB-functions from the clsTacxTrainer class
+# because of principal separation and let sub-classes inherit as well.
+#   class clsTacxLegacyUsbTrainer(clsTacxTrainer, clsTacxUsb):
+#   class clsTacxNewUsbTrainer(clsTacxNewInterface, clsTacxUsb):
+# This multiple-inheritance causes ambiguity for python
+#
+# Defining this class as a base-class, causes lint-errors.
+#
+# Therefore at this moment, the following functions are added to clsTacxTrainer
+# and are only expected to be used by clsTacxLegacyUsbTrainer and 
+# clsTacxNewUsbTrainer; hence prefixed USB_.
+#-------------------------------------------------------------------------------
+#class clsTacxUsb(clsTacxTrainer):
     #---------------------------------------------------------------------------
-    # U S B _ R e a d                          Function for USB-sub-classes only
-    #-------------------------------------------------------------------------------
+    # U S B _ R e a d
+    #---------------------------------------------------------------------------
     # input     UsbDevice
     #
     # function  Read data from Tacx USB trainer
     #
     # returns   data
-    #-------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     def USB_Read(self):
         data = ""
         try:
@@ -445,10 +463,9 @@ class clsTacxTrainer():
             logfile.Write ("Trainer recv data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
         
         return data
-    #-------------------------------------------------------------------------------
-    # S e n d T o T r a i n e r                    Function for USB-sub-classes only
-    #                                              Most be redefined for Vortex
-    #-------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
+    # U S B _ S e n d T o T r a i n e r
+    #---------------------------------------------------------------------------
     # input     UsbDevice, TacxMode
     #           if Mode=modeResistance:  TargetPower or TargetGrade/Weight
     #                                    Speed and Cadence are reference for Power2Resistance
@@ -460,11 +477,11 @@ class clsTacxTrainer():
     # function  Set trainer to calculated resistance (TargetPower or TargetGrade)
     #
     # returns   None
-    #-------------------------------------------------------------------------------
-    def SendToTrainerData(self, TacxMode, Calibrate, PedalEcho, Target, Weight):
+    #---------------------------------------------------------------------------
+    def USB_SendToTrainerData(self, TacxMode, Calibrate, PedalEcho, Target, Weight):
         raise NotImplementedError                   # To be defined in sub-class
 
-    def SendToTrainer(self, TacxMode):              # Ready for USB sub-classes
+    def USB_SendToTrainer(self, TacxMode):              # Ready for USB sub-classes
         Calibrate = self.Calibrate
         PedalEcho = self.PedalEcho
         Target    = self.TargetResistance
@@ -474,9 +491,9 @@ class clsTacxTrainer():
             logfile.Write ("SendToTrainer(%s, %s, %s, %s, %s, %s, %s, %s)" % \
             (TacxMode, self.TargetMode, self.TargetPower, self.TargetGrade, self.UserAndBikeWeight, self.PedalEcho, self.SpeedKmh, self.Cadence))
 
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         # Prepare parameters to be sent to trainer
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         error = False
         if  TacxMode == modeStop:
             Calibrate   = 0
@@ -520,11 +537,11 @@ class clsTacxTrainer():
             logfile.Console(error)
         else:
             Target = int(Target)
-            data   = self.SendToTrainerData(TacxMode, Calibrate, PedalEcho, Target, Weight)
+            data   = self.USB_SendToTrainerData(TacxMode, Calibrate, PedalEcho, Target, Weight)
 
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # Send buffer to trainer
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             if data != False:
                 if debug.on(debug.Data2):
                     logfile.Write ("Trainer send data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
@@ -543,7 +560,7 @@ class clsTacxTrainer():
 # ==> headunit = 1902
 # ==> iMagic
 #-------------------------------------------------------------------------------
-class clsTacxLegacyUsbTrainer(clsTacxTrainer):
+class clsTacxLegacyUsbTrainer(clsTacxTrainer):                  # , clsTacxUsb):
     def __init__(self, clv, Headunit, UsbDevice, Message):
         self.clv        = clv
         self.Headunit   = Headunit
@@ -584,21 +601,24 @@ class clsTacxLegacyUsbTrainer(clsTacxTrainer):
 
         return rtn
 
-    #-------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     # S e n d T o T r a i n e r D a t a
-    #-------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     # input     Mode, Target
     #
     # function  Called by SendToTrainer()
     #           Compose buffer to be sent to trainer
     #
     # returns   data
-    #-------------------------------------------------------------------------------
-    def SendToTrainerData(self, TacxMode, _Calibrate, _Pedecho, Target, _Weight):
-        #---------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
+    def SendToTrainer(self, TacxMode):
+        self.USB_SendToTrainer(TacxMode)
+
+    def USB_SendToTrainerData(self, TacxMode, _Calibrate, _PedalEcho, Target, _Weight):
+        #-----------------------------------------------------------------------
         # Data buffer depends on trainer_type
         # Refer to TotalReverse; "Legacy protocol"
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         fDesiredForceValue  = sc.unsigned_char      # 0         0x00-0xff
                                                     #           0x80 = field switched off
                                                     #           < 0x80 reduce brake force
@@ -622,24 +642,24 @@ class clsTacxLegacyUsbTrainer(clsTacxTrainer):
         else:
             data   = False
         return data
-    #-------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     # R e c e i v e F r o m T r a i n e r
-    #-------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     # input     usbDevice
     #
     # function  Read status from trainer
     #
     # returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
-    #-------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     def ReceiveFromTrainer(self):
-        #-----------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         #  Read from trainer
-        #-----------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         data = self.USB_Read()
 
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         # Define buffer format
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         nStatusAndCursors   = 0                 # 0
         fStatusAndCursors   = sc.unsigned_char
 
@@ -688,11 +708,11 @@ class clsTacxLegacyUsbTrainer(clsTacxTrainer):
         #nFirmwareVersion   = 15                # 20
         fFirmwareVersion    = sc.unsigned_char
 
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         # Parse buffer
         # Note that the button-bits have an inversed logic:
         #   1=not pushed, 0=pushed. Hence the xor.
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         format = sc.no_alignment + fStatusAndCursors + fSpeed + fCadence + fHeartRate + fStopWatch + fCurrentResistance + \
                 fPedalSensor + fAxis0 + fAxis1 + fAxis2 + fAxis3 + fCounter + fWheelCount + \
                 fYearProduction + fDeviceSerial + fFirmwareVersion
@@ -719,7 +739,7 @@ class clsTacxLegacyUsbTrainer(clsTacxTrainer):
 #-------------------------------------------------------------------------------
 # Tacx-trainer with New interface ==> the formula's are different
 #-------------------------------------------------------------------------------
-class clsTacxNewInterfaceTrainer(clsTacxTrainer):
+class clsTacxNewInterface(clsTacxTrainer):
     def __init__(self, clv):
         self.clv        = clv
         self.SpeedScale = 301                        # TotalReverse: 289.75
@@ -752,31 +772,34 @@ class clsTacxNewInterfaceTrainer(clsTacxTrainer):
 #-------------------------------------------------------------------------------
 # Tacx-trainer with New interface & USB connection
 #-------------------------------------------------------------------------------
-class clsTacxNewUsbTrainer(clsTacxNewInterfaceTrainer):
+class clsTacxNewUsbTrainer(clsTacxNewInterface):                # , clsTacxUsb):
     SpeedScale = 301                        # TotalReverse: 289.75
     PowerResistanceFactor = 128866          # TotalReverse
 
     def __init__(self, clv, Headunit, UsbDevice, Message):
-        clsTacxNewInterfaceTrainer.__init__(self, clv)
+        clsTacxNewInterface.__init__(self, clv)
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
         self.Message    = Message
 
-    #-------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     # S e n d T o T r a i n e r D a t a
-    #-------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     # input     Mode, Target, Pedecho, Weight, Calibrate
     #
     # function  Called by SendToTrainer()
     #           Compose buffer to be sent to trainer
     #
     # returns   data
-    #-------------------------------------------------------------------------------
-    def SendToTrainerData(self, TacxMode, Calibrate, Pedecho, Target, Weight):
-        #---------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
+    def SendToTrainer(self, TacxMode):
+        self.USB_SendToTrainer(TacxMode)
+
+    def USB_SendToTrainerData(self, TacxMode, Calibrate, PedalEcho, Target, Weight):
+        #-----------------------------------------------------------------------
         # Data buffer depends on trainer_type
         # Refer to TotalReverse; "Newer protocol"
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         fControlCommand     = sc.unsigned_int       # 0...3
         fTarget             = sc.short              # 4, 5      Resistance for Power=50...1000Watt
         fPedalecho          = sc.unsigned_char      # 6
@@ -790,29 +813,29 @@ class clsTacxNewUsbTrainer(clsTacxNewInterfaceTrainer):
         #-----------------------------------------------------------------------
         # Build data buffer to be sent to trainer (legacy or new)
         #-----------------------------------------------------------------------
-        format = sc.no_alignment + fControlCommand + fTarget +    fPedalecho + fFiller7 + fMode + fWeight + fCalibrate
-        data   = struct.pack (format, 0x00010801, int(Target), self.PedalEcho,         TacxMode,   Weight,   Calibrate)
+        format = sc.no_alignment + fControlCommand + fTarget + fPedalecho + fFiller7 + fMode + fWeight + fCalibrate
+        data   = struct.pack (format, 0x00010801, int(Target),  PedalEcho,          TacxMode,   Weight,   Calibrate)
         return data
 
-    #-------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     # R e c e i v e F r o m T r a i n e r
-    #-------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     # input     usbDevice
     #
     # function  Read status from trainer
     #
     # returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
     #
-    #-------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     def ReceiveFromTrainer(self):
-        #-----------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         #  Read from trainer
-        #-----------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         data = self.USB_Read()
 
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         # Define buffer format
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         #nDeviceSerial      =  0                # 0...1
         fDeviceSerial       = sc.unsigned_short
 
@@ -893,16 +916,16 @@ class clsTacxNewUsbTrainer(clsTacxNewInterfaceTrainer):
                 fEvents + fFiller43 + fCadence + fFiller45 + fModeEcho + \
                 fChecksumLSB + fChecksumMSB + fFiller49_63
 
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         # Buffer must be 64 characters (struct.calcsize(format)),
         # Note that tt_FortiusSB returns 48 bytes only; append with dummy
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         for _v in range( 64 - len(data) ):
             data.append(0)
 
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         # Parse buffer
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         tuple = struct.unpack (format, data)
         self.Axis               = tuple[nAxis1]
         self.Buttons            = tuple[nButtons]
@@ -926,10 +949,10 @@ class clsTacxNewUsbTrainer(clsTacxNewInterfaceTrainer):
 #-------------------------------------------------------------------------------
 # Tacx-trainer with New interface & ANT connection
 #-------------------------------------------------------------------------------
-class clsTacxAntVortexTrainer(clsTacxNewInterfaceTrainer):
+class clsTacxAntVortexTrainer(clsTacxNewInterface):
 
     def __init__(self, clv, AntDevice):
-        clsTacxNewInterfaceTrainer.__init__(self, clv)
+        clsTacxNewInterface.__init__(self, clv)
         self.AntDevice  = AntDevice
         self.Message    = "Pair with Tacx i-Vortex"
 
