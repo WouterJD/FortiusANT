@@ -2,6 +2,7 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-05-07"
+# 2020-05-07    devAntDongle not needed, not used
 # 2020-05-07    pylint error free
 # 2020-02-18    First version, split-off from FortiusAnt.py
 #-------------------------------------------------------------------------------
@@ -17,7 +18,7 @@ def Initialize():
     PageChangeToggle    = 0
 
 
-def BroadcastHeartrateMessage (devAntDongle, HeartRate):
+def BroadcastHeartrateMessage (HeartRate):
     global EventCounter, HeartBeatCounter, HeartBeatEventTime, HeartBeatTime, PageChangeToggle
     #---------------------------------------------------------------------------
     # Check if heart beat has occurred as tacx only reports
@@ -87,5 +88,5 @@ def BroadcastHeartrateMessage (devAntDongle, HeartRate):
 #-------------------------------------------------------------------------------
 if __name__ == "__main__":
     Initialize()
-    fedata = BroadcastHeartrateMessage (-1, 123)
+    fedata = BroadcastHeartrateMessage (123)
     print (fedata)
