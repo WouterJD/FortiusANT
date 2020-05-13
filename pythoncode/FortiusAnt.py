@@ -108,7 +108,7 @@ def Tacx2Dongle(self):
         rtn = True
     else:
         rtn = FortiusAntBody.Tacx2Dongle(self)
-    return True
+    return rtn
 
 # ==============================================================================
 # Subclass FortiusAnt GUI with our directly called functions

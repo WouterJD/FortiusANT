@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-30"
+__version__ = "2020-05-11"
+# 2020-05-11    Small corrections
 # 2020-04-30    Pedal stroke analysis added
 #               form class requires clv to be provided when created
 #               Occasional crash in OnClose() resolved
@@ -408,7 +409,7 @@ class frmFortiusAntGui(wx.Frame):
 
         TextCtrlFont2= wx.Font(12, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
         TextCtrlH2   = 25
-        TextCtrlW2   = int(SpeedWH/2)
+        _TextCtrlW2  = int(SpeedWH/2)
 
         # ----------------------------------------------------------------------
 		# self.Speed label & text
@@ -592,7 +593,7 @@ class frmFortiusAntGui(wx.Frame):
         print("callTacx2Dongle not defined by application class")
 #       tr = 255                                    # experimental purpose only
         while self.RunningSwitch == True:
-            t = time.localtime()
+            #t = time.localtime()
             r = (90 + random.randint(1,20)) / 100   # 0.9 ... 1.1
 #           r = .5
 #           self.SetTransparent(tr)                 # frame can be made transparent
@@ -750,8 +751,8 @@ class frmFortiusAntGui(wx.Frame):
 
             elif iTargetMode == mode_Grade:
                 s = "%2.0f%%" % fTargetGrade
-                if iTargetPower > 0:                                            # 2020-01-22
-                    s += "%iW" % iTargetPower                                   # Target power added for reference
+                s += "%iW" % iTargetPower        # Target power added for reference
+                                                 # Can be negative!
                 self.txtTarget.SetValue(s + suffix)
 
             else:

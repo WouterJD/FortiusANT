@@ -42,7 +42,7 @@ def Open(prefix='FortiusANT', suffix=''):
 
 def IsOpen():
     try:
-        a = fLogfile
+        _test = fLogfile
         return True
     except:
         return False
@@ -86,7 +86,7 @@ def Write (logText, console=False):
 
     if debug.on():
         try:
-            test = fLogfile
+            _test = fLogfile
         except:
             Open()                  # if module not initiated, open implicitly
 

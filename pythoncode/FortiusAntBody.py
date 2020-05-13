@@ -2,7 +2,8 @@
 # Version info
 #-------------------------------------------------------------------------------
 WindowTitle = "Fortius Antifier v3.0 beta"
-__version__ = "2020-05-11"
+__version__ = "2020-05-12"
+# 2020-05-12    Minor code improvements
 # 2020-05-08    Usage of clsTacxTrainer
 # 2020-05-07    Target*** variables global to survive Restart
 # 2020-05-07    clsAntDongle encapsulates all functions
@@ -255,8 +256,7 @@ def LocateHW(self):
     # Done
     #---------------------------------------------------------------------------
     if debug.on(debug.Application): logfile.Write ("Scan for hardware - end")
-    if (clv.manual or clv.manualGrade or AntDongle.OK) and \
-       (clv.SimulateTrainer or clv.Tacx_iVortex or TacxTrainer): 
+    if (clv.manual or clv.manualGrade or AntDongle.OK) and TacxTrainer.OK:
         return True
     else:
         return False
@@ -446,7 +446,7 @@ def Tacx2Dongle(self):
     Restart = False
     while True:
         rtn = Tacx2DongleSub(self, Restart)
-        if AntDongle.DongleReconnected:
+        if not (clv.manual or clv.manualGrade) and AntDongle.DongleReconnected:
             self.SetMessages(Dongle=AntDongle.Message)
             AntDongle.ApplicationRestart()
             Restart = True
@@ -541,11 +541,12 @@ def Tacx2DongleSub(self, Restart):
     StartPedalling  = True
     Counter         = 0
 
-    if TacxTrainer.OK and not clv.SimulateTrainer and TacxTrainer.CalibrateSupported():
+    if TacxTrainer.CalibrateSupported():
         self.SetMessages(Tacx="* * * * S T A R T   P E D A L L I N G * * * *")
         if debug.on(debug.Function):
             logfile.Write('Tacx2Dongle; start pedalling for calibration')
-    try:
+    # try:
+    if True:
         while         self.RunningSwitch \
               and     clv.calibrate \
               and not TacxTrainer.Buttons == usbTrainer.CancelButton \
@@ -611,10 +612,10 @@ def Tacx2DongleSub(self, Restart):
             #-------------------------------------------------------------------
             SleepTime = 0.25 - (time.time() - StartTime)
             if SleepTime > 0: time.sleep(SleepTime)
-    except KeyboardInterrupt:
-        logfile.Console ("Stopped")
-    except Exception as e:
-        logfile.Console ("Calibration stopped with exception: %s" % e)
+    # except KeyboardInterrupt:
+    #     logfile.Console ("Stopped")
+    # except Exception as e:
+    #     logfile.Console ("Calibration stopped with exception: %s" % e)
     #---------------------------------------------------------------------------
     # Stop trainer
     #---------------------------------------------------------------------------
@@ -666,7 +667,8 @@ def Tacx2DongleSub(self, Restart):
     #---------------------------------------------------------------------------
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start main loop')
     try:
-        while self.RunningSwitch == True and not AntDongle.DongleReconnected:
+        while self.RunningSwitch == True and \
+            ((clv.manual or clv.manualGrade) or not AntDongle.DongleReconnected):
             StartTime = time.time()
             #-------------------------------------------------------------------
             # ANT process is done once every 250ms
@@ -739,8 +741,8 @@ def Tacx2DongleSub(self, Restart):
                 else:                                       pass
             elif clv.manualGrade:
                 if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
-                elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.TargetGrade -= 1
-                elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.TargetGrade += 1
+                elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddGrade(-1)
+                elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddGrade( 1)
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
                 else:                                       pass
             else:
@@ -763,7 +765,7 @@ def Tacx2DongleSub(self, Restart):
                 #      now all the ANT traffic is here.
                 #---------------------------------------------------------------
                 if clv.Tacx_iVortex and VTX_VortexID:
-                    info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, VTX_VortexID, self.TargetPower)
+                    info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, VTX_VortexID, TacxTrainer.TargetPower)
                     messages.append ( ant.ComposeMessage (ant.msgID_BroadcastData, info) )
 
                 #---------------------------------------------------------------

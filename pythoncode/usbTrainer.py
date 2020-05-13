@@ -1,7 +1,13 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-11"
+__version__ = "2020-05-12"
+# 2020-05-12    Minor code changes
+#               Addeds: AddGrade()
+#               Implemented VirtualSpeedKmh to realize the virtual gearbox
+#               Flywheel changed as suggested by mattipee, totalreverse.
+#                   Weight = self.UserAndBikeWeight
+#                   totalreverse wiki updated 2020-01-04
 # 2020-05-11    usbTrainer refactored for the following reasons:
 #               - attributes are now stored in one place and not passed to
 #                   functions and returned to callers; in the end it was
@@ -115,23 +121,23 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 # class clsTacxTrainer()
 #     def GetTrainer(clv, AntDevice=None)
 #
-#     def SetPowercurveFactor(PowercurveFactor)               # Store PowercurveFactor
-#     def ResetPowercurveFactor()
+#     def ResetPowercurveFactor()                             # Virtual Gearbox
 #     def SetPowercurveFactorUp()
 #     def SetPowercurveFactorDown()
 #   
 #     def SetPower(Power)                                     # Store Power
-#     def AddPower(Power)
+#     def AddPower(deltaPower)
 #     def SetGrade(Grade)                                     # Store Grade
+#     def AddGrade(deltaGrade)
 #     def SetUserConfiguration(UserWeight, ...)               # Store User
 #
-#     def Refresh(TacxMode)                                   # Receive, calculate, Send
+#     def Refresh(TacxMode)                                   # Receive, Calculate, Send
 #     def SendToTrainer(TacxMode)                             # To be defined by child class
-#     def ReceiveFromTrainer()                                # To be defined by child class
+#     def _ReceiveFromTrainer()                               # To be defined by child class
 #
 #     def CalibrateSupported()                                # Return whether calibration supported
 #
-#     def Grade2Power()                                       # Calculate required Power from Grade
+#     def _Grade2Power()                                      # Calculate required Power from Grade
 #                                                             # This is where the magic is done!
 #
 # class clsSimulatedTrainer(clsTacxTrainer)
@@ -152,13 +158,13 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 #     def TargetPower2Resistance()                            # Legacy conversion TargetPower -> TargetResistance
 #     def CurrentResistance2Power()                           # Legacy conversion CurrentResistance -> CurrentPower
 #     def SendToTrainerUSBData(TacxMode, ...)                 # Compose legacy buffer to be sent
-#     def ReceiveFromTrainer ()                               # Read and parse legacy data from trainer
+#     def _ReceiveFromTrainer ()                              # Read and parse legacy data from trainer
 #
 # class clsTacxNewUsbTrainer(clsTacxUsbTrainer)
 #     def TargetPower2Resistance()                            # New conversion TargetPower -> TargetResistance
 #     def CurrentResistance2Power()                           # New conversion CurrentResistance -> CurrentPower
 #     def SendToTrainerUSBData(TacxMode, ...)                 # Compose new buffer to be sent
-#     def ReceiveFromTrainer ()                               # Read and parse new data from trainer
+#     def _ReceiveFromTrainer ()                              # Read and parse new data from trainer
 #
 #-------------------------------------------------------------------------------
 # c l s T a c x T r a i n e r           The parent for all trainers
@@ -171,9 +177,9 @@ class clsTacxTrainer():
     # Target provided by CTP (Trainer Road, Zwift, Rouvy, ...)
     # See Refresh() for dependencies
     TargetMode              = mode_Power    # Start with power mode
-    TargetGrade             = None          # no grade
+    TargetGrade             = 0             # no grade
     TargetPower             = 100           # and 100Watts
-    TargetResistance        = None          # calculated and input to trainer
+    TargetResistance        = 0             # calculated and input to trainer
 
     # Information provided by CTP
     BicycleWeight           = 10
@@ -182,7 +188,7 @@ class clsTacxTrainer():
     UserWeight              = 75
     UserAndBikeWeight       = 75 + 10       # defined according the standard (data page 51)
 
-    # Information provided by ReceiveFromTrainer()
+    # Information provided by _ReceiveFromTrainer()
     Axis                    = 0             # int
     Buttons                 = 0             # int
     Cadence                 = 0             # int
@@ -341,10 +347,11 @@ class clsTacxTrainer():
 
     #---------------------------------------------------------------------------
     # Functions from external to provide data
+    #
+    # PowercurveFactor:
+    # 10% steps insprired by 10-11-12...36-40-44 cassettes.
+    # 0.3 ... 3 is arbitrary, where lowerbound 0 is definitely no good idea.
     #---------------------------------------------------------------------------
-    def SetPowercurveFactor(self, PowercurveFactor):
-        self.PowercurveFactor   = PowercurveFactor
-
     def ResetPowercurveFactor(self):
         self.PowercurveFactor   = 1
 
@@ -362,14 +369,17 @@ class clsTacxTrainer():
         self.TargetPower        = Power
         self.TargetResistance   = 0             # .Refresh() must be called
 
-    def AddPower(self, Power):
-        self.SetPower(self.TargetPower + Power)
+    def AddPower(self, deltaPower):
+        self.SetPower(self.TargetPower + deltaPower)
 
     def SetGrade(self, Grade):
         self.TargetMode         = mode_Grade
         self.TargetGrade        = Grade
         self.TargetPower        = 0             # .Refresh() must be called
         self.TargetResistance   = 0             # .Refresh() must be called
+
+    def AddGrade(self, deltaGrade):
+        self.SetGrade(self.TargetGrade + deltaGrade)
 
     def SetUserConfiguration(self, UserWeight, BicycleWeight, BicycleWheelDiameter, GearRatio):
         self.BicycleWeight          = BicycleWeight
@@ -383,7 +393,7 @@ class clsTacxTrainer():
     #---------------------------------------------------------------------------
     def SendToTrainer(self, TacxMode):          # no return
         pass
-    def ReceiveFromTrainer(self):               # No return
+    def _ReceiveFromTrainer(self):              # No return
         pass
     def TargetPower2Resistance(self):
         self.TargetResistance = 0               # child class must redefine
@@ -399,7 +409,7 @@ class clsTacxTrainer():
     #
     #               It appears more logical to do calculations when inputs change
     #               but it's done here because some calculations depend on the
-    #               wheelspeed, so must be redone after each ReceiveFromTrainer()
+    #               wheelspeed, so must be redone after each _ReceiveFromTrainer()
     #
     # Output        Class variables match with Target***
     #---------------------------------------------------------------------------
@@ -408,46 +418,38 @@ class clsTacxTrainer():
         #-----------------------------------------------------------------------
         # FIrst get data from the trainer
         #-----------------------------------------------------------------------
-        self.ReceiveFromTrainer()
+        self._ReceiveFromTrainer()
 
         #-----------------------------------------------------------------------
         # Make all variables consistent
         #-----------------------------------------------------------------------
+
+        #-----------------------------------------------------------------------
+        # Calculate Virtual speed applying the digital gearbox
+        # if DOWN has been pressed, we pretend to be riding slower than the
+        #       trainer wheel rotates
+        # if UP has been pressed, we pretend to be faster than the trainer
+        #
+        # Note that Grade2Power() depends on the VirtualSpeed.
+        #-----------------------------------------------------------------------
+        self.VirtualSpeedKmh = self.SpeedKmh * self.PowercurveFactor
+        print('%4.1f %4.1f' % (self.SpeedKmh,  self.PowercurveFactor) )
+
 
         # No negative value defined for ANT message Page25 (#)
         if self.CurrentPower < 0: self.CurrentPower = 0 
 
         assert (self.TargetMode in (mode_Power, mode_Grade))
         if self.TargetMode == mode_Power:
-            #-------------------------------------------------------------------
-            # To be implemented by USB-trainers; pass for others
-            #-------------------------------------------------------------------
-            self.TargetPower2Resistance()
-            self.VirtualSpeedKmh = self.SpeedKmh
+            pass
 
         elif self.TargetMode == mode_Grade:
-            self.Grade2Power()
+            self._Grade2Power()
 
-            #-------------------------------------------------------------------
-            # PowercurveFactor increments the target power as selected
-            # manually. Note that the CurrentPower is NOT affected!
-            # So at the same Grade()/Cadence with factor > 1 the TargetPower and
-            #       CurrentPower go up ==> you ride in a higher gear (heavier)
-            # And at the same Grade()/Cadence with factor < 1 the TargetPower and
-            #       CurrentPower go down ==> you ride in a lower gear (lighter)
-            # Hence: digital or virtual gearbox
-            #-------------------------------------------------------------------
-            self.TargetPower *= self.PowercurveFactor
-
-            #-------------------------------------------------------------------
-            # Virtual speed incorporates the virtual gearbox
-            #-------------------------------------------------------------------
-            self.VirtualSpeedKmh = self.__VfietsNL()
-
-            #-------------------------------------------------------------------
-            # To be implemented by USB-trainers; pass for others
-            #-------------------------------------------------------------------
-            self.TargetPower2Resistance()
+        #-----------------------------------------------------------------------
+        # For all modes: To be implemented by USB-trainers; pass for others
+        #-----------------------------------------------------------------------
+        self.TargetPower2Resistance()
 
         #-----------------------------------------------------------------------
         # Antifier's calibration; valid for USB devices only
@@ -474,6 +476,8 @@ class clsTacxTrainer():
         self.TargetResistance    = int(self.TargetResistance)
         self.CurrentResistance   = int(self.CurrentResistance)
         self.CurrentPower        = int(self.CurrentPower)
+        self.SpeedKmh            = round(self.SpeedKmh,1)
+        self.VirtualSpeedKmh     = round(self.VirtualSpeedKmh,1)
 
         # ----------------------------------------------------------------------
         # Show the virtual cassette, calculated from a 10 teeth sprocket
@@ -509,8 +513,8 @@ class clsTacxTrainer():
             return False
 
     #---------------------------------------------------------------------------
-    # Convert Grade (slope) to power
-    #
+    # Convert G r a d e T o P o w e r           |  Grade = slope
+    #---------------------------------------------------------------------------
     # TotalReverse:
     #   documents:      LOAD ~= (slope (in %) - 0.4) * 650
     #   ttyT1941.py:    SlopeScale =  2 * 5 * 130    = 1300
@@ -543,28 +547,34 @@ class clsTacxTrainer():
     # 
     # Output        TargetPower
     #---------------------------------------------------------------------------
-    def Grade2Power(self):                                         #Grade2Power#
-        if self.TargetGrade < -20 or self.TargetGrade > 30:
-            logfile.Console("Grade2Power; TargetGrade (%s) out of bounds!" % (self.TargetGrade))
-
+    def _Grade2Power(self):                                       #Grade2Power#
         if self.UserAndBikeWeight < 70:
             self.UserAndBikeWeight = 75 + 10
 
-        self.TargetPower  = self.__PfietsNL()
+        self.TargetPower = self.__Grade2Power_FietsNL(self.TargetGrade, \
+                                self.VirtualSpeedKmh, self.UserAndBikeWeight)
 
         if debug.on(debug.Application):
             logfile.Write ("Grade2Power; TargetGrade=%4.1f%%, Speed=%4.1f, Weight=%3.0f, TargetPower=%3.0fW" % \
                 (self.TargetGrade, self.SpeedKmh, self.UserAndBikeWeight, self.TargetPower) )
 
-    def __PfietsNL(self):
+    #---------------------------------------------------------------------------
+    # www.gribble.org
+    # Alternative: https://www.gribble.org/cycling/power_v_speed.html
+    #---------------------------------------------------------------------------
+
+    #---------------------------------------------------------------------------
+    # www.fiets.nl
+    #---------------------------------------------------------------------------
+    def __Grade2Power_FietsNL(self, TargetGrade, SpeedKmh, UserAndBikeWeight):
         #-----------------------------------------------------------------------
         # Thanks to https://www.fiets.nl/2016/05/02/de-natuurkunde-van-het-fietsen/
         # Required power = roll + air + slope + mechanical
         #-----------------------------------------------------------------------
         c     = 0.004                           # roll-resistance constant
-        m     = self.UserAndBikeWeight          # kg
+        m     = UserAndBikeWeight               # kg
         g     = 9.81                            # m/s2
-        v     = self.SpeedKmh / 3.6             # m/s       km/hr * 1000 / 3600
+        v     = SpeedKmh / 3.6                  # m/s       km/hr * 1000 / 3600
         Proll = c * m * g * v                   # Watt
 
         p     = 1.205                           # air-density
@@ -572,34 +582,12 @@ class clsTacxTrainer():
         w     =  0                              # wind-speed
         Pair  = 0.5 * p * cdA * (v+w)*(v+w)* v  # Watt
 
-        i     = self.TargetGrade
+        i     = TargetGrade                     # Percentage 0...100
         Pslope= i/100 * m * g * v               # Watt
 
         Pbike = 37
 
         return int(Proll + Pair + Pslope + Pbike)
-
-    def __VfietsNL(self):
-        #-----------------------------------------------------------------------
-        # The above, inverse:
-        # P = Proll         + Pair + Pslope            + Pbike
-        # P = c * m * g * v + 0    + i/100 * m * g * v + 37
-        # P = v * (c * m * g + i/100 * m * g) + 37
-        # v = (P - 37) / (c * m * g + i/100 * m * g)            in m/s
-        #-----------------------------------------------------------------------
-        c     = 0.004                           # roll-resistance constant
-        m     = self.UserAndBikeWeight          # kg
-        g     = 9.81                            # m/s2
-
-        i     = self.TargetGrade
-        P     = self.TargetPower
-
-        v     = 3.6 * ( (P - 37) / (c * m * g + i/100 * m * g) )
-
-        if v <  0: v = self.SpeedKmh
-        if v > 50: v = 49.8
-
-        return round(v, 1)
 
 #-------------------------------------------------------------------------------
 # c l s S i m u l a t e d T r a i n e r
@@ -634,14 +622,14 @@ class clsSimulatedTrainer(clsTacxTrainer):
     # Output:       self.* variables, see next 10 lines
     # --------------------------------------------------------------------------
     def Refresh (self, _TacxMode=None):
-        if debug.on(debug.Function):logfile.Write ("clsSimulatedTrainer.ReceiveFromTrainer()")
+        if debug.on(debug.Function):logfile.Write ("clsSimulatedTrainer.Refresh()")
         self.Axis               = 0
         self.Buttons            = 0
         self.PedalEcho          = 0
         self.TargetResistance   = 2345
 
         if self.TargetMode == mode_Grade:
-            self.Grade2Power()
+            self._Grade2Power()
 
         if False or self.TargetPower < 10:   # Return fixed value
             self.SpeedKmh    = 34.5
@@ -739,7 +727,7 @@ class clsTacxUsbTrainer(clsTacxTrainer):
 
         while self.Buttons:                     # Loop untill no button pressed
             time.sleep(0.1)
-            self.ReceiveFromTrainer()
+            self._ReceiveFromTrainer()
 
         self.Buttons = Buttons                  # Restore buttons
     #---------------------------------------------------------------------------
@@ -793,7 +781,7 @@ class clsTacxUsbTrainer(clsTacxTrainer):
         Weight    = 0
 
         if debug.on(debug.Function):
-            logfile.Write ("clsTacxTrainer.SendToTrainer(T=%s, M=%s, P=%s, G=%s, R=%s, W=%s, PE=%s, S=%s, C=%s)" % \
+            logfile.Write ("clsTacxUsbTrainer.SendToTrainer(T=%s, M=%s, P=%s, G=%s, R=%s, W=%s, PE=%s, S=%s, C=%s)" % \
             (TacxMode, self.TargetMode, self.TargetPower, self.TargetGrade, \
             self.TargetResistance, self.UserAndBikeWeight, self.PedalEcho, \
             self.SpeedKmh, self.Cadence))
@@ -813,15 +801,13 @@ class clsTacxUsbTrainer(clsTacxTrainer):
                 Calibrate   = 0                                 # may be -8...+8
                 Calibrate   = ( Calibrate + 8 ) * 130           # 0x0410
 
+            assert(self.UserAndBikeWeight >= 0x0a)              # Avoid surprises
             if self.TargetMode == mode_Power:
                 Target = self.TargetResistance
-                Weight = 0x0a                                   # weight=0x0a is a good fly-wheel value
-                                                                # UserAndBikeWeight is not used!
+                Weight = self.UserAndBikeWeight
             elif self.TargetMode == mode_Grade:
                 Target = self.TargetResistance
-                Weight = 0x0a                                   # weight=0x0a is a good fly-wheel value
-                                                                # UserAndBikeWeight is not used!
-                                                                #       an 100kg flywheels gives undesired behaviour :-)
+                Weight = self.UserAndBikeWeight
             else:
                 error = "SendToTrainer; Unsupported TargetMode %s" % self.TargetMode
 
@@ -953,8 +939,8 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
     #
     # returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
     #---------------------------------------------------------------------------
-    def ReceiveFromTrainer(self):
-        if debug.on(debug.Function):logfile.Write ("clsTacxLegacyUsbTrainer.ReceiveFromTrainer()")
+    def _ReceiveFromTrainer(self):
+        if debug.on(debug.Function):logfile.Write ("clsTacxLegacyUsbTrainer._ReceiveFromTrainer()")
         #-----------------------------------------------------------------------
         #  Read from trainer
         #-----------------------------------------------------------------------
@@ -1106,7 +1092,10 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         fPedalecho          = sc.unsigned_char      # 6
         fFiller7            = sc.pad                # 7
         fMode               = sc.unsigned_char      # 8         Idle=0, Ergo/Slope=2, Calibrate/speed=3
-        fWeight             = sc.unsigned_char      # 9         Ergo: 0x0a; Weight = ride + bike in kg
+        fWeight             = sc.unsigned_char      # 9         0x0a for 'almost no fly wheel' or
+                                                            # weight of rider+bike in kg for 
+                                                            # 'realistic' simulation of riders mass
+                                                            # TotalReverse, updated 2020-01-04
         fCalibrate          = sc.unsigned_short     # 10, 11    Depends on mode
 
         if self.TargetMode == mode_Power and Target < Calibrate:
@@ -1128,8 +1117,8 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     # returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
     #
     #---------------------------------------------------------------------------
-    def ReceiveFromTrainer(self):
-        if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.ReceiveFromTrainer()")
+    def _ReceiveFromTrainer(self):
+        if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer._ReceiveFromTrainer()")
         #-----------------------------------------------------------------------
         #  Read from trainer
         #-----------------------------------------------------------------------
