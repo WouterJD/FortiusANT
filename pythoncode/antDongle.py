@@ -1,7 +1,11 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-05-08"
+__version__ = "2020-05-13"
+# 2020-05-13    Added:    msgUnpage50_WindResistance
+#               Modified: msgUnpage51_TrackResistance
+#               #55 Support for Data Page 50 - Wind Resistance
+#               #56 Support for Data Page 51 - Coefficient of Rolling Resistance
 # 2020-05-08    Linux: detach_kernel_driver added 
 # 2020-05-07    clsAntDongle encapsulates all functions
 # 2020-05-07    pylint error free
@@ -225,7 +229,6 @@ class clsAntDongle():
     Cycplus             = False
     DongleReconnected   = True
     
-
     #-----------------------------------------------------------------------
     # _ _ i n i t _ _
     #-----------------------------------------------------------------------
@@ -1569,15 +1572,62 @@ def msgUnpage49_TargetPower(info):
     format = sc.no_alignment + fChannel + fDataPageNumber + fReserved + fTargetPower
     tuple  = struct.unpack (format, info)
 
-    rtn = tuple[nTargetPower] / 4      # returns units of 1Watt
+    TargetPower = tuple[nTargetPower] / 4   # returns units of 1Watt
 
-    return rtn
+    return TargetPower
+
+# ------------------------------------------------------------------------------
+# P a g e 5 0   W i n d R e s i s t a n c e
+# ------------------------------------------------------------------------------
+# D000001231_-_ANT+_Device_Profile_-_Fitness_Equipment_-_Rev_5.0_(6).pdf
+# Data page 50 (0x32) Wind Resistance
+# ------------------------------------------------------------------------------
+def msgUnpage50_WindResistance(info):
+    _nChannel           = 0
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+
+    _nDataPageNumber    = 1
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+
+    fReserved           = sc.pad * 4
+
+    nWindResistanceCoefficient = 2
+    fWindResistanceCoefficient = sc.unsigned_short
+
+    nWindSpeed          = 3
+    fWindSpeed          = sc.unsigned_short
+
+    nDraftingFactor     = 4
+    fDraftingFactor     = sc.unsigned_char
+
+    format = sc.no_alignment + fChannel + fDataPageNumber + fReserved + fWindResistanceCoefficient + fWindSpeed + fDraftingFactor
+    tuple  = struct.unpack (format, info)
+
+    WindResistance = tuple[nWindResistanceCoefficient]
+    if WindResistance == 0xff:
+        WindResistance = 0.51
+    else:
+        WindResistance = WindResistance * 0.01 # kg/m
+
+    WindSpeed = tuple[nWindSpeed]
+    if WindSpeed == 0xff:
+        WindSpeed = 0.0
+    else:
+        WindSpeed = WindSpeed - 127 # km/h
+
+    DraftingFactor = tuple[nDraftingFactor]
+    if DraftingFactor == 0xff:
+        DraftingFactor = 1.0
+    else:
+        DraftingFactor = DraftingFactor * 0.01
+
+    return WindResistance, WindSpeed, DraftingFactor
 
 # ------------------------------------------------------------------------------
 # P a g e 5 1   T r a c k R e s i s t a n c e
 # ------------------------------------------------------------------------------
 # D000001231_-_ANT+_Device_Profile_-_Fitness_Equipment_-_Rev_5.0_(6).pdf
-# Data page 51 (0x33) Target `Resistance
+# Data page 51 (0x33) Target Resistance
 # ------------------------------------------------------------------------------
 def msgUnpage51_TrackResistance(info):
     _nChannel           = 0
@@ -1591,22 +1641,24 @@ def msgUnpage51_TrackResistance(info):
     nGrade              = 2
     fGrade              = sc.unsigned_short
 
-    _nRollingResistance = 3
+    nRollingResistance  = 3
     fRollingResistance  = sc.unsigned_char
 
     format = sc.no_alignment + fChannel + fDataPageNumber + fReserved + fGrade + fRollingResistance
     tuple  = struct.unpack (format, info)
 
     Grade = tuple[nGrade]
-    rtn   = Grade * 0.01 - 200          # -200% - 200%, units 0.01%
+    if Grade == 0xffff: Grade = 0
+    Grade = Grade * 0.01 - 200          # -200% - 200%, units 0.01%
+    Grade = round(Grade,2)
 
-#   rtn  *= 2.5                         # Empirically...
-                                        # This was entered when creating the file
-                                        # but never tested / properly verified
-                                        # 2020-03-31 Incorrect as comparing with Rouvy
-    rtn   = round(rtn,2)
+    RollingResistance = tuple[nRollingResistance]
+    if RollingResistance == 0xff:
+        RollingResistance = 0.004
+    else:
+        RollingResistance = RollingResistance * 0.00005
 
-    return rtn
+    return Grade, RollingResistance
 
 # ------------------------------------------------------------------------------
 # P a g e 5 5   U s e r   C o n f i g u r a t i o n

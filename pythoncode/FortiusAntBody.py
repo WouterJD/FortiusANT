@@ -2,7 +2,8 @@
 # Version info
 #-------------------------------------------------------------------------------
 WindowTitle = "Fortius Antifier v3.0 beta"
-__version__ = "2020-05-12"
+__version__ = "2020-05-13"
+# 2020-05-13    Used: msgUnpage50_WindResistance, msgUnpage51_TrackResistance
 # 2020-05-12    Minor code improvements
 # 2020-05-08    Usage of clsTacxTrainer
 # 2020-05-07    Target*** variables global to survive Restart
@@ -829,6 +830,13 @@ def Tacx2DongleSub(self, Restart):
                                 logfile.Write('PowerMode: TargetPower info received - timestamp set')
 
                         #-------------------------------------------------------
+                        # Data page 50 (0x32) Wind Resistance
+                        #-------------------------------------------------------
+                        elif   DataPageNumber == 50:
+                            TacxTrainer.SetWind(\
+                                        ant.msgUnpage50_WindResistance(info) )
+
+                        #-------------------------------------------------------
                         # Data page 51 (0x33) Track resistance
                         #-------------------------------------------------------
                         elif DataPageNumber == 51:
@@ -849,7 +857,9 @@ def Tacx2DongleSub(self, Restart):
                                     logfile.Write('PowerMode: Grade info ignored')
                                 pass
                             else:
-                                TacxTrainer.SetGrade(ant.msgUnpage51_TrackResistance(info))
+                                Grade, RollingResistance = ant.msgUnpage51_TrackResistance(info)
+                                TacxTrainer.SetGrade(Grade)
+                                TacxTrainer.SetRollingResistance(RollingResistance)
                                 PowerModeActive       = ''
                             
                         #-------------------------------------------------------

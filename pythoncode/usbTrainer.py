@@ -1,13 +1,14 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-13"
+__version__ = "2020-05-13b"
 # 2020-05-13    Minor code changes
-#               Addeds: AddGrade()
+#               Added: AddGrade(), SetRollingResistance(), SetWind()
 #               Implemented VirtualSpeedKmh to realize the virtual gearbox
 #               Flywheel changed as suggested by mattipee, totalreverse.
 #                   Weight = self.UserAndBikeWeight in GradeMode
 #                   totalreverse wiki updated 2020-01-04
+#               Grade2Power according Gribble
 # 2020-05-11    usbTrainer refactored for the following reasons:
 #               - attributes are now stored in one place and not passed to
 #                   functions and returned to callers; in the end it was
@@ -129,6 +130,8 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 #     def AddPower(deltaPower)
 #     def SetGrade(Grade)                                     # Store Grade
 #     def AddGrade(deltaGrade)
+#     def SetRollingResistance(RollingResistance)
+#     def SetWind()
 #     def SetUserConfiguration(UserWeight, ...)               # Store User
 #
 #     def Refresh(TacxMode)                                   # Receive, Calculate, Send
@@ -187,6 +190,11 @@ class clsTacxTrainer():
     GearRatio               = None
     UserWeight              = 75
     UserAndBikeWeight       = 75 + 10       # defined according the standard (data page 51)
+
+    RollingResistance       = 0.004
+    WindResistance          = 0.51          # 1.275 * 0.4 * 1.0
+    WindSpeed               = 0
+    DraftingFactor          = 1.0
 
     # Information provided by _ReceiveFromTrainer()
     Axis                    = 0             # int
@@ -380,6 +388,14 @@ class clsTacxTrainer():
 
     def AddGrade(self, deltaGrade):
         self.SetGrade(self.TargetGrade + deltaGrade)
+    
+    def SetRollingResistance(self, RollingResistance):
+        self.RollingResistance = RollingResistance
+
+    def SetWind(self, WindResistance, WindSpeed, DraftingFactor):
+        self.WindResistance = WindResistance
+        self.WindSpeed      = WindSpeed
+        self.DraftingFactor = DraftingFactor
 
     def SetUserConfiguration(self, UserWeight, BicycleWeight, BicycleWheelDiameter, GearRatio):
         self.BicycleWeight          = BicycleWeight
@@ -551,8 +567,7 @@ class clsTacxTrainer():
         if self.UserAndBikeWeight < 70:
             self.UserAndBikeWeight = 75 + 10
 
-        self.TargetPower = self.__Grade2Power_FietsNL(self.TargetGrade, \
-                                self.VirtualSpeedKmh, self.UserAndBikeWeight)
+        self.__Grade2Power_Gribble()
 
         if debug.on(debug.Application):
             logfile.Write ("Grade2Power; TargetGrade=%4.1f%%, Speed=%4.1f, Weight=%3.0f, TargetPower=%3.0fW" % \
@@ -560,34 +575,54 @@ class clsTacxTrainer():
 
     #---------------------------------------------------------------------------
     # www.gribble.org
-    # Alternative: https://www.gribble.org/cycling/power_v_speed.html
     #---------------------------------------------------------------------------
+    def __Grade2Power_Gribble(self):
+        #-----------------------------------------------------------------------
+        # Matthew updates according www.gribble.org
+        # See: https://www.gribble.org/cycling/power_v_speed.html
+        #-----------------------------------------------------------------------
+        c     = self.RollingResistance              # default=0.004
+        m     = self.UserAndBikeWeight              # default=75+10 kg
+        g     = 9.81                                # m/s2
+        v     = self.VirtualSpeedKmh / 3.6          # m/s   km/hr * 1000 / 3600
+        Proll = c * m * g * v                       # Watt
+
+        p_cdA = self.WindResistance                 # default=0.51
+        w     = self.WindSpeed / 3.6                # default=0
+        d     = self.DraftingFactor                 # default=1
+        Pair  = 0.5 * p_cdA * (v+w) * (v+w) * d * v # Watt
+
+        i     = self.TargetGrade                    # Percentage 0...100
+        Pslope= i/100 * m * g * v                   # Watt
+
+        self.TargetPower = int(Proll + Pair + Pslope)
 
     #---------------------------------------------------------------------------
     # www.fiets.nl
     #---------------------------------------------------------------------------
-    def __Grade2Power_FietsNL(self, TargetGrade, SpeedKmh, UserAndBikeWeight):
+    def __Grade2Power_FietsNL(self):
         #-----------------------------------------------------------------------
         # Thanks to https://www.fiets.nl/2016/05/02/de-natuurkunde-van-het-fietsen/
         # Required power = roll + air + slope + mechanical
         #-----------------------------------------------------------------------
-        c     = 0.004                           # roll-resistance constant
-        m     = UserAndBikeWeight               # kg
+        c     = self.RollingResistance          # roll-resistance constant
+        m     = self.UserAndBikeWeight          # kg
         g     = 9.81                            # m/s2
-        v     = SpeedKmh / 3.6                  # m/s       km/hr * 1000 / 3600
+        v     = self.VirtualSpeedKmh / 3.6      # m/s       km/hr * 1000 / 3600
         Proll = c * m * g * v                   # Watt
 
         p     = 1.205                           # air-density
         cdA   = 0.3                             # resistance factor
+                                                # p_cdA = 0.375
         w     =  0                              # wind-speed
         Pair  = 0.5 * p * cdA * (v+w)*(v+w)* v  # Watt
 
-        i     = TargetGrade                     # Percentage 0...100
+        i     = self.TargetGrade                # Percentage 0...100
         Pslope= i/100 * m * g * v               # Watt
 
         Pbike = 37
 
-        return int(Proll + Pair + Pslope + Pbike)
+        self.TargetPower = int(Proll + Pair + Pslope + Pbike)
 
 #-------------------------------------------------------------------------------
 # c l s S i m u l a t e d T r a i n e r
