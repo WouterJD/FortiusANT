@@ -1,8 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-12"
-# 2020-05-12    Minor code changes
+__version__ = "2020-05-13"
+# 2020-05-13    Minor code changes
 #               Addeds: AddGrade()
 #               Implemented VirtualSpeedKmh to realize the virtual gearbox
 #               Flywheel changed as suggested by mattipee, totalreverse.
@@ -1103,8 +1103,8 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         #-----------------------------------------------------------------------
         # Build data buffer to be sent to trainer (legacy or new)
         #-----------------------------------------------------------------------
-        format = sc.no_alignment + fControlCommand + fTarget + fPedalecho + fFiller7 + fMode + fWeight + fCalibrate
-        data   = struct.pack (format, 0x00010801, int(Target),  PedalEcho,          TacxMode,   Weight,   Calibrate)
+        format = sc.no_alignment + fControlCommand + fTarget + fPedalecho + fFiller7 + fMode +    fWeight + fCalibrate
+        data   = struct.pack (format, 0x00010801, int(Target),  PedalEcho,          TacxMode,  int(Weight),  Calibrate)
         return data
 
     #---------------------------------------------------------------------------
