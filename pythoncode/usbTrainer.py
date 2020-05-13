@@ -6,7 +6,7 @@ __version__ = "2020-05-13"
 #               Addeds: AddGrade()
 #               Implemented VirtualSpeedKmh to realize the virtual gearbox
 #               Flywheel changed as suggested by mattipee, totalreverse.
-#                   Weight = self.UserAndBikeWeight
+#                   Weight = self.UserAndBikeWeight in GradeMode
 #                   totalreverse wiki updated 2020-01-04
 # 2020-05-11    usbTrainer refactored for the following reasons:
 #               - attributes are now stored in one place and not passed to
@@ -804,7 +804,7 @@ class clsTacxUsbTrainer(clsTacxTrainer):
             assert(self.UserAndBikeWeight >= 0x0a)              # Avoid surprises
             if self.TargetMode == mode_Power:
                 Target = self.TargetResistance
-                Weight = self.UserAndBikeWeight
+                Weight = 0x0a                                   # Small flywheel in ERGmode
             elif self.TargetMode == mode_Grade:
                 Target = self.TargetResistance
                 Weight = self.UserAndBikeWeight
