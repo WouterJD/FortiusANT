@@ -1,7 +1,11 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-05-13"
+__version__ = "2020-05-14"
+# 2020-05-14    Added: msgPage000_TacxVortexHU_NoPowerOff
+#                      msgPage172_TacxVortexHU_ChangeHeadunitMode
+#                      msgUnpage221_TacxVortexHU_ButtonPressed
+#               Changed: msgID_ChannelID issued in SlaveXXX_ChannelConfig
 # 2020-05-13    Added:    msgUnpage50_WindResistance
 #               Modified: msgUnpage51_TrackResistance
 #               #55 Support for Data Page 50 - Wind Resistance
@@ -628,7 +632,7 @@ class clsAntDongle():
             msg43_ChannelPeriod         (channel_FE_s, ChannelPeriod=0x2000),                                     # 4 Hz
             msg60_ChannelTransmitPower  (channel_FE_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_FE_s),
-        #   msg4D_RequestMessage        (channel_FE_s, msgID_ChannelID) # Note that answer may be in logfile only
+            msg4D_RequestMessage        (channel_FE_s, msgID_ChannelID)
         ]
         self.Write(messages)
 
@@ -653,7 +657,7 @@ class clsAntDongle():
             msg43_ChannelPeriod         (channel_HRM_s, ChannelPeriod=0x1f86),
             msg60_ChannelTransmitPower  (channel_HRM_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_HRM_s),
-        #   msg4D_RequestMessage        (channel_HRM_s, msgID_ChannelID) # Note that answer may be in logfile only
+            msg4D_RequestMessage        (channel_HRM_s, msgID_ChannelID)
         ]
         self.Write(messages)
 
@@ -666,7 +670,7 @@ class clsAntDongle():
             msg43_ChannelPeriod         (channel_SCS_s, ChannelPeriod=0x1f86),
             msg60_ChannelTransmitPower  (channel_SCS_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_SCS_s),
-        #   msg4D_RequestMessage        (channel_SCS_s, msgID_ChannelID) # Note that answer may be in logfile only
+            msg4D_RequestMessage        (channel_SCS_s, msgID_ChannelID)
         ]
         self.Write(messages)
 
@@ -679,7 +683,7 @@ class clsAntDongle():
             msg43_ChannelPeriod         (channel_VTX, ChannelPeriod=0x2000),
             msg60_ChannelTransmitPower  (channel_VTX, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_VTX),
-        #   msg4D_RequestMessage        (channel_VTX, msgID_ChannelID) # Note that answer may be in logfile only
+            msg4D_RequestMessage        (channel_VTX, msgID_ChannelID)
         ]
         self.Write(messages)
 
@@ -692,7 +696,7 @@ class clsAntDongle():
             msg43_ChannelPeriod         (channel_VTX_s, ChannelPeriod=0x2000),
             msg60_ChannelTransmitPower  (channel_VTX_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_VTX_s),
-        #   msg4D_RequestMessage        (channel_VTX_s, msgID_ChannelID) # Note that answer may be in logfile only
+            msg4D_RequestMessage        (channel_VTX_s, msgID_ChannelID)
         ]
         self.Write(messages)
 
@@ -705,7 +709,7 @@ class clsAntDongle():
             msg43_ChannelPeriod         (channel_VHU_s, ChannelPeriod=0x2000),
             msg60_ChannelTransmitPower  (channel_VHU_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_VHU_s),
-        #   msg4D_RequestMessage        (channel_VHU_s, msgID_ChannelID) # Note that answer may be in logfile only
+            msg4D_RequestMessage        (channel_VHU_s, msgID_ChannelID)
         ]
         self.Write(messages)
 
@@ -1415,7 +1419,8 @@ def msgPage16_TacxVortexSetPower (Channel, VortexID, Power):
     fCommand            = sc.unsigned_char  # 0xAA power request
     fSubcommand         = sc.unsigned_char
     fNoCalibrationData  = sc.unsigned_char
-    fPower              = sc.unsigned_short
+    fPower              = sc.unsigned_short # https://tacx.com/nl/product/i-vortex/
+    Power = min(0, Power)                   # --> No simulation descent ==> power > 0
 
     format = sc.big_endian +    fChannel + fDataPageNumber +   fVortexID + fCommand + fSubcommand + fNoCalibrationData + fPower
     info   = struct.pack(format, Channel,   DataPageNumber, int(VortexID),  0xAA,      0,            0,               int(Power))
@@ -1436,6 +1441,78 @@ def msgUnpage16_TacxVortexSetPower (info):
 
           #Channel,  DataPageNumber, VortexID, Command,  Subcommand, NoCalibrationData, Power
     return tuple[0], tuple[1],       tuple[2], tuple[3], tuple[4],   tuple[5],          tuple[6]
+
+# ------------------------------------------------------------------------------
+#     P a g e 1 7 2   T a c x V o r t e x H U _ C h a n g e H e a d u n i t M o d e
+# U n P a g e 2 2 1   T a c x V o r t e x H U _ B u t t o n P r e s s e d
+# ------------------------------------------------------------------------------
+# TotalReverse:
+# You have to switch the head unit into -PC- mode. The head unit config is
+#
+# Frequency=0x4e (78), DeviceType=0x3e, Period = 0x0f00 and no network key
+#
+# When active, the units sends "ad 01 .." frames containing the serial number of the device.
+#
+# You can change the head unit mode with the command
+# "ac 03 xx 00 00 00 00 00"
+# with
+# xx=0x4 switchs to "-PC-" mode
+# xx=0x0 switchs back to "trainer control" mode
+# xx=0x2 switchs to some kind of "special mode" (probably some kind of 'mixed'
+#        mode where the head unit shows the trainer speed, cad and power and
+#        maybe works like a repeater of the data)
+# xx="anything else" is another "special mode" (?)
+#
+# In -PC- mode, pressing the buttons sends frames like
+# "dd 10 xx 00 00 00 00 cc"
+# where "xx" is a button number from 1 to 5 and
+#       "cc" is a counter, which increments for every button press.
+#
+# To prevent the head unit to switch to "power off" you have to send zero frames
+# "00 00 00 00 00 00 00 00" from time to time.
+#
+# The device also knows the standard commands "ac 01 .." , "ac 02 .." , "ac 04 .."
+# to trigger the serial-number (the default frame), the version-number and the
+# battery status.
+# ------------------------------------------------------------------------------
+def msgPage000_TacxVortexHU_StayAlive (Channel):        # No Power Off
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fReserved           = sc.pad * 8
+
+    format = sc.big_endian +    fChannel + fReserved
+    info   = struct.pack(format, Channel)
+
+    return info
+
+def msgPage172_TacxVortexHU_ChangeHeadunitMode (Channel, Mode):
+    DataPageNumber      = 16
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fCommand            = sc.unsigned_char  # 0x03 Change headunit Mode
+    fMode               = sc.unsigned_char  # 0x00=TrainerControl 0x02=SpecialMode 0x04=PCmode
+    fReserved           = sc.pad * 5
+
+    format = sc.big_endian +    fChannel + fDataPageNumber + fCommand + fMode + fReserved
+    info   = struct.pack(format, Channel,   DataPageNumber,   0x03,      Mode)
+
+    return info
+
+def msgUnpage221_TacxVortexHU_ButtonPressed (info):
+    fChannel            = sc.unsigned_char  # 0 First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # 1 First byte of the ANT+ datapage (payload)
+    fCommand            = sc.unsigned_char  # 2 0x10 Button press
+
+    nButton             = 3
+    fButton             = sc.unsigned_char  # 3 Button 1...5
+
+    fReserved           = sc.pad * 4        # -
+    fCount              = sc.unsigned_char  # 4
+
+    format = sc.big_endian +    fChannel + fDataPageNumber + fCommand + fButton + fReserved + fCount
+    tuple = struct.unpack (format, info)
+
+    return tuple[nButton]
 
 # ------------------------------------------------------------------------------
 # P a g e 1 6   G e n e r a l   F E   i n f o
@@ -1592,10 +1669,10 @@ def msgUnpage50_WindResistance(info):
     fReserved           = sc.pad * 4
 
     nWindResistanceCoefficient = 2
-    fWindResistanceCoefficient = sc.unsigned_short
+    fWindResistanceCoefficient = sc.unsigned_char
 
     nWindSpeed          = 3
-    fWindSpeed          = sc.unsigned_short
+    fWindSpeed          = sc.unsigned_char
 
     nDraftingFactor     = 4
     fDraftingFactor     = sc.unsigned_char

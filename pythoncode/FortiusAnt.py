@@ -176,7 +176,7 @@ class clsFortiusAntConsole:
                     sTarget += "(%iW)" % iTargetPower        # Target power added for reference
             else:
                 sTarget = "None"
-            msg = "Target=%s Speed=%4.1fkmh hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f %3.0f" % \
+            msg = "Target=%s Speed=%4.1fkmh hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f T=%3.0f" % \
                   (  sTarget,    fSpeed,  iHeartRate,       iPower,     iRevs,  iTacx, int(iTeeth) )
             logfile.Console (msg)
 

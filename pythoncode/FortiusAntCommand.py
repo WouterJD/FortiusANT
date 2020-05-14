@@ -290,7 +290,7 @@ class CommandLineVariables(object):
             print('You have started FortiusANT without command-line parameters.')
             print(' ')
             print('Therefore we start with a best-practice setting:')
-            print('     %s -g -H0 -A' % pgm)
+            print('     %s -a -g -H0 -A' % pgm)
             print(' ')
             print('If you want to start without the graphical user interface:')
             print('     %s -a' % pgm)
@@ -298,9 +298,20 @@ class CommandLineVariables(object):
             print('For more info, please refer to the wiki on github.')
             print('Succes!')
             print('---------------------------------------------------------------')
+            print('FortiusANT is open source and can freely be used.')
+            print('')
+            print('A free gift would be appreciated:')
+            print('Put yourself on the FortiusANT map by making yourself known')
+            print('by leaving a message with name/location/trainer on')
+            print('https://github.com/WouterJD/FortiusANT/issues/14')
+            print('')
+            print('Just for the fun of knowing where we are training.')
+            print('---------------------------------------------------------------')
+            self.autostart              = True
             self.gui                    = True      # Show gui
             self.hrm                    = 0         # Pair with HRM
             self.PedalStrokeAnalysis    = True      # Show it
+
 
     def print(self):
         try:

@@ -2,7 +2,8 @@
 # Version info
 #-------------------------------------------------------------------------------
 WindowTitle = "Fortius Antifier v3.0 beta"
-__version__ = "2020-05-13"
+__version__ = "2020-05-14"
+# 2020-05-14    pylint error free
 # 2020-05-13    Used: msgUnpage50_WindResistance, msgUnpage51_TrackResistance
 # 2020-05-12    Minor code improvements
 # 2020-05-08    Usage of clsTacxTrainer
@@ -200,7 +201,7 @@ def IdleFunction(self):
     global TacxTrainer
     rtn = 0
     if TacxTrainer and TacxTrainer.OK:
-        TacxTrainer.Refresh()
+        TacxTrainer.Refresh(True, usbTrainer.modeCalibrate)
         rtn = TacxTrainer.Buttons
     return rtn
 
@@ -314,7 +315,7 @@ def Runoff(self):
         #-----------------------------------------------------------------------
         # Get data from trainer
         #-----------------------------------------------------------------------
-        TacxTrainer.Refresh()
+        TacxTrainer.Refresh(True, usbTrainer.modeCalibrate) # This cannot be an ANT trainer
 
         #-----------------------------------------------------------------------
         # Show what happens
@@ -457,10 +458,7 @@ def Tacx2Dongle(self):
 
 def Tacx2DongleSub(self, Restart):
     global clv, AntDongle, TacxTrainer
-
     AntHRMpaired = False
-    AntVTXpaired = False
-    VTX_VortexID = 0
 
     #---------------------------------------------------------------------------
     # Info from ANT slave channels
@@ -482,6 +480,7 @@ def Tacx2DongleSub(self, Restart):
     #    one to transmit the trainer info (Fitness Equipment)
     #    one to transmit heartrate info   (HRM monitor)
     #    one to interface with Tacx i-Vortex (VTX)
+    #    one to interface with Tacx i-Vortex headunit (VHU)
     #
     # And if you want a dedicated Speed Cadence Sensor, implement like this...
     #---------------------------------------------------------------------------
@@ -504,21 +503,23 @@ def Tacx2DongleSub(self, Restart):
             # Request what DeviceID is paired to the HRM-channel
             # No pairing-loop: HRM perhaps not yet active and avoid delay
             #-------------------------------------------------------------------
-            msg = ant.msg4D_RequestMessage(ant.channel_HRM_s, ant.msgID_ChannelID)
-            AntDongle.Write([msg], False, False)
+            # msg = ant.msg4D_RequestMessage(ant.channel_HRM_s, ant.msgID_ChannelID)
+            # AntDongle.Write([msg], False, False)
     
         if clv.Tacx_iVortex:
             #-------------------------------------------------------------------
             # Create ANT+ slave channel for VTX
+            # No pairing-loop: VTX perhaps not yet active and avoid delay
             #-------------------------------------------------------------------
             AntDongle.SlaveVTX_ChannelConfig(0)
 
+            # msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
+            # AntDongle.Write([msg], False, False)
+
             #-------------------------------------------------------------------
-            # Request what DeviceID is paired to the VTX-channel
-            # No pairing-loop: VTX perhaps not yet active and avoid delay
+            # Create ANT+ slave channel for VHU
             #-------------------------------------------------------------------
-            msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
-            AntDongle.Write([msg], False, False)
+            AntDongle.SlaveVHU_ChannelConfig(0)
 
         if clv.scs != None:
             AntDongle.SlaveSCS_ChannelConfig(clv.scs)   # Create ANT+ slave channel for SCS
@@ -530,7 +531,6 @@ def Tacx2DongleSub(self, Restart):
     #---------------------------------------------------------------------------
     # Loop control
     #---------------------------------------------------------------------------
-    # self.RunningSwitch = True             # Is set by caller!
     EventCounter       = 0
 
     #---------------------------------------------------------------------------
@@ -557,7 +557,7 @@ def Tacx2DongleSub(self, Restart):
             #-------------------------------------------------------------------
             # Receive / Send trainer
             #-------------------------------------------------------------------
-            TacxTrainer.Refresh(usbTrainer.modeCalibrate)
+            TacxTrainer.Refresh(True, usbTrainer.modeCalibrate)
 
             #-------------------------------------------------------------------
             # When calibration IS supported, the following condition will NOT occur.
@@ -622,7 +622,7 @@ def Tacx2DongleSub(self, Restart):
     #---------------------------------------------------------------------------
     if TacxTrainer.OK:
         if debug.on(debug.Function): logfile.Write('Tacx2Dongle; stop trainer')
-        TacxTrainer.SendToTrainer(usbTrainer.modeStop)
+        TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
     self.SetMessages(Tacx=TacxTrainer.Message)
 
     #---------------------------------------------------------------------------
@@ -681,10 +681,9 @@ def Tacx2DongleSub(self, Restart):
                 QuarterSecond = False 
 
             #-------------------------------------------------------------------
-            # Get data from trainer
-            # TRAINER- SHOULD WRITE THEN READ 70MS LATER REALLY
+            # Get data from trainer (Receive + Calc + Send)
             #-------------------------------------------------------------------
-            TacxTrainer.Refresh()               # = Receive + Calc + Send
+            TacxTrainer.Refresh(QuarterSecond, usbTrainer.modeResistance)
             if clv.gui: self.SetMessages(Tacx=TacxTrainer.Message + PowerModeActive)
 
             #-------------------------------------------------------------------
@@ -761,13 +760,8 @@ def Tacx2DongleSub(self, Restart):
             if QuarterSecond:
                 LastANTtime = time.time()
                 #---------------------------------------------------------------
-                # Send power to iVortex
-                # Yes, we could have put this into the clsTacxTrainer
-                #      now all the ANT traffic is here.
+                # Sending i-Vortex messages is done by Refesh() not here
                 #---------------------------------------------------------------
-                if clv.Tacx_iVortex and VTX_VortexID:
-                    info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, VTX_VortexID, TacxTrainer.TargetPower)
-                    messages.append ( ant.ComposeMessage (ant.msgID_BroadcastData, info) )
 
                 #---------------------------------------------------------------
                 # Broadcast Heartrate message
@@ -783,15 +777,11 @@ def Tacx2DongleSub(self, Restart):
                     messages.append(fe.BroadcastTrainerDataMessage (TacxTrainer.Cadence, \
                         TacxTrainer.CurrentPower, TacxTrainer.SpeedKmh, TacxTrainer.HeartRate))
                     
-                #---------------------------------------------------------------
-                # Broadcast and receive ANT+ responses
-                #---------------------------------------------------------------
-                # Note that, if there are no messages to be sent, we do not 
-                #       receive anything either.... This sounds weard but:
-                # It occurs if we are in manual mode and NOT using Vortex...
-                #---------------------------------------------------------------
-                if len(messages) > 0:
-                    data = AntDongle.Write(messages, True, False)
+            #-------------------------------------------------------------------
+            # Broadcast and receive ANT+ responses
+            #-------------------------------------------------------------------
+            if len(messages) > 0:
+                data = AntDongle.Write(messages, True, False)
 
             #-------------------------------------------------------------------
             # Here all response from the ANT dongle are processed (receive=True)
@@ -800,12 +790,18 @@ def Tacx2DongleSub(self, Restart):
             # - TargetGradeFromDongle or TargetPowerFromDongle
             # - Information from HRM (if paired)
             # - Information from i-Vortex (if paired)
+            #
+            # Note: it'd be better to select the channel first and then the
+            #       message to group by device. Something for future improvement
             #-------------------------------------------------------------------
             for d in data:
                 synch, length, id, info, checksum, _rest, Channel, DataPageNumber = ant.DecomposeMessage(d)
                 error = False
 
-                if id == ant.msgID_AcknowledgedData:
+                if clv.Tacx_iVortex and TacxTrainer.HandleANTmessage(d):
+                    pass                    # Message is handled or ignored
+
+                elif id == ant.msgID_AcknowledgedData:
                     #-----------------------------------------------------------
                     # Fitness Equipment Channel inputs
                     #-----------------------------------------------------------
@@ -833,8 +829,9 @@ def Tacx2DongleSub(self, Restart):
                         # Data page 50 (0x32) Wind Resistance
                         #-------------------------------------------------------
                         elif   DataPageNumber == 50:
-                            TacxTrainer.SetWind(\
-                                        ant.msgUnpage50_WindResistance(info) )
+                            WindResistance, WindSpeed, DraftingFactor = \
+                                ant.msgUnpage50_WindResistance(info)
+                            TacxTrainer.SetWind(WindResistance, WindSpeed, DraftingFactor)
 
                         #-------------------------------------------------------
                         # Data page 51 (0x33) Track resistance
@@ -965,62 +962,6 @@ def Tacx2DongleSub(self, Restart):
                         else: error = "Unknown HRM data page"
 
                     #-----------------------------------------------------------
-                    # VTX_s = Tacx i-Vortex trainer
-                    #-----------------------------------------------------------
-                    elif Channel == ant.channel_VTX_s:
-                        # logfile.Console ('i-Vortex Page=%s %s' % (DataPageNumber, info))
-                        #-------------------------------------------------------
-                        # Ask what device is paired
-                        #-------------------------------------------------------
-                        if not AntVTXpaired:
-                            msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
-                            AntDongle.Write([msg], False, False)
-
-                        #-------------------------------------------------------
-                        # Data page 00 msgUnpage00_TacxVortexDataSpeed
-                        #-------------------------------------------------------
-                        if DataPageNumber == 0:
-                            VTX_UsingVirtualSpeed, CurrentPower, VTX_Speed, VTX_CalibrationState, Cadence = \
-                                ant.msgUnpage00_TacxVortexDataSpeed(info)
-                            SpeedKmh = round( VTX_Speed / ( 100 * 1000 / 3600 ), 1)
-                            TacxTrainer.SetAntVortexValues(Cadence, CurrentPower, SpeedKmh)
-                            if debug.on(debug.Function):
-                                logfile.Write ('i-Vortex Page=%s UsingVirtualSpeed=%s Power=%s Speed=%s State=%s Cadence=%s' % \
-                                    (DataPageNumber, VTX_UsingVirtualSpeed, CurrentPower, SpeedKmh, VTX_CalibrationState, Cadence) )
-
-                        #-------------------------------------------------------
-                        # Data page 01 msgUnpage01_TacxVortexDataSerial
-                        #-------------------------------------------------------
-                        elif DataPageNumber == 1:
-                            VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm = ant.msgUnpage01_TacxVortexDataSerial(info)
-                            if debug.on(debug.Function):
-                                logfile.Write ('i-Vortex Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % \
-                                    (DataPageNumber, VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm) )
-
-                        #-------------------------------------------------------
-                        # Data page 02 msgUnpage02_TacxVortexDataVersion
-                        #-------------------------------------------------------
-                        elif DataPageNumber == 2:
-                            VTX_Major, VTX_Minor, VTX_Build = ant.msgUnpage02_TacxVortexDataVersion(info)
-                            if debug.on(debug.Function):
-                                logfile.Write ('i-Vortex Page=%s Major=%s Minor=%s Build=%s' % \
-                                    (DataPageNumber, VTX_Major, VTX_Minor, VTX_Build))
-
-                        #-------------------------------------------------------
-                        # Data page 03 msgUnpage03_TacxVortexDataCalibration
-                        #-------------------------------------------------------
-                        elif DataPageNumber == 3:
-                            VTX_Calibration, VTX_VortexID = ant.msgUnpage03_TacxVortexDataCalibration(info)
-                            if debug.on(debug.Function):
-                                logfile.Write ('i-Vortex Page=%s Calibration=%s VortexID=%s' % \
-                                    (DataPageNumber, VTX_Calibration, VTX_VortexID))
-
-                        #-------------------------------------------------------
-                        # Other data pages
-                        #-------------------------------------------------------
-                        else: error = "Unknown VTX data page"
-
-                    #-----------------------------------------------------------
                     # Speed Cadence Sensor inputs
                     #-----------------------------------------------------------
                     elif Channel == ant.channel_SCS:
@@ -1049,7 +990,7 @@ def Tacx2DongleSub(self, Restart):
                     else: error = "Unknown channel"
 
                 #---------------------------------------------------------------
-                # ChannelID - the info from a Master device on the network
+                # ChannelID - the info that a master on the network is paired
                 #---------------------------------------------------------------
                 elif id == ant.msgID_ChannelID:
                     Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \
@@ -1061,11 +1002,6 @@ def Tacx2DongleSub(self, Restart):
                     elif Channel == ant.channel_HRM_s and DeviceTypeID == ant.DeviceTypeID_HRM:
                         AntHRMpaired = True
                         self.SetMessages(HRM='Heart Rate Monitor paired: %s' % DeviceNumber)
-
-                    elif Channel == ant.channel_VTX_s and DeviceTypeID == ant.DeviceTypeID_VTX:
-                        AntVTXpaired = True
-                        TacxTrainer.Message = 'Tacx i-Vortex paired: %s' % DeviceNumber
-                        self.SetMessages(Tacx=TacxTrainer.Message)
 
                     else:
                         logfile.Console('Unexpected device %s on channel %s' % (DeviceNumber, Channel))
@@ -1119,6 +1055,6 @@ def Tacx2DongleSub(self, Restart):
     if not (clv.manual or clv.manualGrade):
         AntDongle.ResetDongle()
     if TacxTrainer and TacxTrainer.OK:
-        TacxTrainer.SendToTrainer(usbTrainer.modeStop)
+        TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
 
     return True

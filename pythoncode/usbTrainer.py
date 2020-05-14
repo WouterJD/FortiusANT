@@ -1,7 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-13b"
+__version__ = "2020-05-14"
+# 2020-05-14    Changed: Refresh() QuarterSecond added, mandatory fields
+#                        clsTacxTrainer with __init__
+#               Added:   HandleANTmessage + iVortex ANT handling done here
+#               Virtual gearbox: 0.1 ... 3.0. 0.1 should be light enough.
 # 2020-05-13    Minor code changes
 #               Added: AddGrade(), SetRollingResistance(), SetWind()
 #               Implemented VirtualSpeedKmh to realize the virtual gearbox
@@ -69,6 +73,7 @@ import struct
 import sys
 import time
 
+import antDongle         as ant
 import debug
 import logfile
 import structConstants   as sc
@@ -134,8 +139,8 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 #     def SetWind()
 #     def SetUserConfiguration(UserWeight, ...)               # Store User
 #
-#     def Refresh(TacxMode)                                   # Receive, Calculate, Send
-#     def SendToTrainer(TacxMode)                             # To be defined by child class
+#     def Refresh(QuarterSecond, TacxMode)                    # Receive, Calculate, Send
+#     def SendToTrainer(QuarterSecond, TacxMode)              # To be defined by child class
 #     def _ReceiveFromTrainer()                               # To be defined by child class
 #
 #     def CalibrateSupported()                                # Return whether calibration supported
@@ -144,16 +149,20 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 #                                                             # This is where the magic is done!
 #
 # class clsSimulatedTrainer(clsTacxTrainer)
-#     def Refresh(Tacxmode)                                   # Randomize data (does not receive/send!)
+#     def Refresh(QuarterSecond, Tacxmode)                    # Randomize data (does not receive/send!)
 #                                                             # Completely replaces parent.Refresh()
 #
 # class clsTacxAntVortexTrainer(clsTacxTrainer)
 #     def SetAntVortexValues(Cadence, CurrentPower, SpeedKmh) # Store data from Tacx i-Vortex
+#     def Refresh(QuarterSecond, TacxMode)
+#     def SendToTrainer(QuarterSecond, TacxMode)
+#     def _ReceiveFromTrainer()
+#     def HandleANTmessage(message)
 #
 # class clsTacxUsbTrainer(clsTacxTrainer)
 #     def Wheel2Speed()                                       # Convert Wheelspeed -> Kmh
 #     def Speed2Wheel(SpeedKmh)                               # Convert Kmh --> Wheelspeed
-#     def Refresh(TacxMode)                                   # Add USB-special(s) to parent.Refresh()
+#     def Refresh(QuarterSecond, TacxMode)                    # Add USB-special(s) to parent.Refresh()
 #     def USB_Read()                                          # Read buffer from USB connected Tacx
 #     def SendToTrainer(tacxMode)                             # Send buffer to   USB connected Tacx
 #
@@ -176,6 +185,7 @@ class clsTacxTrainer():
     UsbDevice               = None          # clsHeadUnitLegacy and clsHeadUnitNew only!
     AntDevice               = None          # clsVortexTrainer only!
     OK                      = False
+    Message                 = None
 
     # Target provided by CTP (Trainer Road, Zwift, Rouvy, ...)
     # See Refresh() for dependencies
@@ -220,6 +230,13 @@ class clsTacxTrainer():
     Headunit                = 0             # The connected headunit in GetTrainer()
     Calibrate               = 0             # The value as established during calibration
     SpeedScale              = None          # To be set in sub-class
+
+    def __init__(self, clv, Message):
+        if debug.on(debug.Function):logfile.Write ("clsTacxTrainer.__init__()")
+        self.clv             = clv
+        self.Message         = Message
+        self.OK              = False
+
     #---------------------------------------------------------------------------
     # G e t T r a i n e r
     #---------------------------------------------------------------------------
@@ -347,18 +364,18 @@ class clsTacxTrainer():
         #-----------------------------------------------------------------------
         if dev != False:
             if LegacyProtocol:
-                return clsTacxLegacyUsbTrainer(clv, hu, dev, msg)
+                return clsTacxLegacyUsbTrainer(clv, msg, hu, dev)
             else:
-                return clsTacxNewUsbTrainer(clv, hu, dev, msg)
+                return clsTacxNewUsbTrainer(clv, msg, hu, dev)
         else:
-            return clsTacxTrainer           # where .OK = False
+            return clsTacxTrainer (clv, msg)           # where .OK = False
 
     #---------------------------------------------------------------------------
     # Functions from external to provide data
     #
     # PowercurveFactor:
     # 10% steps insprired by 10-11-12...36-40-44 cassettes.
-    # 0.3 ... 3 is arbitrary, where lowerbound 0 is definitely no good idea.
+    # 0.1 ... 3 is arbitrary, where lowerbound 0 is definitely no good idea.
     #---------------------------------------------------------------------------
     def ResetPowercurveFactor(self):
         self.PowercurveFactor   = 1
@@ -368,7 +385,7 @@ class clsTacxTrainer():
             self.PowercurveFactor   *= 1.1
 
     def SetPowercurveFactorDown(self):
-        if self.PowercurveFactor > 0.3:
+        if self.PowercurveFactor > 0.1:
             self.PowercurveFactor   /= 1.1
 
     def SetPower(self, Power):
@@ -407,17 +424,20 @@ class clsTacxTrainer():
     #---------------------------------------------------------------------------
     # SendToTrainer() and ReceivedFromTrainer() to be defined by sub-class
     #---------------------------------------------------------------------------
-    def SendToTrainer(self, TacxMode):          # no return
+    def SendToTrainer(self, QuarterSecond, TacxMode):   # no return
         pass
-    def _ReceiveFromTrainer(self):              # No return
+    def _ReceiveFromTrainer(self):                      # No return
         pass
     def TargetPower2Resistance(self):
-        self.TargetResistance = 0               # child class must redefine
+        self.TargetResistance = 0                    # child class must redefine
 
     #---------------------------------------------------------------------------
     # R e f r e s h
     #---------------------------------------------------------------------------
     # Input         Class variables Target***
+    #               QuarterSecond, indicates that 1/4 second since previous
+    #                              for ANTdevices only
+    #               TacxMode, to pass to SendToTrainer()
     #
     # Function      Refresh updates the actual values from the trainer
     #               Then does required calculations
@@ -429,8 +449,9 @@ class clsTacxTrainer():
     #
     # Output        Class variables match with Target***
     #---------------------------------------------------------------------------
-    def Refresh(self, TacxMode=modeResistance):                        #Refresh#
-        if debug.on(debug.Function):logfile.Write ("clsTacxTrainer.Refresh()")
+    def Refresh(self, QuarterSecond, TacxMode):
+        if debug.on(debug.Function):logfile.Write ( \
+                    'clsTacxTrainer.Refresh(%s, %s)' % (QuarterSecond, TacxMode))
         #-----------------------------------------------------------------------
         # FIrst get data from the trainer
         #-----------------------------------------------------------------------
@@ -449,8 +470,6 @@ class clsTacxTrainer():
         # Note that Grade2Power() depends on the VirtualSpeed.
         #-----------------------------------------------------------------------
         self.VirtualSpeedKmh = self.SpeedKmh * self.PowercurveFactor
-        print('%4.1f %4.1f' % (self.SpeedKmh,  self.PowercurveFactor) )
-
 
         # No negative value defined for ANT message Page25 (#)
         if self.CurrentPower < 0: self.CurrentPower = 0 
@@ -511,7 +530,7 @@ class clsTacxTrainer():
         #-----------------------------------------------------------------------
         # Then send the results to the trainer again
         #-----------------------------------------------------------------------
-        self.SendToTrainer(TacxMode)
+        self.SendToTrainer(QuarterSecond, TacxMode)
 
     #---------------------------------------------------------------------------
     # C a l i b r a t e S u p p o r t e d
@@ -631,9 +650,8 @@ class clsTacxTrainer():
 #-------------------------------------------------------------------------------
 class clsSimulatedTrainer(clsTacxTrainer):
     def __init__(self, clv):
+        super().__init__(clv, "Simulated Tacx Trainer to test ANT-interface")
         if debug.on(debug.Function):logfile.Write ("clsSimulatedTrainer.__init__()")
-        self.clv             = clv
-        self.Message         = "Simulated Tacx Trainer to test ANT-interface"
         self.OK              = True
         self.clv.PowerFactor = 1            # Not applicable for simulation
 
@@ -656,7 +674,7 @@ class clsSimulatedTrainer(clsTacxTrainer):
     #
     # Output:       self.* variables, see next 10 lines
     # --------------------------------------------------------------------------
-    def Refresh (self, _TacxMode=None):
+    def Refresh (self, _QuarterSecond=None, _TacxMode=None):
         if debug.on(debug.Function):logfile.Write ("clsSimulatedTrainer.Refresh()")
         self.Axis               = 0
         self.Buttons            = 0
@@ -707,22 +725,243 @@ class clsSimulatedTrainer(clsTacxTrainer):
 #-------------------------------------------------------------------------------
 class clsTacxAntVortexTrainer(clsTacxTrainer):
     def __init__(self, clv, AntDevice):
+        super().__init__(clv, "Pair with Tacx i-Vortex")
         if debug.on(debug.Function):logfile.Write ("clsTacxAntVortexTrainer.__init__()")
-        self.AntDevice       = AntDevice
-        self.Message         = "Pair with Tacx i-Vortex"
-        self.OK              = True
-        self.clv.PowerFactor = 1            # Not applicable for i-Vortex
+        self.OK                = True           # The AntDevice is there,
+                                                # the trainer not yet paired!
+        self.clv.PowerFactor   = 1              # Not applicable for i-Vortex
 
-    def SetAntVortexValues(self, Cadence, CurrentPower, SpeedKmh):
-        self.Cadence        = Cadence
-        self.CurrentPower   = CurrentPower
-        self.SpeedKmh       = SpeedKmh
-        self.WheelSpeed     = 0                         # Not applicable
+        self.__iVortexButtons  = 0
+        self.__AntVTXpaired    = False
+        self.__AntVHUpaired    = False
+        self.__DeviceNumberVTX = 0              # provided by CHANNEL_ID
+        self.__DeviceNumberVHU = 0
+        self.__VortexID    = 0                  # provided by datapage 3
 
     #---------------------------------------------------------------------------
-    # SendToTrainer() is done in the ANT-loop in FortiusAantBody.py
-    # ReceivedFromTrainer() cannot be done; messages are received in ANT-loop
+    # ReceiveFromTrainer()
+    # Note: __iVortexButtons are prepared by HandleANTmessage
     #---------------------------------------------------------------------------
+    def _ReceiveFromTrainer(self):
+        # ----------------------------------------------------------------------
+        # Translate i-Vortex buttons to TacxTrainer.Buttons.
+        # WHAT IS 1,2,3,4,5??: CORRECT MAPPING TO BE ESTABLISHED!!!
+        # ----------------------------------------------------------------------
+        if   self.__iVortexButtons == 0: self.Buttons = 0
+        elif self.__iVortexButtons == 1: self.Buttons = EnterButton
+        elif self.__iVortexButtons == 2: self.Buttons = DownButton
+        elif self.__iVortexButtons == 3: self.Buttons = UpButton
+        elif self.__iVortexButtons == 4: self.Buttons = CancelButton
+        elif self.__iVortexButtons == 5: self.Buttons = 0
+        self.__iVortexButtons = 0
+
+    #---------------------------------------------------------------------------
+    # SendToTrainer()
+    #---------------------------------------------------------------------------
+    def SendToTrainer(self, QuarterSecond, TacxMode):
+        if QuarterSecond:
+            messages = []
+            if TacxMode ==  modeResistance:
+                #---------------------------------------------------------------
+                # Set target power
+                #---------------------------------------------------------------
+                if self.__AntVTXpaired and self.__VortexID:
+                    info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, \
+                                self.__VortexID, self.TargetPower)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    messages.append ( msg )
+
+                #---------------------------------------------------------------
+                # Avoid power off on headunit
+                #---------------------------------------------------------------
+                if self.__AntVHUpaired:
+                    info = ant.msgPage000_TacxVortexHU_StayAlive (ant.channel_VHU_s)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    messages.append ( msg )
+
+            elif TacxMode ==  modeStop:
+                #---------------------------------------------------------------
+                # Switch headunit to trainer control mode
+                #---------------------------------------------------------------
+                if self.__AntVHUpaired:
+                    msg = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (\
+                                                           ant.channel_VHU_s, 0)
+                    messages.append ( msg )
+
+            #-------------------------------------------------------------------
+            # Send messages, leave receiving to the outer loop
+            #-------------------------------------------------------------------
+            if messages:
+                self.AntDevice.Write(messages, False, False)
+
+    #---------------------------------------------------------------------------
+    # Refresh()
+    #---------------------------------------------------------------------------
+    def Refresh(self, QuarterSecond, TacxMode):
+        super().Refresh(QuarterSecond, TacxMode)
+        if debug.on(debug.Function):logfile.Write ("clsTacxAntVortexTrainer.Refresh()")
+
+        # ----------------------------------------------------------------------
+        # Compose displayable message
+        # ----------------------------------------------------------------------
+        if self.__DeviceNumberVTX:
+            self.Message = 'Tacx i-Vortex paired: %s' % self.__DeviceNumberVTX
+        else:
+            self.Message = "Pair with Tacx i-Vortex"
+
+        if self.__DeviceNumberVHU:
+            self.Message += ', Headunit: %s' % self.__DeviceNumberVHU
+        else:
+            self.Message += ', Headunit'
+
+    #---------------------------------------------------------------------------
+    # HandleANTmessage()
+    #---------------------------------------------------------------------------
+    def HandleANTmessage(self, msg):
+        _synch, _length, id, info, _checksum, _rest, Channel, DataPageNumber = ant.DecomposeMessage(msg)
+        dataHandled = False
+        messages    = []
+        #-----------------------------------------------------------------------
+        # VTX_s = Tacx i-Vortex trainer
+        #-----------------------------------------------------------------------
+        if Channel == ant.channel_VTX_s:
+            if id == ant.msgID_AcknowledgedData:
+                dataHandled = True
+
+            #-------------------------------------------------------------------
+            # BroadcastData - info received from the master device
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_BroadcastData:
+                #---------------------------------------------------------------
+                # Ask what device is paired
+                #---------------------------------------------------------------
+                if not self.__AntVTXpaired:
+                    msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
+                    messages.append ( msg )
+
+                #---------------------------------------------------------------
+                # Data page 00 msgUnpage00_TacxVortexDataSpeed
+                #---------------------------------------------------------------
+                if DataPageNumber == 0:
+                    dataHandled = True
+                    VTX_UsingVirtualSpeed, self.CurrentPower, VTX_Speed, \
+                        VTX_CalibrationState, self.Cadence = \
+                        ant.msgUnpage00_TacxVortexDataSpeed(info)
+                    self.SpeedKmh       = round( VTX_Speed / ( 100 * 1000 / 3600 ), 1)
+                    self.WheelSpeed     = 0                         # Not applicable
+                    if debug.on(debug.Function):
+                        logfile.Write ('i-Vortex Page=%s UsingVirtualSpeed=%s Power=%s Speed=%s State=%s Cadence=%s' % \
+                            (DataPageNumber, VTX_UsingVirtualSpeed, self.CurrentPower, \
+                                self.SpeedKmh, VTX_CalibrationState, self.Cadence) )
+
+                #---------------------------------------------------------------
+                # Data page 01 msgUnpage01_TacxVortexDataSerial
+                #---------------------------------------------------------------
+                elif DataPageNumber == 1:
+                    dataHandled = True
+                    VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm = ant.msgUnpage01_TacxVortexDataSerial(info)
+                    if debug.on(debug.Function):
+                        logfile.Write ('i-Vortex Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % \
+                            (DataPageNumber, VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm) )
+
+                #---------------------------------------------------------------
+                # Data page 02 msgUnpage02_TacxVortexDataVersion
+                #---------------------------------------------------------------
+                elif DataPageNumber == 2:
+                    dataHandled = True
+                    VTX_Major, VTX_Minor, VTX_Build = ant.msgUnpage02_TacxVortexDataVersion(info)
+                    if debug.on(debug.Function):
+                        logfile.Write ('i-Vortex Page=%s Major=%s Minor=%s Build=%s' % \
+                            (DataPageNumber, VTX_Major, VTX_Minor, VTX_Build))
+
+                #---------------------------------------------------------------
+                # Data page 03 msgUnpage03_TacxVortexDataCalibration
+                #---------------------------------------------------------------
+                elif DataPageNumber == 3:
+                    dataHandled = True
+                    VTX_Calibration, self.__VortexID = ant.msgUnpage03_TacxVortexDataCalibration(info)
+                    if debug.on(debug.Function):
+                        logfile.Write ('i-Vortex Page=%s Calibration=%s VortexID=%s' % \
+                            (DataPageNumber, VTX_Calibration, self.__VortexID))
+
+            #-------------------------------------------------------------------
+            # ChannelID - the info that a master on the network is paired
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_ChannelID:
+                Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \
+                    ant.unmsg51_ChannelID(info)
+
+                if DeviceTypeID == ant.DeviceTypeID_VTX:
+                    dataHandled = True
+                    self.__AntVTXpaired    = True
+                    self.__DeviceNumberVTX = DeviceNumber
+
+            #-------------------------------------------------------------------
+            # Outer loop does not need to handle channel_VTX_s messages
+            #-------------------------------------------------------------------
+            dataHandled = True
+
+        #-----------------------------------------------------------------------
+        # VHU_s = Tacx i-Vortex headunit
+        #-----------------------------------------------------------------------
+        elif Channel == ant.channel_VHU_s:
+            if id == ant.msgID_AcknowledgedData:
+                dataHandled = True
+
+            #-------------------------------------------------------------------
+            # BroadcastData - info received from the master device
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_BroadcastData:
+                #---------------------------------------------------------------
+                # Ask what device is paired
+                # And tell to switch to PC-mode
+                #---------------------------------------------------------------
+                if not self.__AntVHUpaired:
+                    msg = ant.msg4D_RequestMessage(ant.channel_VHU_s, ant.msgID_ChannelID)
+                    messages.append ( msg )
+
+                    msg = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (\
+                                             ant.channel_VHU_s, 4)    # PC-mode
+                    messages.append ( msg )
+
+                #---------------------------------------------------------------
+                # Data page 173 frames containing the serial number of the device
+                #---------------------------------------------------------------
+                if DataPageNumber == 173: # 0xad:
+                    dataHandled = True
+
+                #---------------------------------------------------------------
+                # Data page 221 TacxVortexHU_ButtonPressed
+                #---------------------------------------------------------------
+                elif DataPageNumber == 221:
+                    dataHandled = True
+                    self.__iVortexButtons = \
+                              ant.msgUnpage221_TacxVortexHU_ButtonPressed (info)
+
+            #-------------------------------------------------------------------
+            # ChannelID - the info that a master on the network is paired
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_ChannelID:
+                Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \
+                    ant.unmsg51_ChannelID(info)
+
+                if Channel == ant.channel_VHU_s and DeviceTypeID == ant.DeviceTypeID_VHU:
+                    dataHandled = True
+                    self.__AntVHUpaired    = True
+                    self.__DeviceNumberVHU = DeviceNumber
+
+            #-------------------------------------------------------------------
+            # Outer loop does not need to handle channel_VHU_s messages
+            #-------------------------------------------------------------------
+            dataHandled = True
+
+        #-----------------------------------------------------------------------
+        # Send messages, leave receiving to the outer loop
+        #-----------------------------------------------------------------------
+        if messages:
+            self.AntDevice.Write(messages, False, False)
+
+        return dataHandled
 
 #-------------------------------------------------------------------------------
 # c l s T a c x U s b T r a i n e r
@@ -747,8 +986,8 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     #---------------------------------------------------------------------------
     # Refresh()
     #---------------------------------------------------------------------------
-    def Refresh(self, TacxMode=modeResistance):
-        super().Refresh(TacxMode)
+    def Refresh(self, QuarterSecond, TacxMode):
+        super().Refresh(QuarterSecond, TacxMode)
         if debug.on(debug.Function):logfile.Write ("clsTacxUsbTrainer.Refresh()")
 
         # ----------------------------------------------------------------------
@@ -807,7 +1046,7 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     def SendToTrainerUSBData(self, TacxMode, Calibrate, PedalEcho, Target, Weight):
         raise NotImplementedError                   # To be defined in sub-class
 
-    def SendToTrainer(self, TacxMode):
+    def SendToTrainer(self, _QuarterSecond, TacxMode):
         assert (TacxMode in (modeStop, modeResistance, modeCalibrate))
 
         Calibrate = self.Calibrate
@@ -880,12 +1119,11 @@ class clsTacxUsbTrainer(clsTacxTrainer):
 # ==> iMagic
 #-------------------------------------------------------------------------------
 class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
-    def __init__(self, clv, Headunit, UsbDevice, Message):
+    def __init__(self, clv, Message, Headunit, UsbDevice):
+        super().__init__(clv, Message)
         if debug.on(debug.Function):logfile.Write ("clsTacxLegacyUsbTrainer.__init__()")
-        self.clv        = clv
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
-        self.Message    = Message
         self.OK         = True
         self.SpeedScale = 11.9 # GoldenCheetah: curSpeed = curSpeedInternal / (1.19f * 10.0f);
         #PowerResistanceFactor = (1 / 0.0036)       # GoldenCheetah ~= 277.778
@@ -1064,16 +1302,15 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
 # Tacx-trainer with New interface & USB connection
 #-------------------------------------------------------------------------------
 class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
-    def __init__(self, clv, Headunit, UsbDevice, Message):
+    def __init__(self, clv, Message, Headunit, UsbDevice):
+        super().__init__(clv, Message)
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__()")
-        self.clv        = clv
         self.SpeedScale = 301                        # TotalReverse: 289.75
         self.PowerResistanceFactor = 128866          # TotalReverse
 
         self.Resistance40 = 1000 # Last resistance realized at cadence > 40
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
-        self.Message    = Message
         self.OK         = True
 
     #---------------------------------------------------------------------------
@@ -1089,6 +1326,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             rtn = self.__AvoidCycleOfDeath(rtn)
         self.TargetResistance = int(rtn)
 
+    #---------------------------------------------------------------------------
     # Limit Resistance to avoid the Cycle of Death
     # CoD = if you get tired at a certain power and cycle slower, the resistance
     #       keeps going up untill Power/0 = infinite and you "die".
@@ -1099,6 +1337,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     #
     # Cadence < 40 is considered unrealistic this only makes trainer workable
     # Resistance 1500 is above the calibrate value (default 1040)
+    #---------------------------------------------------------------------------
     def __AvoidCycleOfDeath(self, Resistance):
         if self.Cadence >= 40 and Resistance > 1500:
             self.Resistance40 = Resistance
