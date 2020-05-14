@@ -168,8 +168,8 @@ from   FortiusAntGui                import mode_Power, mode_Grade
 import logfile
 import usbTrainer
 
-PrintWarnings = False                # Print warnings even when logging = off
-CycleTimeFast = 0.02
+PrintWarnings = False   # Print warnings even when logging = off
+CycleTimeFast = 0.02    # TRAINER- SHOULD WRITE THEN READ 70MS LATER REALLY
 CycleTimeANT  = 0.25
 # ------------------------------------------------------------------------------
 # Initialize globals

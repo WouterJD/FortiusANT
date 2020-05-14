@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-14"
+__version__ = "2020-05-14b"
+# 2020-05-15    Added: logging for SetPower() and SetGrade(), 
+#                    TargetPower2Resistance()
 # 2020-05-14    Changed: Refresh() QuarterSecond added, mandatory fields
 #                        clsTacxTrainer with __init__
 #               Added:   HandleANTmessage + iVortex ANT handling done here
@@ -389,6 +391,7 @@ class clsTacxTrainer():
             self.PowercurveFactor   /= 1.1
 
     def SetPower(self, Power):
+        if debug.on(debug.Function):logfile.Write ("SetPower(%s)" % Power)
         self.TargetMode         = mode_Power
         self.TargetGrade        = 0
         self.TargetPower        = Power
@@ -398,6 +401,7 @@ class clsTacxTrainer():
         self.SetPower(self.TargetPower + deltaPower)
 
     def SetGrade(self, Grade):
+        if debug.on(debug.Function):logfile.Write ("SetGrade(%s)" % Grade)
         self.TargetMode         = mode_Grade
         self.TargetGrade        = Grade
         self.TargetPower        = 0             # .Refresh() must be called
@@ -407,9 +411,16 @@ class clsTacxTrainer():
         self.SetGrade(self.TargetGrade + deltaGrade)
     
     def SetRollingResistance(self, RollingResistance):
+        if debug.on(debug.Function):
+            logfile.Write ("SetRollingResistance(%s[def=0.004])" % RollingResistance)
+
         self.RollingResistance = RollingResistance
 
     def SetWind(self, WindResistance, WindSpeed, DraftingFactor):
+        if debug.on(debug.Function):
+            logfile.Write ("SetWind(%s[def=0.51], %s[def=0], %s[def=1])" % 
+                (WindResistance, WindSpeed, DraftingFactor) )
+
         self.WindResistance = WindResistance
         self.WindSpeed      = WindSpeed
         self.DraftingFactor = DraftingFactor
@@ -588,9 +599,11 @@ class clsTacxTrainer():
 
         self.__Grade2Power_Gribble()
 
-        if debug.on(debug.Application):
-            logfile.Write ("Grade2Power; TargetGrade=%4.1f%%, Speed=%4.1f, Weight=%3.0f, TargetPower=%3.0fW" % \
-                (self.TargetGrade, self.SpeedKmh, self.UserAndBikeWeight, self.TargetPower) )
+        if debug.on(debug.Function):
+            logfile.Write ("Grade2Power (TargetGrade=%4.1f%%, Speed=%4.1f, Weight=%3.0f, rR=%s, wR=%s, wS=%s, d=%s) = TargetPower=%3.0fW" % \
+                (self.TargetGrade, self.VirtualSpeedKmh, self.UserAndBikeWeight, \
+                self.RollingResistance, self.WindResistance, self.WindSpeed, self.DraftingFactor, \
+                 self.TargetPower) )
 
     #---------------------------------------------------------------------------
     # www.gribble.org
@@ -707,6 +720,7 @@ class clsSimulatedTrainer(clsTacxTrainer):
             self.Cadence      *= (1 + random.randint(-2,2) / 100)               # Variation of 2%
 
             self.SpeedKmh      = 35 * self.Cadence / 100                        # Speed is 35 kmh at cadence 100 (My highest gear)
+            self.VirtualSpeedKmh= self.SpeedKmh
 
             self.HeartRate     = HRmax * (0.5 + ((self.CurrentPower - 100) / (ftp - 100) ) * 0.3)
                                                                                 # As if power is linear with power
@@ -1162,8 +1176,12 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
         # Check bounds
         rtn = min(226, rtn) # Maximum value; as defined by Golden Cheetah
         rtn = max( 30, rtn) # Minimum value
+        rtn = int(rtn)
 
-        self.TargetResistance = int(rtn)
+        if debug.on(debug.Function):logfile.Write (\
+                "clsTacxLegacyUsbTrainer.TargetPower2Resistance(%s, %s) = %s" % \
+                    (self.TargetPower, self.SpeedKmh, rtn) )
+        self.TargetResistance = rtn
 
     #---------------------------------------------------------------------------
     # S e n d T o T r a i n e r U S B D a t a
@@ -1308,7 +1326,6 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         self.SpeedScale = 301                        # TotalReverse: 289.75
         self.PowerResistanceFactor = 128866          # TotalReverse
 
-        self.Resistance40 = 1000 # Last resistance realized at cadence > 40
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
         self.OK         = True
@@ -1324,7 +1341,12 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         if self.WheelSpeed > 0:
             rtn = self.TargetPower * self.PowerResistanceFactor / self.WheelSpeed
             rtn = self.__AvoidCycleOfDeath(rtn)
-        self.TargetResistance = int(rtn)
+        rtn = int(rtn)
+
+        if debug.on(debug.Function):logfile.Write (\
+            "clsTacxNewUsbTrainer.TargetPower2Resistance(%s, %s) = %s" % \
+            (self.TargetPower, self.WheelSpeed, rtn ))
+        self.TargetResistance = rtn
 
     #---------------------------------------------------------------------------
     # Limit Resistance to avoid the Cycle of Death
@@ -1332,18 +1354,16 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     #       keeps going up untill Power/0 = infinite and you "die".
     # Note that interface maximum = 0x7fff = 32767
     #
-    # Remember the resistance at 40 rpm.
-    # When cadence drops, gradually reduce to a minimum of 1000
+    # The protection factor must be Speed, since that is used in Power2Resistance
+    # Note that Speed may drop faster than Cadance!
     #
-    # Cadence < 40 is considered unrealistic this only makes trainer workable
-    # Resistance 1500 is above the calibrate value (default 1040)
+    # Note this is just a quite empirically established protection.
     #---------------------------------------------------------------------------
     def __AvoidCycleOfDeath(self, Resistance):
-        if self.Cadence >= 40 and Resistance > 1500:
-            self.Resistance40 = Resistance
 
-        if self.Cadence <  40 and Resistance >= self.Resistance40:
-            Resistance = 1500 + self.Cadence / 40 * (self.Resistance40 - 1500)
+        if self.SpeedKmh <= 15 and Resistance >= 6000:
+            Resistance = int(max(1500, self.SpeedKmh / 15 * 6000))
+
         return Resistance
 
     #---------------------------------------------------------------------------
@@ -1357,6 +1377,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     # returns   data
     #---------------------------------------------------------------------------
     def SendToTrainerUSBData(self, TacxMode, Calibrate, PedalEcho, Target, Weight):
+        Target = int(min(0x7fff, Target))
         #-----------------------------------------------------------------------
         # Data buffer depends on trainer_type
         # Refer to TotalReverse; "Newer protocol"
@@ -1378,7 +1399,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         # Build data buffer to be sent to trainer (legacy or new)
         #-----------------------------------------------------------------------
         format = sc.no_alignment + fControlCommand + fTarget + fPedalecho + fFiller7 + fMode +    fWeight + fCalibrate
-        data   = struct.pack (format, 0x00010801, int(Target),  PedalEcho,          TacxMode,  int(Weight),  Calibrate)
+        data   = struct.pack (format, 0x00010801,     Target,   PedalEcho,          TacxMode,  int(Weight),  Calibrate)
         return data
 
     #---------------------------------------------------------------------------
