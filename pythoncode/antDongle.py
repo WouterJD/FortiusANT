@@ -1420,7 +1420,7 @@ def msgPage16_TacxVortexSetPower (Channel, VortexID, Power):
     fSubcommand         = sc.unsigned_char
     fNoCalibrationData  = sc.unsigned_char
     fPower              = sc.unsigned_short # https://tacx.com/nl/product/i-vortex/
-    Power = min(0, Power)                   # --> No simulation descent ==> power > 0
+    Power = max(0, Power)                   # --> No simulation descent ==> power > 0
 
     format = sc.big_endian +    fChannel + fDataPageNumber +   fVortexID + fCommand + fSubcommand + fNoCalibrationData + fPower
     info   = struct.pack(format, Channel,   DataPageNumber, int(VortexID),  0xAA,      0,            0,               int(Power))
