@@ -765,7 +765,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
         if   self.__iVortexButtons == 0: self.Buttons = 0
         elif self.__iVortexButtons == 1: self.Buttons = CancelButton # Left 
         elif self.__iVortexButtons == 2: self.Buttons = UpButton
-        elif self.__iVortexButtons == 3: self.Buttons = 0            # OK
+        elif self.__iVortexButtons == 3: self.Buttons = EnterButton  # OK
         elif self.__iVortexButtons == 4: self.Buttons = DownButton
         elif self.__iVortexButtons == 5: self.Buttons = EnterButton  # Right
         self.__iVortexButtons = 0
