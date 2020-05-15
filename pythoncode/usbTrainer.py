@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-14b"
+__version__ = "2020-05-15"
+# 2020-05-15    Changed: AntDevice initialized in clsTacxAntVortexTrainer
 # 2020-05-15    Added: logging for SetPower() and SetGrade(), 
 #                    TargetPower2Resistance()
 # 2020-05-14    Changed: Refresh() QuarterSecond added, mandatory fields
@@ -741,6 +742,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
     def __init__(self, clv, AntDevice):
         super().__init__(clv, "Pair with Tacx i-Vortex")
         if debug.on(debug.Function):logfile.Write ("clsTacxAntVortexTrainer.__init__()")
+        self.AntDevice         = AntDevice
         self.OK                = True           # The AntDevice is there,
                                                 # the trainer not yet paired!
         self.clv.PowerFactor   = 1              # Not applicable for i-Vortex
