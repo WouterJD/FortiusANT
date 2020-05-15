@@ -915,6 +915,7 @@ def DongleDebugMessage(text, d):
             elif p        == 25: p_ = 'Trainer Data'
             elif p        == 48: p_ = 'Basic Resistance'
             elif p        == 49: p_ = 'Target Power'
+            elif p        == 50: p_ = 'Wind Resistance'
             elif p        == 51: p_ = 'Track Resistance'
             elif p        == 54: p_ = 'FE Capabilities'
             elif p        == 55: p_ = 'User Configuration'
