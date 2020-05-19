@@ -1,7 +1,37 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-07"
+__version__ = "2020-05-19"
+# 2020-05-19    Changed: exception handling when loading firmware (issue #89)
+# 2020-05-18    Changed: Some clode cleanup in clsTacxAntVortexTrainer
+# 2020-05-15    Changed: self.AntDevice initialized in clsTacxAntVortexTrainer
+# 2020-05-15    Added: logging for SetPower() and SetGrade(), 
+#                    TargetPower2Resistance()
+# 2020-05-14    Changed: Refresh() QuarterSecond added, mandatory fields
+#                        clsTacxTrainer with __init__
+#               Added:   HandleANTmessage + iVortex ANT handling done here
+#               Virtual gearbox: 0.1 ... 3.0. 0.1 should be light enough.
+# 2020-05-13    Minor code changes
+#               Added: AddGrade(), SetRollingResistance(), SetWind()
+#               Implemented VirtualSpeedKmh to realize the virtual gearbox
+#               Flywheel changed as suggested by mattipee, totalreverse.
+#                   Weight = self.UserAndBikeWeight in GradeMode
+#                   totalreverse wiki updated 2020-01-04
+#               Grade2Power according Gribble
+# 2020-05-11    usbTrainer refactored for the following reasons:
+#               - attributes are now stored in one place and not passed to
+#                   functions and returned to callers; in the end it was
+#                   unclear what values were changed where and by whome
+#               - separate Tacx-dependant code into their own classes
+#               - Enable further improvement on the Grade2Power
+#                   algorithm in one separated location.
+#               - Grade2Power() replaces Grade2Resistance() and is therefore
+#                   immediatly usable for i-Vortex
+#                   Power2Resistance() is for USB-connected trainers only
+#               - Grade2Power() is brought back to the very basic, with a 
+#                   formula based on physics and no additions.
+#                   Ready for testing and -perhaps- finetuning.
+#               - Introduction VirtualSpeedKmh (not yet finalized)
 # 2020-05-07    pylint error free
 # 2020-04-28    FortiusAntGui; only two constants imported (I do not want a link here with GUI)
 # 2020-04-16    Write() replaced by Console() where needed
@@ -43,10 +73,12 @@ __version__ = "2020-05-07"
 #-------------------------------------------------------------------------------
 import usb.core
 import os
+import random
 import struct
 import sys
 import time
 
+import antDongle         as ant
 import debug
 import logfile
 import structConstants   as sc
@@ -55,28 +87,22 @@ import FortiusAntCommand as cmd
 import fxload
 
 #-------------------------------------------------------------------------------
-# Globals
-#-------------------------------------------------------------------------------
-global trainer_type;    trainer_type     = 0
-global LegacyProtocol;  LegacyProtocol   = False
-
-tt_iMagic        = 0x1902    # Old "solid green" iMagic headunit (with or without firmware)
-tt_iMagicWG      = 0x1904    # New "white green" iMagic headunit (firmware inside)
-tt_Fortius       = 0x1932    # New "white blue" Fortius headunit (firmware inside)
-tt_FortiusSB     = 0x1942    # Old "solid blue" Fortius (firmware inside)
-tt_FortiusSB_nfw = 0xe6be    # Old "solid blue" Fortius (without firmware)
-
-idVendor_Tacx    = 0x3561
-
-#-------------------------------------------------------------------------------
 # Constants
 #-------------------------------------------------------------------------------
+hu1902          = 0x1902    # Old "solid green" iMagic headunit (with or without firmware)
+hu1904          = 0x1904    # New "white green" iMagic headunit (firmware inside)
+hu1932          = 0x1932    # New "white blue" Fortius headunit (firmware inside)
+hu1942          = 0x1942    # Old "solid blue" Fortius (firmware inside)
+hue6be_nfw      = 0xe6be    # Old "solid blue" Fortius (without firmware)
+
+idVendor_Tacx   = 0x3561
+
 EnterButton     = 1
 DownButton      = 2
 UpButton        = 4
 CancelButton    = 8
 
-modeStop        = 0
+modeStop        = 0         # USB Tacx modes
 modeResistance  = 2
 modeCalibrate   = 3
 
@@ -92,477 +118,1109 @@ imagic_fw  = os.path.join(dirname, 'tacximagic_1902_firmware.hex')
 fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 
 #-------------------------------------------------------------------------------
-# Convert Power (Watt) <--> Resistance (presumably Nm)
-#
-#            Power = Torque (Nm) * Speed (rad/s)
-# <==>       Power = Resistance * Speed / factor
-# and   Resistance = Power / Speed * factor
-#
-# We assume resistance is something like Nm
-#    know   WheelSpeed is mm/s
-#    know   Power      is Watt
+# Class inheritance
+# -----------------
+# clsTacxTrainer                            = Base class with attributes
+#       -> clsSimulatedTrainer              = Simulated trainer
+#       -> clsTacxAntVortexTrainer          = Tacx i-Vortex
+#       -> clsTacxUsbTrainer
+#             -> clsTacxLegacyUsbTrainer    = Tacx iMagic
+#             -> clsTacxNewUsbTrainer       = Tacx Fortius
 #-------------------------------------------------------------------------------
-# The resistance is calculated above 10 km/hr and 30 rpm
-# a. protect against divide-by-zero
-# b. obviously rider does not meet up required power (so give him a brake)
-# c. tacx fortius does not work well at (or above) 200W at 10km/h
+# Class functions (more info in the classes)
+# ------------------------------------------
+# class clsTacxTrainer()
+#     def GetTrainer(clv, AntDevice=None)
 #
-# ad c. 200 W and 10 km/hr
-#       R = 200 * 128866 / (10 * 301) = 8562
+#     def ResetPowercurveFactor()                             # Virtual Gearbox
+#     def SetPowercurveFactorUp()
+#     def SetPowercurveFactorDown()
+#   
+#     def SetPower(Power)                                     # Store Power
+#     def AddPower(deltaPower)
+#     def SetGrade(Grade)                                     # Store Grade
+#     def AddGrade(deltaGrade)
+#     def SetRollingResistance(RollingResistance)
+#     def SetWind()
+#     def SetUserConfiguration(UserWeight, ...)               # Store User
 #
-#       Tacx Fortius is said to have a range of 50...1000Watt,
-#           let's calculate at 50km/hr:
-#       R = 1000 * 128866 / (50 * 301) = 8562
-#           I leave it to you to test whether you can go over this resistance at
-#           high speeds :-)
+#     def Refresh(QuarterSecond, TacxMode)                    # Receive, Calculate, Send
+#     def SendToTrainer(QuarterSecond, TacxMode)              # To be defined by child class
+#     def _ReceiveFromTrainer()                               # To be defined by child class
 #
-#    My personal experience already showed that the Tacx Fortius works well
-#       at higher speeds and here is the explanation!
+#     def CalibrateSupported()                                # Return whether calibration supported
 #
-#    Conclusion: for rider with ftp=250 (or more) who wants to do low-speed,
-#       low-cadence (MTB) training, this is not the machine!
+#     def _Grade2Power()                                      # Calculate required Power from Grade
+#                                                             # This is where the magic is done!
+#
+# class clsSimulatedTrainer(clsTacxTrainer)
+#     def Refresh(QuarterSecond, Tacxmode)                    # Randomize data (does not receive/send!)
+#                                                             # Completely replaces parent.Refresh()
+#
+# class clsTacxAntVortexTrainer(clsTacxTrainer)
+#     def SetAntVortexValues(Cadence, CurrentPower, SpeedKmh) # Store data from Tacx i-Vortex
+#     def Refresh(QuarterSecond, TacxMode)
+#     def SendToTrainer(QuarterSecond, TacxMode)
+#     def _ReceiveFromTrainer()
+#     def HandleANTmessage(message)
+#
+# class clsTacxUsbTrainer(clsTacxTrainer)
+#     def Wheel2Speed()                                       # Convert Wheelspeed -> Kmh
+#     def Speed2Wheel(SpeedKmh)                               # Convert Kmh --> Wheelspeed
+#     def Refresh(QuarterSecond, TacxMode)                    # Add USB-special(s) to parent.Refresh()
+#     def USB_Read()                                          # Read buffer from USB connected Tacx
+#     def SendToTrainer(tacxMode)                             # Send buffer to   USB connected Tacx
+#
+# class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer)
+#     def TargetPower2Resistance()                            # Legacy conversion TargetPower -> TargetResistance
+#     def CurrentResistance2Power()                           # Legacy conversion CurrentResistance -> CurrentPower
+#     def SendToTrainerUSBData(TacxMode, ...)                 # Compose legacy buffer to be sent
+#     def _ReceiveFromTrainer ()                              # Read and parse legacy data from trainer
+#
+# class clsTacxNewUsbTrainer(clsTacxUsbTrainer)
+#     def TargetPower2Resistance()                            # New conversion TargetPower -> TargetResistance
+#     def CurrentResistance2Power()                           # New conversion CurrentResistance -> CurrentPower
+#     def SendToTrainerUSBData(TacxMode, ...)                 # Compose new buffer to be sent
+#     def _ReceiveFromTrainer ()                              # Read and parse new data from trainer
+#
 #-------------------------------------------------------------------------------
-# legacyResistance2Power and vv for iMagic, using legacy protocol
-# Thanks to GoldenCheetah / GoldenCheetah / master / src / Train / Imagic.cpp
+# c l s T a c x T r a i n e r           The parent for all trainers
 #-------------------------------------------------------------------------------
-PowerResistanceFactor = 128866                  # TotalReverse
-legacyPowerResistanceFactor = (1 / 0.0036)      # GoldenCheetah ~= 277.778
+class clsTacxTrainer():
+    UsbDevice               = None          # clsHeadUnitLegacy and clsHeadUnitNew only!
+    AntDevice               = None          # clsVortexTrainer only!
+    OK                      = False
+    Message                 = None
 
-def Resistance2Power(Resistance, SpeedKmh):
-    global LegacyProtocol
+    # Target provided by CTP (Trainer Road, Zwift, Rouvy, ...)
+    # See Refresh() for dependencies
+    TargetMode              = mode_Power    # Start with power mode
+    TargetGrade             = 0             # no grade
+    TargetPower             = 100           # and 100Watts
+    TargetResistance        = 0             # calculated and input to trainer
 
-    if LegacyProtocol:
-        if SpeedKmh == 0:
-            return 0
+    # Information provided by CTP
+    BicycleWeight           = 10
+    BicycleWheelDiameter    = None
+    GearRatio               = None
+    UserWeight              = 75
+    UserAndBikeWeight       = 75 + 10       # defined according the standard (data page 51)
+
+    RollingResistance       = 0.004
+    WindResistance          = 0.51          # 1.275 * 0.4 * 1.0
+    WindSpeed               = 0
+    DraftingFactor          = 1.0
+
+    # Information provided by _ReceiveFromTrainer()
+    Axis                    = 0             # int
+    Buttons                 = 0             # int
+    Cadence                 = 0             # int
+    CurrentPower            = 0             # int
+    CurrentResistance       = 0             # int
+    HeartRate               = 0             # int
+    PedalEcho               = 0
+    SpeedKmh                = 0             # round(,1)
+    VirtualSpeedKmh         = 0             #           see Grade_mode
+    TargetResistanceFT      = 0             # int       Returned from trainer
+    WheelSpeed              = 0             # int
+
+    # Other general variables
+    clv                     = None          # Command line variables
+    PowercurveFactor        = 1             # 1.1 causes higher load
+                                            # 0.9 causes lower load
+                                            # Is manually set in Grademode
+    Teeth                   = 15            # See Refresh()
+
+    # USB devices only:
+    Headunit                = 0             # The connected headunit in GetTrainer()
+    Calibrate               = 0             # The value as established during calibration
+    SpeedScale              = None          # To be set in sub-class
+
+    def __init__(self, clv, Message):
+        if debug.on(debug.Function):logfile.Write ("clsTacxTrainer.__init__()")
+        self.clv             = clv
+        self.Message         = Message
+        self.OK              = False
+
+    #---------------------------------------------------------------------------
+    # G e t T r a i n e r
+    #---------------------------------------------------------------------------
+    # Function      Create a TacxTrainer-child class, depending on the 
+    #               circumstances.
+    #
+    # Output        object.OK and object.Message
+    #
+    # Returns       Object of a TacxTrainer sub-class
+    #---------------------------------------------------------------------------
+    @staticmethod                       # pretent to be c++ factory function
+    def GetTrainer(clv, AntDevice=None):
+        if debug.on(debug.Function):logfile.Write ("clsTacxTrainer.GetTrainer()")
+
+        #-----------------------------------------------------------------------
+        # Usually I do not like multiple exit points, but here it's too handy
+        #-----------------------------------------------------------------------
+        if clv.SimulateTrainer: return clsSimulatedTrainer(clv)
+        if clv.Tacx_iVortex:    return clsTacxAntVortexTrainer(clv, AntDevice)
+            
+        #-----------------------------------------------------------------------
+        # So we are going to initialize USB
+        # This may be either 'Legacy interface' or 'New interface'
+        #-----------------------------------------------------------------------
+        msg             = "No Tacx trainer found"
+        hu              = None                      # TrainerType
+        dev             = False
+        LegacyProtocol  = False
+
+        #-----------------------------------------------------------------------
+        # Find supported trainer (actually we talk to a headunit)
+        #-----------------------------------------------------------------------
+        for hu in [hu1902, hu1904, hu1932, hu1942, hue6be_nfw]:
+            try:
+                if debug.on(debug.Function):
+                    logfile.Write ("GetTrainer - Check for trainer %s" % (hex(hu)))
+                dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=hu)      # find trainer USB device
+                if dev:
+                    msg = "Connected to Tacx Trainer T" + hex(hu)[2:]          # remove 0x from result
+                    if debug.on(debug.Data2 | debug.Function):
+                        logfile.Print (dev)
+                    break
+            except Exception as e:
+                if debug.on(debug.Function):
+                    logfile.Write ("GetTrainer - " + str(e))
+
+                if "AttributeError" in str(e):
+                    msg = "GetTrainer - Could not find USB trainer: " + str(e)
+                elif "No backend" in str(e):
+                    msg = "GetTrainer - No backend, check libusb: " + str(e)
+                else:
+                    msg = "GetTrainer: " + str(e)
+
+        #-----------------------------------------------------------------------
+        # Initialise trainer (if found)
+        #-----------------------------------------------------------------------
+        if not dev:
+            hu  = 0
+            dev = False
+        else:                                                  # found trainer
+            #-------------------------------------------------------------------
+            # iMagic             As defined together with fritz-hh and jegorvin)
+            #-------------------------------------------------------------------
+            if hu == hu1902:
+                LegacyProtocol = True
+                logfile.Console ("Initialising head unit T1902 (iMagic), please wait 5 seconds")
+                logfile.Console (imagic_fw)   # Hint what may be wrong if absent
+                try:
+                    fxload.loadHexFirmware(dev, imagic_fw)
+                except Exception as e:                         # file not found?
+                    msg = "GetTrainer: " + str(e)
+                    dev = False
+                else:
+                    time.sleep(5)
+                    msg = "T1902 head unit initialised (iMagic)"
+
+            #-------------------------------------------------------------------
+            # unintialised Fortius (as provided by antifier original code)
+            #-------------------------------------------------------------------
+            if hu == hue6be_nfw:
+                logfile.Console ("Initialising head unit T1942 (Fortius), please wait 5 seconds")
+                logfile.Console (fortius_fw)  # Hint what may be wrong if absent
+                try:
+                    fxload.loadHexFirmware(dev, fortius_fw)
+                except Exception as e:                         # file not found?
+                    msg = "GetTrainer: " + str(e)
+                    dev = False
+                else:
+                    time.sleep(5)
+                    dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=hu1942)
+                    if dev != None:
+                        msg = "T1942 head unit initialised (Fortius)"
+                        hu = hu1942
+                    else:
+                        msg = "GetTrainer - Unable to load firmware"
+                        dev = False
+
+            #-------------------------------------------------------------------
+            # Set configuration
+            #-------------------------------------------------------------------
+            if dev != False:
+                dev.set_configuration()
+                if hu == hu1902:
+                    dev.set_interface_altsetting(0, 1)
+
+            #-------------------------------------------------------------------
+            # InitialiseTrainer (will not read cadence until init str is sent)
+            #-------------------------------------------------------------------
+            if dev != False and LegacyProtocol == False:
+                data = struct.pack (sc.unsigned_int, 0x00000002)
+                if debug.on(debug.Data2):
+                    logfile.Write ("InitialiseTrainer data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
+                dev.write(0x02,data)
+
+        #-----------------------------------------------------------------------
+        # Done
+        #-----------------------------------------------------------------------
+        logfile.Console(msg)
+        if debug.on(debug.Function):
+            logfile.Write ("GetTrainer() returns, trainertype=" + hex(hu))
+
+        #-----------------------------------------------------------------------
+        # Return the correct Object
+        #-----------------------------------------------------------------------
+        if dev != False:
+            if LegacyProtocol:
+                return clsTacxLegacyUsbTrainer(clv, msg, hu, dev)
+            else:
+                return clsTacxNewUsbTrainer(clv, msg, hu, dev)
         else:
-            # GoldenCheetah: curPower = ((curResistance * 0.0036f) + 0.2f) * curSpeedInternal;
-            # return round(((Resistance / legacyPowerResistanceFactor) + 0.2) * WheelSpeed, 1)
+            return clsTacxTrainer (clv, msg)           # where .OK = False
 
-            # ref https://github.com/WouterJD/FortiusANT/wiki/Power-calibrated-with-power-meter-(iMagic)
-            return round(Resistance * (SpeedKmh* SpeedKmh / 648 + SpeedKmh / 5411 + 0.1058) + 2.2 * SpeedKmh, 1)
-    else:
-        WheelSpeed = Speed2Wheel(SpeedKmh)
-        return round(Resistance / PowerResistanceFactor * WheelSpeed, 1)
+    #---------------------------------------------------------------------------
+    # Functions from external to provide data
+    #
+    # PowercurveFactor:
+    # 10% steps insprired by 10-11-12...36-40-44 cassettes.
+    # 0.1 ... 3 is arbitrary, where lowerbound 0 is definitely no good idea.
+    #---------------------------------------------------------------------------
+    def ResetPowercurveFactor(self):
+        self.PowercurveFactor   = 1
 
-def Power2Resistance(PowerInWatt, SpeedKmh, Cadence):
-    global LegacyProtocol
+    def SetPowercurveFactorUp(self):
+        if self.PowercurveFactor < 3:
+            self.PowercurveFactor   *= 1.1
 
-    WheelSpeed = Speed2Wheel(SpeedKmh)
+    def SetPowercurveFactorDown(self):
+        if self.PowercurveFactor > 0.1:
+            self.PowercurveFactor   /= 1.1
 
-    if LegacyProtocol:
-        rtn = 0
-        if WheelSpeed > 0:
-            # instead of brakeCalibrationFactor use PowerFactor -p
-            # GoldenCheetah: setResistance = (((load  / curSpeedInternal) - 0.2f) / 0.0036f)
-            #                setResistance *= brakeCalibrationFactor
-            # rtn = ((PowerInWatt / WheelSpeed) - 0.2) * legacyPowerResistanceFactor
+    def SetPower(self, Power):
+        if debug.on(debug.Function):logfile.Write ("SetPower(%s)" % Power)
+        self.TargetMode         = mode_Power
+        self.TargetGrade        = 0
+        self.TargetPower        = Power
+        self.TargetResistance   = 0             # .Refresh() must be called
 
-            # ref https://github.com/WouterJD/FortiusANT/wiki/Power-calibrated-with-power-meter-(iMagic)
-            rtn = (PowerInWatt - 2.2 * SpeedKmh) / (SpeedKmh * SpeedKmh / 648 + SpeedKmh / 5411 + 0.1058)
+    def AddPower(self, deltaPower):
+        self.SetPower(self.TargetPower + deltaPower)
 
-        # Check bounds
-        rtn = int(min(226, rtn)) # Maximum value; as defined by Golden Cheetah
-        rtn = int(max( 30, rtn)) # Minimum value
+    def SetGrade(self, Grade):
+        if debug.on(debug.Function):logfile.Write ("SetGrade(%s)" % Grade)
+        self.TargetMode         = mode_Grade
+        self.TargetGrade        = Grade
+        self.TargetPower        = 0             # .Refresh() must be called
+        self.TargetResistance   = 0             # .Refresh() must be called
 
-    else:
-        if WheelSpeed > 0:
-            rtn = PowerInWatt * PowerResistanceFactor / WheelSpeed
-            rtn = ResistanceAtLowSpeed(SpeedKmh, rtn)
+    def AddGrade(self, deltaGrade):
+        self.SetGrade(self.TargetGrade + deltaGrade)
+    
+    def SetRollingResistance(self, RollingResistance):
+        if debug.on(debug.Function):
+            logfile.Write ("SetRollingResistance(%s[def=0.004])" % RollingResistance)
+
+        self.RollingResistance = RollingResistance
+
+    def SetWind(self, WindResistance, WindSpeed, DraftingFactor):
+        if debug.on(debug.Function):
+            logfile.Write ("SetWind(%s[def=0.51], %s[def=0], %s[def=1])" % 
+                (WindResistance, WindSpeed, DraftingFactor) )
+
+        self.WindResistance = WindResistance
+        self.WindSpeed      = WindSpeed
+        self.DraftingFactor = DraftingFactor
+
+    def SetUserConfiguration(self, UserWeight, BicycleWeight, BicycleWheelDiameter, GearRatio):
+        self.BicycleWeight          = BicycleWeight
+        self.BicycleWheelDiameter   = BicycleWheelDiameter
+        self.GearRatio              = GearRatio
+        self.UserWeight             = UserWeight
+        self.UserAndBikeWeight      = UserWeight + BicycleWeight
+
+    #---------------------------------------------------------------------------
+    # SendToTrainer() and ReceivedFromTrainer() to be defined by sub-class
+    #---------------------------------------------------------------------------
+    def SendToTrainer(self, QuarterSecond, TacxMode):   # no return
+        pass
+    def _ReceiveFromTrainer(self):                      # No return
+        pass
+    def TargetPower2Resistance(self):
+        self.TargetResistance = 0                    # child class must redefine
+
+    #---------------------------------------------------------------------------
+    # R e f r e s h
+    #---------------------------------------------------------------------------
+    # Input         Class variables Target***
+    #               QuarterSecond, indicates that 1/4 second since previous
+    #                              for ANTdevices only
+    #               TacxMode, to pass to SendToTrainer()
+    #
+    # Function      Refresh updates the actual values from the trainer
+    #               Then does required calculations
+    #               And finally instructs the trainer what to do
+    #
+    #               It appears more logical to do calculations when inputs change
+    #               but it's done here because some calculations depend on the
+    #               wheelspeed, so must be redone after each _ReceiveFromTrainer()
+    #
+    # Output        Class variables match with Target***
+    #---------------------------------------------------------------------------
+    def Refresh(self, QuarterSecond, TacxMode):
+        if debug.on(debug.Function):logfile.Write ( \
+                    'clsTacxTrainer.Refresh(%s, %s)' % (QuarterSecond, TacxMode))
+        #-----------------------------------------------------------------------
+        # FIrst get data from the trainer
+        #-----------------------------------------------------------------------
+        self._ReceiveFromTrainer()
+
+        #-----------------------------------------------------------------------
+        # Make all variables consistent
+        #-----------------------------------------------------------------------
+
+        #-----------------------------------------------------------------------
+        # Calculate Virtual speed applying the digital gearbox
+        # if DOWN has been pressed, we pretend to be riding slower than the
+        #       trainer wheel rotates
+        # if UP has been pressed, we pretend to be faster than the trainer
+        #
+        # Note that Grade2Power() depends on the VirtualSpeed.
+        #-----------------------------------------------------------------------
+        self.VirtualSpeedKmh = self.SpeedKmh * self.PowercurveFactor
+
+        # No negative value defined for ANT message Page25 (#)
+        if self.CurrentPower < 0: self.CurrentPower = 0 
+
+        assert (self.TargetMode in (mode_Power, mode_Grade))
+        if self.TargetMode == mode_Power:
+            pass
+
+        elif self.TargetMode == mode_Grade:
+            self._Grade2Power()
+
+        #-----------------------------------------------------------------------
+        # For all modes: To be implemented by USB-trainers; pass for others
+        #-----------------------------------------------------------------------
+        self.TargetPower2Resistance()
+
+        #-----------------------------------------------------------------------
+        # Antifier's calibration; valid for USB devices only
+        #                         non-USB classes will set PowerFactor=1
+        #
+        # The idea is that Power2Resistance gives insufficient resistance
+        # and that the formula can be corrected with the PowerFactor.
+        # Therefore before Send:
+        #       the TargetResistance is multiplied by factor
+        # and after Receive:
+        #       the CurrentResistance and CurrentPower are divided by factor
+        # Just for antifier upwards compatibility; usage unknown.
+        #-----------------------------------------------------------------------
+        if self.clv.PowerFactor:
+            self.TargetResistance  *= self.clv.PowerFactor  # Will be sent
+
+            self.CurrentResistance /= self.clv.PowerFactor  # Was just received
+            self.CurrentPower      /= self.clv.PowerFactor  # Was just received
+
+        # ----------------------------------------------------------------------
+        # Round after all these calculations
+        # ----------------------------------------------------------------------
+        self.TargetPower         = int(self.TargetPower)
+        self.TargetResistance    = int(self.TargetResistance)
+        self.CurrentResistance   = int(self.CurrentResistance)
+        self.CurrentPower        = int(self.CurrentPower)
+        self.SpeedKmh            = round(self.SpeedKmh,1)
+        self.VirtualSpeedKmh     = round(self.VirtualSpeedKmh,1)
+
+        # ----------------------------------------------------------------------
+        # Show the virtual cassette, calculated from a 10 teeth sprocket
+        # If PowercurveFactor = 1  : 15 teeth
+        # If PowercurveFactor = 0.9: 14 teeth
+        # Limit of PowercurveFactor is done at the up/down button
+        # 15 is choosen so that when going heavier, first 14,12,11 teeth is
+        #     shown. Numbers like 5,4,3 would be irrealistic in real world.
+        #     Of course the number of teeth is a reference number.
+        #
+        # Set FortiusAntGui.py OnPaint() for details.
+        #       PowercurveFactor = 0.1 = 150 teeth
+        #       PowercurveFactor = 0.5 =  30 teeth
+        #       PowercurveFactor = 1.0 =  15 teeth
+        #       PowercurveFactor = 2.0 =   8 teeth
+        #       PowercurveFactor = 3.0 =   5 teeth
+        # ----------------------------------------------------------------------
+        self.Teeth = int(15 / self.PowercurveFactor)
+            
+        #-----------------------------------------------------------------------
+        # Then send the results to the trainer again
+        #-----------------------------------------------------------------------
+        self.SendToTrainer(QuarterSecond, TacxMode)
+
+    #---------------------------------------------------------------------------
+    # C a l i b r a t e S u p p o r t e d
+    #---------------------------------------------------------------------------
+    # input     self.tt
+    #
+    # function  Return whether this trainer support calibration
+    #
+    # returns   True/False
+    #---------------------------------------------------------------------------
+    def CalibrateSupported(self):
+        if self.Headunit == hu1932:                 # And perhaps others as well
+            return True
         else:
-            rtn = ResistanceAtLowSpeed(SpeedKmh, 6666)
+            return False
 
-    return rtn
+    #---------------------------------------------------------------------------
+    # Convert G r a d e T o P o w e r           |  Grade = slope
+    #---------------------------------------------------------------------------
+    # TotalReverse:
+    #   documents:      LOAD ~= (slope (in %) - 0.4) * 650
+    #   ttyT1941.py:    SlopeScale =  2 * 5 * 130    = 1300
+    #                   commented  = 13 * 5 * 10 * 5 = 3250
+    #
+    # TotalReverse, Issue #2:
+    # ANT+ describes a simple physical model:
+    #   Total resistance [N] = Gravitational Resistance + Rolling Resistance + Wind Resistance
+    # Gravitational Resistance [N] = (Equipment Mass + User Mass) x Grade(%)/100 x 9.81
+    # With the assumption of a total weight of about 80 kg and without rolling and wind
+    # resistance together with the simple assumption
+    # Load = Force [N] * 137 (the result of a fitting in ergo mode) one get:
+    #
+    # Load = 137 * 80 * 9.81 * slope_in_percent / 100
+    #
+    # SlopeScale = 137 * 80 * 9.81 / 100 = 1075
+    #
+    # Tests:
+    # factor 650 causes Zwift to think we ride @ 20km/h where the wheel runs at 40km/hr
+    # factor 1300 to be tested
+    #
+    #---------------------------------------------------------------------------
+    # Refer to ANT msgUnpage51_TrackResistance()
+    #          where zwift grade does not seem to match the definition
+    #---------------------------------------------------------------------------
+    # Input         TargetGrade, UserAndBikeWeight, SpeedKmh
+    #
+    # Function      Calculate what power must be produced, given the current
+    #               grade, speed and weigth
+    # 
+    # Output        TargetPower
+    #---------------------------------------------------------------------------
+    def _Grade2Power(self):                                       #Grade2Power#
+        if self.UserAndBikeWeight < 70:
+            self.UserAndBikeWeight = 75 + 10
 
-# Limit Resistance
-# (interface maximum = 0x7fff = 32767)
-# at low speed, Fortius does not manage higher resistance
-# at high speed, the rider does not
-def ResistanceAtLowSpeed(SpeedKmh, Resistance):
-    if SpeedKmh <= 15 and Resistance >= 6000:
-        Resistance = int(max(1000, SpeedKmh / 15 * 6000))
-    return Resistance
+        self.__Grade2Power_Gribble()
 
-#-------------------------------------------------------------------------------
-# Convert WheelSpeed --> Speed in km/hr
-# WheelSpeed = 1 mm/sec <==> 1.000.000 / 3600 km/hr = 1/278 km/hr
-# TotalReverse: Other implementations are using values between 1/277 and 1/360.
-# A practical test shows that Cadence=92 gives 40km/hr at a given ratio
-#		factor 289.75 gives a slightly higher speed
-#		factor 301 would be good (8-11-2019)
-#-------------------------------------------------------------------------------
-SpeedScale = 301         # TotalReverse: 289.75
-SpeedScale_Legacy = 11.9 # GoldenCheetah: curSpeed = curSpeedInternal / (1.19f * 10.0f);
-def Wheel2Speed(WheelSpeed):
-    global LegacyProtocol
+        if debug.on(debug.Function):
+            logfile.Write ("Grade2Power (TargetGrade=%4.1f%%, Speed=%4.1f, Weight=%3.0f, rR=%s, wR=%s, wS=%s, d=%s) = TargetPower=%3.0fW" % \
+                (self.TargetGrade, self.VirtualSpeedKmh, self.UserAndBikeWeight, \
+                self.RollingResistance, self.WindResistance, self.WindSpeed, self.DraftingFactor, \
+                 self.TargetPower) )
 
-    if LegacyProtocol:
-        return round(WheelSpeed / SpeedScale_Legacy, 2)
-    else:
-        return round(WheelSpeed / SpeedScale, 2)
-
-def Speed2Wheel(Speed):
-    global LegacyProtocol
-
-    if LegacyProtocol:
-        return round(Speed * SpeedScale_Legacy, 0)
-    else:
-        return round(Speed * SpeedScale, 0)
-
-#-------------------------------------------------------------------------------
-# Convert Grade (slope) to resistance
-#
-# TotalReverse:
-#   documents:      LOAD ~= (slope (in %) - 0.4) * 650
-#   ttyT1941.py:    SlopeScale =  2 * 5 * 130    = 1300
-#                   commented  = 13 * 5 * 10 * 5 = 3250
-#
-# TotalReverse, Issue #2:
-# ANT+ describes a simple physical model:
-#   Total resistance [N] = Gravitational Resistance + Rolling Resistance + Wind Resistance
-# Gravitational Resistance [N] = (Equipment Mass + User Mass) x Grade(%)/100 x 9.81
-# With the assumption of a total weight of about 80 kg and without rolling and wind
-# resistance together with the simple assumption
-# Load = Force [N] * 137 (the result of a fitting in ergo mode) one get:
-#
-# Load = 137 * 80 * 9.81 * slope_in_percent / 100
-#
-# SlopeScale = 137 * 80 * 9.81 / 100 = 1075
-#
-# Tests:
-# factor 650 causes Zwift to think we ride @ 20km/h where the wheel runs at 40km/hr
-# factor 1300 to be tested
-#
-#-------------------------------------------------------------------------------
-# Refer to ANT msgUnpage51_TrackResistance()
-#          where zwift grade does not seem to match the definition
-#-------------------------------------------------------------------------------
-def Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence):
-    global LegacyProtocol
-
-    if TargetGrade < -20 or TargetGrade > 30:
-        logfile.Console("Grade2Resistance; TargetGrade (%s) out of bounds!" % (TargetGrade))
-
-    if UserAndBikeWeight == 0: UserAndBikeWeight = 80
-
-    clv = cmd.Get()     # clv = Command Line Variables
-    option = 3          # 2020-01-15 after testing my preferred option is #3!
-    limit  = True
-
-    if option == 1:
+    #---------------------------------------------------------------------------
+    # www.gribble.org
+    #---------------------------------------------------------------------------
+    def __Grade2Power_Gribble(self):
         #-----------------------------------------------------------------------
-        # Formula from TotalReverse
-        # BUT: result is zero for TargetGrade=0
-        #      result is negative for downhill; which is supported by Tacx Fortius
-        #             but that's about the only one, ANT does not support it
-        #             and it seems zwift does not understand it
-        #             without produced power, zwift does not provide speed
-        #             and at -5% the motorbrake starts pushing, so power=negative
-        #
-        # (grade=10 - 0.4) * 137 * g=9.81 / 100 * weight=90  results in r=11.611
-        #             and that is a resistance I cannot handle
-        # (grade=-5 - 0.4) * 137 * g=9.81 / 100 * weight=90  results in r=-6.531
-        #           which makes the brake to drive the wheel,
-        #           resulting that I cannot 'produce' power and Zwift says speed=0
+        # Matthew updates according www.gribble.org
+        # See: https://www.gribble.org/cycling/power_v_speed.html
         #-----------------------------------------------------------------------
-        SlopeScale  = 137 * 9.81 / 100         # To be multiplied with UserAndBikeWeight
-        SlopeOffset = -0.4
-        rtn = int ( (TargetGrade - SlopeOffset) * SlopeScale * UserAndBikeWeight )
+        c     = self.RollingResistance              # default=0.004
+        m     = self.UserAndBikeWeight              # default=75+10 kg
+        g     = 9.81                                # m/s2
+        v     = self.VirtualSpeedKmh / 3.6          # m/s   km/hr * 1000 / 3600
+        Proll = c * m * g * v                       # Watt
 
-        if LegacyProtocol:
-            # Resistance is calculated for new interface, convert to Legacy
-            p   = Resistance2Power(rtn, SpeedKmh)
-            rtn = Power2Resistance(p, SpeedKmh, Cadence)
+        p_cdA = self.WindResistance                 # default=0.51
+        w     = self.WindSpeed / 3.6                # default=0
+        d     = self.DraftingFactor                 # default=1
+        Pair  = 0.5 * p_cdA * (v+w) * (v+w) * d * v # Watt
 
-        if limit:
-            MaxRes = Power2Resistance(clv.ftp * 1.25, SpeedKmh, Cadence)
-            rtn = int(min(MaxRes, rtn))       # Limit resistance to my max
-            rtn = int(max(     0, rtn))       # No negative target resistance
+        i     = self.TargetGrade                    # Percentage 0...100
+        Pslope= i/100 * m * g * v                   # Watt
 
-    elif option == 2:
-        #-----------------------------------------------------------------------
-        # TargetGrade ftp-based ergo mode
-        # Resistance depends on the TargetGrade and the current speed
-        # Power is lineair between -10% and 10%, independant on speed
-        #-----------------------------------------------------------------------
-        P_max = clv.ftp * 1.50                                              # Power at grade =  10%
-        P_min = clv.ftp * 0.00                                              # Power at grade = -10%
-        P     = P_min + ( (P_max - P_min) / 20 * (TargetGrade + 10) )   # TargetPower
+        self.TargetPower = int(Proll + Pair + Pslope)
 
-        if limit:
-            P = max( 0.5  * clv.ftp, P)                                     # Minimum value
-            P = min( 1.25 * clv.ftp, P)                                     # Maximum value
-        P = int(P)
-        rtn   = Power2Resistance(P, SpeedKmh, Cadence)
-
-        if debug.on(debug.Application):
-            logfile.Write ("2: Grade=%4.1f, max=%3s, min=%3s, power=%3s, resistance=%5s" % (TargetGrade, P_max, P_min, P, rtn) )
-
-    elif option == 3:
-        #-----------------------------------------------------------------------
-        # TargetGrade ftp-based resistance mode;
-        #   I ride all in highest gear to get maximum speed (best for Fortius)
-        #   Adjusting cadence (speed) influences required power.
-        #   No nead to change gears, although you are free to do so!
-        #
-        # Resistance depends on the TargetGrade (not the current speed)
-        # Resistance is lineair between -20% and 20%, Power increases with speed
-        #
-        # To ride in highest gear only (no shifting) two checkpoints are used
-        # - at  50rpm (higher power, lowest cadence)
-        # - at 100rpm (lower  power, highest cadence)
-        #
-        # 2020-01-13 Test: this basically works well
-        #            Even a tough track (-10% ... +20%) can be done (Zwift Muir)
-        # 2020-01-15 Formula's made as clear as possible
-        #            Ready for parameterization through command lineair
-        #            with bike = (2.096,50/34,15/25) it will be easy to customize
-        #            Effects can be visualized in related excel sheet
-        #
-        #            I use fS=fL and rS=rS so I do not need to change gears.
-        # 2020-01-15 Tested with Zwift and it works well.
-        #            Power is well distributed and gear-shifting has the
-        #            expected effect.
-        #            The ftp-based powercurve is realized and customizable!
-        # 2020-01-16 Parameters moved to command-line
-        #-----------------------------------------------------------------------
-        #------------------------------ Bicycle constants (command line defined)
-        # tyre  = 2.096                           # m        tyre circumference
-        # fL    = 50                              # teeth    chain wheel front / large
-        # fS    = 50  # 34                        # teeth    chain wheel front / small
-        # rL    = 15  # 25                        # teeth    cassette back / large
-        # rS    = 15                              # teeth    cassette back / small
-
-
-        #------------------------------ Calculation for +20%, low cadence, 1.5 ftp
-        up    = 20                              # %        slope gradient
-        rpm   = 50                              # /min     low cadence
-        d     = clv.tyre * clv.fS / clv.rL      # m        distance for one pedal-revolution
-        s     = d * rpm * 60 / 1000             # km/hr    speed
-        P_max = clv.ftp * clv.ResistanceH / 100 # Watt     higher power
-        R_max = Power2Resistance(P_max, s, rpm) # Resistance for this speed at 50 rpm
-
-        #------------------------------ Calculation for -20%, high cadence, 1 ftp
-        down  = -20                             # %        slope gradient
-        rpm   = 100                             # /min     high cadence
-        d     = clv.tyre * clv.fL / clv.rS      # m        distance for one pedal-revolution
-        s     = d * rpm * 60 / 1000             # km/hr    speed
-        P_min = clv.ftp * clv.ResistanceL / 100 # Watt     lower power
-        R_min = Power2Resistance(P_min, s, rpm) # Resistance for this speed at 100 rpm
-
-        #--------------------------------------- Calculation for TargetGrade
-        rtn   = int(R_min + ( (R_max - R_min) / (up - down) * (TargetGrade - down) ) )
-
-        if debug.on(debug.Application):
-            logfile.Write ("3: Grade=%4.1f, R_max=%4.0f, R_min=%4.0f, resistance=%4.0f" % (TargetGrade, R_max, R_min, rtn) )
-
-    else:
-        #-----------------------------------------------------------------------
-        # Let's start with the basic formula.
-        # Resistance depends on the TargetGrade (not the current speed)
-        # But target resistance at steep slopes (8%...20%) cannot be done and
-        #       you must gear down seriously.
-        #-----------------------------------------------------------------------
-        P       = PfietsNL(TargetGrade, UserAndBikeWeight, SpeedKmh)
-
-        #-----------------------------------------------------------------------
-        # Initial versions limitted P to 1.50ftp
-        # But that means that the curve is maximized (e.g. at 5% and then remains
-        #   flat until 20% which takes away the slope-effect)
-        # Old formula: P = min (1.50 * ftp, P)
-        #-----------------------------------------------------------------------
-
-        #-----------------------------------------------------------------------
-        # Let's learn from "ftp-based resistance mode" (read there)
-        # Let's establish a factor so that 10%/50 rpm will require 1.50ftp
-        #-----------------------------------------------------------------------
-        rpm     = 50                      # /min     cadence
-        d       = 2.096 * 50 / 17         # m        distance for one pedal-revolution
-        w       = d * rpm / 60 * 1000     # mm/sec   WheelSpeed
-        P_max   = clv.ftp * 1.50          # Watt     higher power
-
-        P_fiets = PfietsNL(10, UserAndBikeWeight, Wheel2Speed(w))         # Power at 10%up at 50 rpm in highest gear
-        factor  = min(1, P_max / P_fiets) # Reduction factor; <= 1
-        if TargetGrade < 0: factor = 1
-
-        #-----------------------------------------------------------------------
-        # Reduce Target power with a constant factor to get to 1.5ftp at 10%
-        # Resistance remains dependant on the TargetGrade (not the current speed)
-        #-----------------------------------------------------------------------
-        Px      = P * factor
-
-        #-----------------------------------------------------------------------
-        # Translate power to resistance at the current speed
-        # Note that Power2Resistance() has its own limitations
-        #-----------------------------------------------------------------------
-        rtn     = Power2Resistance(Px, SpeedKmh, Cadence)
-
-        if debug.on(debug.Application):
-            logfile.Write ("%4.1f%%, P=%3.0fW(%3.0fW), R=%4.0f f=%4.2f" % \
-                     (TargetGrade, P,     Px,        rtn,  factor) )
-
-    rtn = ResistanceAtLowSpeed(SpeedKmh, rtn)
-
-    return rtn
-
-def PfietsNL(TargetGrade, UserAndBikeWeight, SpeedKmh):
+    #---------------------------------------------------------------------------
+    # www.fiets.nl
+    #---------------------------------------------------------------------------
+    def __Grade2Power_FietsNL(self):
         #-----------------------------------------------------------------------
         # Thanks to https://www.fiets.nl/2016/05/02/de-natuurkunde-van-het-fietsen/
         # Required power = roll + air + slope + mechanical
         #-----------------------------------------------------------------------
-        c     = 0.004                           # roll-resistance constant
-        m     = UserAndBikeWeight               # kg
+        c     = self.RollingResistance          # roll-resistance constant
+        m     = self.UserAndBikeWeight          # kg
         g     = 9.81                            # m/s2
-        v     = SpeedKmh / 3.6                  # m/s       km/hr * 1000 / 3600
+        v     = self.VirtualSpeedKmh / 3.6      # m/s       km/hr * 1000 / 3600
         Proll = c * m * g * v                   # Watt
 
         p     = 1.205                           # air-density
         cdA   = 0.3                             # resistance factor
+                                                # p_cdA = 0.375
         w     =  0                              # wind-speed
         Pair  = 0.5 * p * cdA * (v+w)*(v+w)* v  # Watt
 
-        i     = TargetGrade
+        i     = self.TargetGrade                # Percentage 0...100
         Pslope= i/100 * m * g * v               # Watt
 
         Pbike = 37
 
-        return Proll + Pair + Pslope + Pbike
+        self.TargetPower = int(Proll + Pair + Pslope + Pbike)
 
 #-------------------------------------------------------------------------------
-# G e t T r a i n e r
+# c l s S i m u l a t e d T r a i n e r
 #-------------------------------------------------------------------------------
-# input     none
-#
-# function  find USB trainer
-#
-# returns   devTrainer, msg
+# Simulate Tacx-trainer
 #-------------------------------------------------------------------------------
-def GetTrainer():
-    global trainer_type
-    global LegacyProtocol
-    #---------------------------------------------------------------------------
-    # Initialize
-    #---------------------------------------------------------------------------
-    if debug.on(debug.Function):logfile.Write ("GetTrainer()")
-    trainer_type     = 0
-    LegacyProtocol   = False
+class clsSimulatedTrainer(clsTacxTrainer):
+    def __init__(self, clv):
+        super().__init__(clv, "Simulated Tacx Trainer to test ANT-interface")
+        if debug.on(debug.Function):logfile.Write ("clsSimulatedTrainer.__init__()")
+        self.OK              = True
+        self.clv.PowerFactor = 1            # Not applicable for simulation
 
-    #---------------------------------------------------------------------------
-    # Find supported trainer
-    #---------------------------------------------------------------------------
-    msg = "No Tacx trainer found"
-    for idp in [tt_iMagic, tt_iMagicWG, tt_Fortius, tt_FortiusSB, tt_FortiusSB_nfw]:
-        try:
-            if debug.on(debug.Function): logfile.Write ("GetTrainer - Check for trainer %s" % (hex(idp)))
-            dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=idp)      # find trainer USB device
-            if dev != None:
-                msg = "Connected to Tacx Trainer T" + hex(idp)[2:]          # remove 0x from result, was "Trainer found:"
-                if debug.on(debug.Data2 | debug.Function):
-                    logfile.Print (dev)
-                trainer_type = idp
-                break
-        except Exception as e:
-            if debug.on(debug.Function): logfile.Write ("GetTrainer - " + str(e))
+    # --------------------------------------------------------------------------
+    # R e f r e s h
+    # --------------------------------------------------------------------------
+    # input:        self.TargetPower
+    #
+    # Description:  Basically, values are set so that no trainer-interface is needed
+    #               Especially, to be able to test without the trainer being active
+    #
+    #               Just for fun, generate values based upon what the trainer
+    #               program wants so that a live simulation can be generated.
+    #               For example to make a video without pedalling.
+    #
+    #               The CurrentPower smoothly adjust to TargetPower
+    #               The HeartRate follows the CurrentPower produced
+    #               The Cadence is floating around 100
+    #               The Speed follows the Cadence
+    #
+    # Output:       self.* variables, see next 10 lines
+    # --------------------------------------------------------------------------
+    def Refresh (self, _QuarterSecond=None, _TacxMode=None):
+        if debug.on(debug.Function):logfile.Write ("clsSimulatedTrainer.Refresh()")
+        self.Axis               = 0
+        self.Buttons            = 0
+        self.PedalEcho          = 0
+        self.TargetResistance   = 2345
 
-            if "AttributeError" in str(e):
-                msg = "GetTrainer - Could not find USB trainer: " + str(e)
-            elif "No backend" in str(e):
-                msg = "GetTrainer - No backend, check libusb: " + str(e)
+        if self.TargetMode == mode_Grade:
+            self._Grade2Power()
+
+        if False or self.TargetPower < 10:   # Return fixed value
+            self.SpeedKmh    = 34.5
+            self.HeartRate   = 135
+            self.CurrentPower= 246
+            self.Cadence     = 113
+        else:                           # Return animated value
+                                        # Using this setting, you let TrainerRoad and FortiusANT play together
+                                        # and sip a beer yourself :-)
+            HRmax       = 180
+            ftp         = 246   # at 80% HRmax
+
+            deltaPower    = (self.TargetPower - self.CurrentPower)
+            if deltaPower < 8:
+                self.CurrentPower = self.TargetPower
+                deltaPower        = 0
             else:
-                msg = "GetTrainer: " + str(e)
+                self.CurrentPower = self.CurrentPower + deltaPower / 8          # Step towards TargetPower
+            self.CurrentPower *= (1 + random.randint(-3,3) / 100)               # Variation of 5%
 
-    #---------------------------------------------------------------------------
-    # Initialise trainer (if found)
-    #---------------------------------------------------------------------------
-    if trainer_type == 0:
-        dev = False
-    else:                                                        # found trainer
-        #-----------------------------------------------------------------------
-        # iMagic            As defined together with fritz-hh and jegorvin)
-        #-----------------------------------------------------------------------
-        if trainer_type == tt_iMagic:
-            LegacyProtocol = True
-            if debug.on(debug.Function): logfile.Write ("GetTrainer - Found iMagic head unit")
-            try:
-                fxload.loadHexFirmware(dev, imagic_fw)
-                if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
-                time.sleep(5)
-                msg = "GetTrainer - iMagic head unit initialised"
-            except:                                                  # not found
-                msg = "GetTrainer - Unable to initialise trainer"
-                dev = False
+            self.Cadence       = 100 - deltaPower / 10                          # Cadence drops when Target increases
+            self.Cadence      *= (1 + random.randint(-2,2) / 100)               # Variation of 2%
 
-        #-----------------------------------------------------------------------
-        # unintialised Fortius (as provided by antifier original code)
-        #-----------------------------------------------------------------------
-        if trainer_type == tt_FortiusSB_nfw:
-            if debug.on(debug.Function): logfile.Write ("GetTrainer - Found uninitialised Fortius head unit")
-            try:
-                fxload.loadHexFirmware(dev, fortius_fw)
-                if debug.on(debug.Function): logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
-                time.sleep(5)
-                dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=tt_FortiusSB)
-                if dev != None:
-                    msg = "GetTrainer - Fortius head unit initialised"
-                    trainer_type = tt_FortiusSB
-                else:
-                    msg = "GetTrainer - Unable to load firmware"
-                    dev = False
-            except:                                                     # not found
-                msg = "GetTrainer - Unable to initialise trainer"
-                dev = False
+            self.SpeedKmh      = 35 * self.Cadence / 100                        # Speed is 35 kmh at cadence 100 (My highest gear)
+            self.VirtualSpeedKmh= self.SpeedKmh
 
-        #-----------------------------------------------------------------------
-        # Set configuration
-        #-----------------------------------------------------------------------
-        if dev != False:
-            dev.set_configuration()
-            if trainer_type == tt_iMagic:   dev.set_interface_altsetting(0, 1)
-
-        #-----------------------------------------------------------------------
-        # InitialiseTrainer (will not read cadence until initialisation byte is sent)
-        #-----------------------------------------------------------------------
-        if dev != False and LegacyProtocol == False:
-            data = struct.pack (sc.unsigned_int, 0x00000002)
-            if debug.on(debug.Data2):
-                logfile.Write ("InitialiseTrainer data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
-            dev.write(0x02,data)
-
-    #---------------------------------------------------------------------------
-    # Done
-    #---------------------------------------------------------------------------
-    logfile.Console(msg)
-    if debug.on(debug.Function):logfile.Write ("GetTrainer() returns, trainertype=" + hex(trainer_type))
-    return dev, msg
-
+            self.HeartRate     = HRmax * (0.5 + ((self.CurrentPower - 100) / (ftp - 100) ) * 0.3)
+                                                                                # As if power is linear with power
+                                                                                # 100W is reached at 50%
+                                                                                # ftp  is reached at 80%
+                                                                                # Assume lineair between 100W and ftp
+            if self.HeartRate < HRmax * 0.5: self.HeartRate = HRmax * 0.5       # minimize HR
+            if self.HeartRate > HRmax:       self.HeartRate = HRmax             # maximize HR
+            self.HeartRate    += random.randint(-5,5)                           # Variation of heartrate by 5 beats
 
 #-------------------------------------------------------------------------------
-# S e n d T o T r a i n e r
+# c l s T a c x A n t V o r t e x T r a i n e r
 #-------------------------------------------------------------------------------
-# input     devTrainer, Mode
-#           if Mode=modeResistance:  TargetPower or TargetGrade/Weight
-#                                    Speed and Cadence are reference for Power2Resistance
-#               in mode_Grade: PowercurveFactor increments/decrements resistance
-#           PedalEcho   - must be echoed
-#           Calibrate   - Resistance during calibration is specified
-#                         If =zero default is calculated
-#           LegacyProtocol (for iMagic)
-#
-# function  Set trainer to calculated resistance (TargetPower) or Grade
-#
-# returns   None
+# Tacx-trainer with ANT connection
+# Actually, only the data-storage and Refresh() with Grade2Power() is used!
 #-------------------------------------------------------------------------------
-def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade,
-                    PowercurveFactor, UserAndBikeWeight, \
-                    PedalEcho, SpeedKmh, Cadence, Calibrate, SimulateTrainer):
-    global LegacyProtocol # As filled in GetTrainer()
+class clsTacxAntVortexTrainer(clsTacxTrainer):
+    def __init__(self, clv, AntDevice):
+        super().__init__(clv, "Pair with Tacx i-Vortex")
+        if debug.on(debug.Function):logfile.Write ("clsTacxAntVortexTrainer.__init__()")
+        self.AntDevice         = AntDevice
+        self.OK                = True           # The AntDevice is there,
+                                                # the trainer not yet paired!
+        self.clv.PowerFactor   = 1              # Not applicable for i-Vortex
 
-    if debug.on(debug.Function): logfile.Write ("SendToTrainer(%s, %s, %s, %s, %s, %s, %s, %s)" % (Mode, TargetMode, TargetPower, TargetGrade, UserAndBikeWeight, PedalEcho, SpeedKmh, Cadence))
+        self.__AntVTXpaired    = False
+        self.__AntVHUpaired    = False
+        self.__DeviceNumberVTX = 0              # provided by CHANNEL_ID msg
+        self.__DeviceNumberVHU = 0
+
+        self.__Cadence         = 0              # provided by datapage 0
+        self.__CurrentPower    = 0
+        self.__SpeedKmh        = 0
+
+        self.__VortexID        = 0              # provided by datapage 3
+
+        self.__iVortexButtons  = 0              # provided by datapage 221
 
     #---------------------------------------------------------------------------
-    # Data buffer depends on trainer_type
-    # Refer to TotalReverse; "Legacy protocol" or "Newer protocol"
+    # R e c e i v e F r o m T r a i n e r
     #---------------------------------------------------------------------------
-    if LegacyProtocol == True:
+    # input     __data as collected by HandleANTmessage
+    #
+    # function  Now provide data to TacxTrainer
+    #
+    # returns   Buttons, Cadence, CurrentPower, SpeedKmh, Message
+    #
+    #           NOT: HeartRate, TargetResistance, CurrentResistance, PedalEcho
+    #                WheelSpeed
+    #---------------------------------------------------------------------------
+    def _ReceiveFromTrainer(self):
+        # ----------------------------------------------------------------------
+        # Data provided by data pages
+        # ----------------------------------------------------------------------
+        self.Cadence      = self.__Cadence
+        self.CurrentPower = self.__CurrentPower
+        self.SpeedKmh     = self.__SpeedKmh
+
+        # ----------------------------------------------------------------------
+        # Translate i-Vortex buttons to TacxTrainer.Buttons.
+        # Mapping according TotalReverse:
+        # https://github.com/totalreverse/ttyT1941/issues/9#issuecomment-624360140
+        # ----------------------------------------------------------------------
+        if   self.__iVortexButtons == 0: self.Buttons = 0
+        elif self.__iVortexButtons == 1: self.Buttons = CancelButton # Left 
+        elif self.__iVortexButtons == 2: self.Buttons = UpButton
+        elif self.__iVortexButtons == 3: self.Buttons = EnterButton  # OK
+        elif self.__iVortexButtons == 4: self.Buttons = DownButton
+        elif self.__iVortexButtons == 5: self.Buttons = EnterButton  # Right
+        self.__iVortexButtons = 0
+
+        # ----------------------------------------------------------------------
+        # Compose displayable message
+        # ----------------------------------------------------------------------
+        if self.__DeviceNumberVTX:
+            self.Message = 'Tacx i-Vortex paired: %s' % self.__DeviceNumberVTX
+        else:
+            self.Message = "Pair with Tacx i-Vortex"
+
+        if self.__DeviceNumberVHU:
+            self.Message += ', Headunit: %s' % self.__DeviceNumberVHU
+        else:
+            self.Message += ', Headunit'
+
+    #---------------------------------------------------------------------------
+    # SendToTrainer()
+    #---------------------------------------------------------------------------
+    def SendToTrainer(self, QuarterSecond, TacxMode):
+        if QuarterSecond:
+            messages = []
+            if TacxMode ==  modeResistance:
+                #---------------------------------------------------------------
+                # Set target power
+                #---------------------------------------------------------------
+                if self.__AntVTXpaired and self.__VortexID:
+                    info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, \
+                                self.__VortexID, self.TargetPower)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    messages.append ( msg )
+
+                #---------------------------------------------------------------
+                # Avoid power off on headunit
+                #---------------------------------------------------------------
+                if self.__AntVHUpaired:
+                    info = ant.msgPage000_TacxVortexHU_StayAlive (ant.channel_VHU_s)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    messages.append ( msg )
+
+            elif TacxMode ==  modeStop:
+                #---------------------------------------------------------------
+                # Switch headunit to trainer control mode
+                #---------------------------------------------------------------
+                if self.__AntVHUpaired:
+                    msg = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (\
+                                                           ant.channel_VHU_s, 0)
+                    messages.append ( msg )
+
+            #-------------------------------------------------------------------
+            # Send messages, leave receiving to the outer loop
+            #-------------------------------------------------------------------
+            if messages:
+                self.AntDevice.Write(messages, False, False)
+
+    #---------------------------------------------------------------------------
+    # HandleANTmessage()
+    #---------------------------------------------------------------------------
+    def HandleANTmessage(self, msg):
+        _synch, _length, id, info, _checksum, _rest, Channel, DataPageNumber = \
+                                                       ant.DecomposeMessage(msg)
+        dataHandled = False
+        messages    = []
+        #-----------------------------------------------------------------------
+        # VTX_s = Tacx i-Vortex trainer
+        #-----------------------------------------------------------------------
+        if Channel == ant.channel_VTX_s:
+            if id == ant.msgID_AcknowledgedData:
+                dataHandled = True
+
+            #-------------------------------------------------------------------
+            # BroadcastData - info received from the master device
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_BroadcastData:
+                #---------------------------------------------------------------
+                # Ask what device is paired
+                #---------------------------------------------------------------
+                if not self.__AntVTXpaired:
+                    msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
+                    messages.append ( msg )
+
+                #---------------------------------------------------------------
+                # Data page 00 msgUnpage00_TacxVortexDataSpeed
+                #---------------------------------------------------------------
+                if DataPageNumber == 0:
+                    dataHandled = True
+                    VTX_UsingVirtualSpeed, self.__CurrentPower, VTX_Speed, \
+                        VTX_CalibrationState, self.__Cadence = \
+                        ant.msgUnpage00_TacxVortexDataSpeed(info)
+                    self.__SpeedKmh = round( VTX_Speed / ( 100 * 1000 / 3600 ), 1)
+                    if debug.on(debug.Function):
+                        logfile.Write ('i-Vortex Page=%s UsingVirtualSpeed=%s Power=%s Speed=%s State=%s Cadence=%s' % \
+                            (DataPageNumber, VTX_UsingVirtualSpeed, self.CurrentPower, \
+                                self.SpeedKmh, VTX_CalibrationState, self.Cadence) )
+
+                #---------------------------------------------------------------
+                # Data page 01 msgUnpage01_TacxVortexDataSerial
+                #---------------------------------------------------------------
+                elif DataPageNumber == 1:
+                    dataHandled = True
+                    VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm = ant.msgUnpage01_TacxVortexDataSerial(info)
+                    if debug.on(debug.Function):
+                        logfile.Write ('i-Vortex Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % \
+                            (DataPageNumber, VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm) )
+
+                #---------------------------------------------------------------
+                # Data page 02 msgUnpage02_TacxVortexDataVersion
+                #---------------------------------------------------------------
+                elif DataPageNumber == 2:
+                    dataHandled = True
+                    VTX_Major, VTX_Minor, VTX_Build = ant.msgUnpage02_TacxVortexDataVersion(info)
+                    if debug.on(debug.Function):
+                        logfile.Write ('i-Vortex Page=%s Major=%s Minor=%s Build=%s' % \
+                            (DataPageNumber, VTX_Major, VTX_Minor, VTX_Build))
+
+                #---------------------------------------------------------------
+                # Data page 03 msgUnpage03_TacxVortexDataCalibration
+                #---------------------------------------------------------------
+                elif DataPageNumber == 3:
+                    dataHandled = True
+                    VTX_Calibration, self.__VortexID = ant.msgUnpage03_TacxVortexDataCalibration(info)
+                    if debug.on(debug.Function):
+                        logfile.Write ('i-Vortex Page=%s Calibration=%s VortexID=%s' % \
+                            (DataPageNumber, VTX_Calibration, self.__VortexID))
+
+            #-------------------------------------------------------------------
+            # ChannelID - the info that a master on the network is paired
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_ChannelID:
+                Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \
+                    ant.unmsg51_ChannelID(info)
+
+                if DeviceTypeID == ant.DeviceTypeID_VTX:
+                    dataHandled = True
+                    self.__AntVTXpaired    = True
+                    self.__DeviceNumberVTX = DeviceNumber
+
+            #-------------------------------------------------------------------
+            # Outer loop does not need to handle channel_VTX_s messages
+            #-------------------------------------------------------------------
+            dataHandled = True
+
+        #-----------------------------------------------------------------------
+        # VHU_s = Tacx i-Vortex headunit
+        #-----------------------------------------------------------------------
+        elif Channel == ant.channel_VHU_s:
+            if id == ant.msgID_AcknowledgedData:
+                dataHandled = True
+
+            #-------------------------------------------------------------------
+            # BroadcastData - info received from the master device
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_BroadcastData:
+                #---------------------------------------------------------------
+                # Ask what device is paired
+                # And tell to switch to PC-mode
+                #---------------------------------------------------------------
+                if not self.__AntVHUpaired:
+                    msg = ant.msg4D_RequestMessage(ant.channel_VHU_s, ant.msgID_ChannelID)
+                    messages.append ( msg )
+
+                    msg = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (\
+                                             ant.channel_VHU_s, 4)    # PC-mode
+                    messages.append ( msg )
+
+                #---------------------------------------------------------------
+                # Data page 173 frames containing the serial number of the device
+                #---------------------------------------------------------------
+                if DataPageNumber == 173: # 0xad:
+                    dataHandled = True
+
+                #---------------------------------------------------------------
+                # Data page 221 TacxVortexHU_ButtonPressed
+                #---------------------------------------------------------------
+                elif DataPageNumber == 221:
+                    dataHandled = True
+                    self.__iVortexButtons = \
+                              ant.msgUnpage221_TacxVortexHU_ButtonPressed (info)
+
+            #-------------------------------------------------------------------
+            # ChannelID - the info that a master on the network is paired
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_ChannelID:
+                Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \
+                    ant.unmsg51_ChannelID(info)
+
+                if Channel == ant.channel_VHU_s and DeviceTypeID == ant.DeviceTypeID_VHU:
+                    dataHandled = True
+                    self.__AntVHUpaired    = True
+                    self.__DeviceNumberVHU = DeviceNumber
+
+            #-------------------------------------------------------------------
+            # Outer loop does not need to handle channel_VHU_s messages
+            #-------------------------------------------------------------------
+            dataHandled = True
+
+        #-----------------------------------------------------------------------
+        # Send messages, leave receiving to the outer loop
+        #-----------------------------------------------------------------------
+        if messages:
+            self.AntDevice.Write(messages, False, False)
+
+        return dataHandled
+
+#-------------------------------------------------------------------------------
+# c l s T a c x U s b T r a i n e r
+#-------------------------------------------------------------------------------
+class clsTacxUsbTrainer(clsTacxTrainer):
+    #---------------------------------------------------------------------------
+    # Convert WheelSpeed --> Speed in km/hr
+    # SpeedScale must be defined in sub-class
+    #---------------------------------------------------------------------------
+    # WheelSpeed = 1 mm/sec <==> 1.000.000 / 3600 km/hr = 1/278 km/hr
+    # TotalReverse: Other implementations are using values between 1/277 and 1/360.
+    # A practical test shows that Cadence=92 gives 40km/hr at a given ratio
+    #		factor 289.75 gives a slightly higher speed
+    #		factor 301 would be good (8-11-2019)
+    #---------------------------------------------------------------------------
+    def Wheel2Speed(self):
+        self.SpeedKmh = round(self.WheelSpeed / self.SpeedScale, 1)
+
+    def Speed2Wheel(self, SpeedKmh):
+        return int(SpeedKmh * self.SpeedScale)
+    
+    #---------------------------------------------------------------------------
+    # Refresh()
+    #---------------------------------------------------------------------------
+    def Refresh(self, QuarterSecond, TacxMode):
+        super().Refresh(QuarterSecond, TacxMode)
+        if debug.on(debug.Function):logfile.Write ("clsTacxUsbTrainer.Refresh()")
+
+        # ----------------------------------------------------------------------
+        # When a button is pressed, the button is returned a number of times,
+        # depending on the polling-frequency. The caller would receive the same
+        # button multiple times.
+        # Therefore we poll the trainer untill "no button" received, only if
+        # the last receive provided Buttons.
+        # ----------------------------------------------------------------------
+        Buttons = self.Buttons                  # Remember the buttons pressed
+
+        while self.Buttons:                     # Loop untill no button pressed
+            time.sleep(0.1)
+            self._ReceiveFromTrainer()
+
+        self.Buttons = Buttons                  # Restore buttons
+    #---------------------------------------------------------------------------
+    # U S B _ R e a d
+    #---------------------------------------------------------------------------
+    # input     UsbDevice
+    #
+    # function  Read data from Tacx USB trainer
+    #
+    # returns   data
+    #---------------------------------------------------------------------------
+    def USB_Read(self):
+        data = ""
+        try:
+            data = self.UsbDevice.read(0x82, 64, 30)
+        except TimeoutError:
+            pass
+        except Exception as e:
+            if "timeout error" in str(e) or "timed out" in str(e): # trainer did not return any data
+                pass
+            else:
+                logfile.Console("Read from USB trainer error: " + str(e))
+        if debug.on(debug.Data2):
+            logfile.Write ("Trainer recv data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
+        
+        return data
+
+    #---------------------------------------------------------------------------
+    # S e n d T o T r a i n e r
+    #---------------------------------------------------------------------------
+    # input     UsbDevice, TacxMode
+    #           if Mode=modeResistance:  TargetResistance
+    #
+    #           PedalEcho   - must be echoed
+    #           Calibrate   - Resistance during calibration is specified
+    #                         If =zero default is calculated
+    #
+    # function  Set trainer to calculated resistance (TargetPower or TargetGrade)
+    #
+    # returns   None
+    #---------------------------------------------------------------------------
+    def SendToTrainerUSBData(self, TacxMode, Calibrate, PedalEcho, Target, Weight):
+        raise NotImplementedError                   # To be defined in sub-class
+
+    def SendToTrainer(self, _QuarterSecond, TacxMode):
+        assert (TacxMode in (modeStop, modeResistance, modeCalibrate))
+
+        Calibrate = self.Calibrate
+        PedalEcho = self.PedalEcho
+        Target    = self.TargetResistance
+        Weight    = 0
+
+        if debug.on(debug.Function):
+            logfile.Write ("clsTacxUsbTrainer.SendToTrainer(T=%s, M=%s, P=%s, G=%s, R=%s, W=%s, PE=%s, S=%s, C=%s)" % \
+            (TacxMode, self.TargetMode, self.TargetPower, self.TargetGrade, \
+            self.TargetResistance, self.UserAndBikeWeight, self.PedalEcho, \
+            self.SpeedKmh, self.Cadence))
+
+        #-----------------------------------------------------------------------
+        # Prepare parameters to be sent to trainer
+        #-----------------------------------------------------------------------
+        error = False
+        if  TacxMode == modeStop:
+            Calibrate   = 0
+            PedalEcho   = 0
+            Target      = 0
+            Weight      = 0
+
+        elif TacxMode == modeResistance:
+            if Calibrate == 0:                                  # Use old formula:
+                Calibrate   = 0                                 # may be -8...+8
+                Calibrate   = ( Calibrate + 8 ) * 130           # 0x0410
+
+            assert(self.UserAndBikeWeight >= 0x0a)              # Avoid surprises
+            if self.TargetMode == mode_Power:
+                Target = self.TargetResistance
+                Weight = 0x0a                                   # Small flywheel in ERGmode
+            elif self.TargetMode == mode_Grade:
+                Target = self.TargetResistance
+                Weight = self.UserAndBikeWeight
+            else:
+                error = "SendToTrainer; Unsupported TargetMode %s" % self.TargetMode
+
+        elif TacxMode == modeCalibrate:
+            Calibrate   = 0
+            PedalEcho   = 0
+            Target      = self.Speed2Wheel(20)                  # 20 km/h is our decision for calibration
+            Weight      = 0
+
+        if error:
+            logfile.Console(error)
+        else:
+            Target = int(Target)
+            data   = self.SendToTrainerUSBData(TacxMode, Calibrate, PedalEcho, Target, Weight)
+
+            #-------------------------------------------------------------------
+            # Send buffer to trainer
+            #-------------------------------------------------------------------
+            if data != False:
+                if debug.on(debug.Data2):
+                    logfile.Write ("Trainer send data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
+                    logfile.Write ("                  tacx mode=%s target=%s pe=%s weight=%s cal=%s" % \
+                                                (TacxMode, Target, PedalEcho, Weight, Calibrate))
+
+                try:
+                    self.UsbDevice.write(0x02, data, 30)                             # send data to device
+                except Exception as e:
+                    logfile.Console("Write to USB trainer error: " + str(e))
+
+#-------------------------------------------------------------------------------
+# c l s T a c x L e g a c y U s b T r a i n e r
+#-------------------------------------------------------------------------------
+# USB-trainer with Legacy interface and old formula's
+# ==> headunit = 1902
+# ==> iMagic
+#-------------------------------------------------------------------------------
+class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
+    def __init__(self, clv, Message, Headunit, UsbDevice):
+        super().__init__(clv, Message)
+        if debug.on(debug.Function):logfile.Write ("clsTacxLegacyUsbTrainer.__init__()")
+        self.Headunit   = Headunit
+        self.UsbDevice  = UsbDevice
+        self.OK         = True
+        self.SpeedScale = 11.9 # GoldenCheetah: curSpeed = curSpeedInternal / (1.19f * 10.0f);
+        #PowerResistanceFactor = (1 / 0.0036)       # GoldenCheetah ~= 277.778
+
+    #---------------------------------------------------------------------------
+    # Basic physics: Power = Resistance * Speed  <==> Resistance = Power / Speed
+    #
+    # These two functions calculate as measured with @yegorvin
+    #---------------------------------------------------------------------------
+    def CurrentResistance2Power(self):
+        if self.SpeedKmh == 0:
+            rtn = 0
+        else:
+            # GoldenCheetah: curPower = ((curResistance * 0.0036f) + 0.2f) * curSpeedInternal;
+            # return round(((Resistance / PowerResistanceFactor) + 0.2) * WheelSpeed, 1)
+
+            # ref https://github.com/WouterJD/FortiusANT/wiki/Power-calibrated-with-power-meter-(iMagic)
+            rtn = self.CurrentResistance * (self.SpeedKmh * self.SpeedKmh / 648 + \
+                                                  self.SpeedKmh / 5411 + 0.1058) + \
+                        2.2 * self.SpeedKmh
+        self.CurrentPower = int(rtn)
+
+    def TargetPower2Resistance(self):
+        rtn = 0
+        if self.SpeedKmh > 0:
+            # instead of brakeCalibrationFactor use PowerFactor -p
+            # GoldenCheetah: setResistance = (((load  / curSpeedInternal) - 0.2f) / 0.0036f)
+            #                setResistance *= brakeCalibrationFactor
+            # rtn = ((PowerInWatt / WheelSpeed) - 0.2) * PowerResistanceFactor
+
+            # ref https://github.com/WouterJD/FortiusANT/wiki/Power-calibrated-with-power-meter-(iMagic)
+            rtn = (self.TargetPower - 2.2 * self.SpeedKmh) / \
+                    (self.SpeedKmh * self.SpeedKmh / 648 + \
+                     self.SpeedKmh / 5411 + 0.1058)
+
+        # Check bounds
+        rtn = min(226, rtn) # Maximum value; as defined by Golden Cheetah
+        rtn = max( 30, rtn) # Minimum value
+        rtn = int(rtn)
+
+        if debug.on(debug.Function):logfile.Write (\
+                "clsTacxLegacyUsbTrainer.TargetPower2Resistance(%s, %s) = %s" % \
+                    (self.TargetPower, self.SpeedKmh, rtn) )
+        self.TargetResistance = rtn
+
+    #---------------------------------------------------------------------------
+    # S e n d T o T r a i n e r U S B D a t a
+    #---------------------------------------------------------------------------
+    # input     Mode, Target
+    #
+    # function  Called by SendToTrainer()
+    #           Compose buffer to be sent to trainer
+    #
+    # returns   data
+    #---------------------------------------------------------------------------
+    def SendToTrainerUSBData(self, TacxMode, _Calibrate, _PedalEcho, Target, _Weight):
+        #-----------------------------------------------------------------------
+        # Data buffer depends on trainer_type
+        # Refer to TotalReverse; "Legacy protocol"
+        #-----------------------------------------------------------------------
         fDesiredForceValue  = sc.unsigned_char      # 0         0x00-0xff
                                                     #           0x80 = field switched off
                                                     #           < 0x80 reduce brake force
@@ -571,142 +1229,249 @@ def SendToTrainer(devTrainer, Mode, TargetMode, TargetPower, TargetGrade,
                                                     #           0x02 = autopause if wheel < 20
                                                     #           0x04 = autostart if wheel >= 20
         fStopWatch          = sc.unsigned_int       # 2...5
-    else:
+
+        #-----------------------------------------------------------------------
+        # Build data buffer to be sent to trainer (legacy)
+        #-----------------------------------------------------------------------
+        if TacxMode == modeResistance:
+            DesiredForceValue = Target
+            StartStop, StopWatch = 0,0  # GoldenCheetah sends 2-byte data
+                                        #    in sendRunCommand() with
+                                        #    StartStop always zero
+                                        # so we should be good like this
+            format = sc.no_alignment + fDesiredForceValue + fStartStop + fStopWatch
+            data   = struct.pack (format, DesiredForceValue, StartStop, StopWatch)
+        else:
+            data   = False
+        return data
+    #---------------------------------------------------------------------------
+    # R e c e i v e F r o m T r a i n e r
+    #---------------------------------------------------------------------------
+    # input     usbDevice
+    #
+    # function  Read status from trainer
+    #
+    # returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
+    #---------------------------------------------------------------------------
+    def _ReceiveFromTrainer(self):
+        if debug.on(debug.Function):logfile.Write ("clsTacxLegacyUsbTrainer._ReceiveFromTrainer()")
+        #-----------------------------------------------------------------------
+        #  Read from trainer
+        #-----------------------------------------------------------------------
+        data = self.USB_Read()
+
+        #-----------------------------------------------------------------------
+        # Define buffer format
+        #-----------------------------------------------------------------------
+        nStatusAndCursors   = 0                 # 0
+        fStatusAndCursors   = sc.unsigned_char
+
+        nSpeed              = 1                 # 1, 2      Wheel speed (Speed = WheelSpeed / SpeedScale in km/h)
+        fSpeed              = sc.unsigned_short
+
+        nCadence            = 2                 # 3
+        fCadence            = sc.unsigned_char
+
+        nHeartRate          = 3                 # 4
+        fHeartRate          = sc.unsigned_char
+
+        #nStopWatch         = 4
+        fStopWatch          = sc.unsigned_int   # 5,6,7,8
+
+        nCurrentResistance  = 5                 # 9
+        fCurrentResistance  = sc.unsigned_char
+
+        nPedalSensor        = 6                 # 10
+        fPedalSensor        = sc.unsigned_char
+
+        #nAxis0             = 7                 # 11
+        fAxis0              = sc.unsigned_char
+
+        nAxis1              = 8                 # 12
+        fAxis1              = sc.unsigned_char
+
+        #nAxis2             = 9                 # 13
+        fAxis2              = sc.unsigned_char
+
+        #nAxis3             = 10                # 14
+        fAxis3              = sc.unsigned_char
+
+        #nCounter           = 11                # 15
+        fCounter            = sc.unsigned_char
+
+        #nWheelCount        = 12                # 16
+        fWheelCount         = sc.unsigned_char
+
+        #nYearProduction    = 13                # 17
+        fYearProduction     = sc.unsigned_char
+
+        #nDeviceSerial      = 14                # 18, 19
+        fDeviceSerial       = sc.unsigned_short
+
+        #nFirmwareVersion   = 15                # 20
+        fFirmwareVersion    = sc.unsigned_char
+
+        #-----------------------------------------------------------------------
+        # Parse buffer
+        # Note that the button-bits have an inversed logic:
+        #   1=not pushed, 0=pushed. Hence the xor.
+        #-----------------------------------------------------------------------
+        format = sc.no_alignment + fStatusAndCursors + fSpeed + fCadence + fHeartRate + fStopWatch + fCurrentResistance + \
+                fPedalSensor + fAxis0 + fAxis1 + fAxis2 + fAxis3 + fCounter + fWheelCount + \
+                fYearProduction + fDeviceSerial + fFirmwareVersion
+        tuple = struct.unpack (format, data)
+
+        self.Axis                = tuple[nAxis1]
+        self.Buttons             = ((tuple[nStatusAndCursors] & 0xf0) >> 4) ^ 0x0f
+        self.Cadence             = tuple[nCadence]
+        self.CurrentResistance   = tuple[nCurrentResistance]
+        self.HeartRate           = tuple[nHeartRate]
+        self.PedalEcho           = tuple[nPedalSensor]
+        self.WheelSpeed          = tuple[nSpeed]
+
+        self.Wheel2Speed()
+        self.CurrentResistance2Power()
+
+        if debug.on(debug.Function):
+            logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s, Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
+                (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
+                          )
+
+#-------------------------------------------------------------------------------
+# c l s T a c x N e w U s b T r a i n e r
+#-------------------------------------------------------------------------------
+# Tacx-trainer with New interface & USB connection
+#-------------------------------------------------------------------------------
+class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
+    def __init__(self, clv, Message, Headunit, UsbDevice):
+        super().__init__(clv, Message)
+        if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__()")
+        self.SpeedScale = 301                        # TotalReverse: 289.75
+        self.PowerResistanceFactor = 128866          # TotalReverse
+
+        self.Headunit   = Headunit
+        self.UsbDevice  = UsbDevice
+        self.OK         = True
+
+    #---------------------------------------------------------------------------
+    # Basic physics: Power = Resistance * Speed  <==> Resistance = Power / Speed
+    #---------------------------------------------------------------------------
+    def CurrentResistance2Power(self):
+        self.CurrentPower = int(self.CurrentResistance / self.PowerResistanceFactor * self.WheelSpeed)
+
+    def TargetPower2Resistance(self):
+        rtn        = 0
+        if self.WheelSpeed > 0:
+            rtn = self.TargetPower * self.PowerResistanceFactor / self.WheelSpeed
+            rtn = self.__AvoidCycleOfDeath(rtn)
+        rtn = int(rtn)
+
+        if debug.on(debug.Function):logfile.Write (\
+            "clsTacxNewUsbTrainer.TargetPower2Resistance(%s, %s) = %s" % \
+            (self.TargetPower, self.WheelSpeed, rtn ))
+        self.TargetResistance = rtn
+
+    #---------------------------------------------------------------------------
+    # Limit Resistance to avoid the Cycle of Death
+    #
+    # This a phenomenon occuring in ERGmode (constant power, resistance depends
+    # on (wheel)speed): if you get tired at a certain power and cycle slower, 
+    # the resistance keeps going up untill Power/0 = infinite and you "die".
+    # Starting-up will be quite impossible as well: Power/0.1 is very high!
+    # ==> 1: Resistance must be limitted to a maximum at low wheel-speeds
+    #
+    # Also, Fortius (I do not know for others) does not perform well for high
+    # resistances at low wheelspeed. Practical tests have shown a maximum
+    # of Resistance = 4500 at 10km/hr. Higher resistances cause stuttering.
+    # ==> 2: Same rule, other reason.
+    #
+    # The protection is that when Speed droppes below 10km/hr, the resistance is
+    # limitted. And, if you do not like this, avoid going into this protection,
+    # by keeping the wheelspeed above 10km/hr in ERG-mode rides.
+    #
+    # Note that, the protection factor must be Speed (not Cadence), since that
+    # is used in Power2Resistance. Note that, Speed may drop faster than Cadance!
+    #
+    # Note also that, the figures are empirically determined.
+    # option 1. R=6000 at 15km/hr ==> 6000 / 128866 * (15 * 301) = 210Watt
+    # option 2. R=4500 at 10km/hr ==> 4500 / 128866 * (10 * 301) = 100Watt
+    #
+    # The minium of 1500 is chosen above calibration level to avoid that the
+    # brake is going to spinn (negative power mode).
+    #
+    # It means that the required power is maintained untill 10 km/hr, then drops
+    # to 100Watt and gradually runs down to minimum at zero-speed.
+    # Also, when required power would be 300Watt and you speed up from
+    # 1...10km/hr, the power gradually increases to 100Watt untill above 10km/hr
+    # the real power is set.
+    #
+    # With all this said, a similar function should be present in the LegacyUSB
+    # class; or function generalized and constants 1500 and 4500 (6000) adjusted.
+    #---------------------------------------------------------------------------
+    def __AvoidCycleOfDeath(self, Resistance):
+
+        if self.TargetMode == mode_Power and self.SpeedKmh <= 10 and Resistance >= 6000:
+            Resistance = int(1500 + self.SpeedKmh * 300)
+#           print('__AvoidCycleOfDeath', self.SpeedKmh, Resistance)
+
+        return Resistance
+
+    #---------------------------------------------------------------------------
+    # S e n d T o T r a i n e r D a t a
+    #---------------------------------------------------------------------------
+    # input     Mode, Target, Pedecho, Weight, Calibrate
+    #
+    # function  Called by SendToTrainer()
+    #           Compose buffer to be sent to trainer
+    #
+    # returns   data
+    #---------------------------------------------------------------------------
+    def SendToTrainerUSBData(self, TacxMode, Calibrate, PedalEcho, Target, Weight):
+        Target = int(min(0x7fff, Target))
+        #-----------------------------------------------------------------------
+        # Data buffer depends on trainer_type
+        # Refer to TotalReverse; "Newer protocol"
+        #-----------------------------------------------------------------------
         fControlCommand     = sc.unsigned_int       # 0...3
         fTarget             = sc.short              # 4, 5      Resistance for Power=50...1000Watt
         fPedalecho          = sc.unsigned_char      # 6
         fFiller7            = sc.pad                # 7
         fMode               = sc.unsigned_char      # 8         Idle=0, Ergo/Slope=2, Calibrate/speed=3
-        fWeight             = sc.unsigned_char      # 9         Ergo: 0x0a; Weight = ride + bike in kg
+        fWeight             = sc.unsigned_char      # 9         0x0a for 'almost no fly wheel' or
+                                                            # weight of rider+bike in kg for 
+                                                            # 'realistic' simulation of riders mass
+                                                            # TotalReverse, updated 2020-01-04
         fCalibrate          = sc.unsigned_short     # 10, 11    Depends on mode
 
-    #---------------------------------------------------------------------------
-    # Prepare parameters to be sent to trainer
-    #---------------------------------------------------------------------------
-    error = False
-    if   Mode == modeStop:
-        Calibrate   = 0
-        PedalEcho   = 0
-        Target      = 0
-        Weight      = 0
-        pass
-
-    elif Mode == modeResistance:
-        if Calibrate == 0:                                  # Use old formula:
-            Calibrate   = 0                                 # may be -8...+8
-            Calibrate   = ( Calibrate + 8 ) * 130           # 0x0410
-
-        if TargetMode == mode_Power:
-            Target = Power2Resistance(TargetPower, SpeedKmh, Cadence)
-            # Target *= PowercurveFactor                    # manual adjustment of requested resistance
-                                                            # IS NOT permitted: When trainer software
-                                                            # asks for 100W, you will get 100Watt!
-            if LegacyProtocol == False and Target < Calibrate:
-                Target = Calibrate                          # Avoid motor-function for low TargetPower
-            Weight = 0x0a                                   # weight=0x0a is a good fly-wheel value
-                                                            # UserAndBikeWeight is not used!
-        elif TargetMode == mode_Grade:
-            Target = Grade2Resistance(TargetGrade, UserAndBikeWeight, SpeedKmh, Cadence)
-            Target *= PowercurveFactor                      # manual adjustment of requested resistance
-            Weight = 0x0a                                   # weight=0x0a is a good fly-wheel value
-                                                            # UserAndBikeWeight is not used!
-                                                            #       an 100kg flywheels gives undesired behaviour :-)
-        else:
-            error = "SendToTrainer; Unsupported TargetMode %s" % TargetMode
-
-    elif Mode == modeCalibrate:
-        Calibrate   = 0
-        PedalEcho   = 0
-        Target      = Speed2Wheel(20)                       # 20 km/h is our decision for calibration
-        Weight      = 0
-
-    else:
-        error = "SendToTrainer; incorrect Mode %s!" % Mode
-
-    if error:
-        logfile.Console(error)
-    else:
+        if self.TargetMode == mode_Power and Target < Calibrate:
+            Target = Calibrate        # Avoid motor-function for low TargetPower
         #-----------------------------------------------------------------------
         # Build data buffer to be sent to trainer (legacy or new)
         #-----------------------------------------------------------------------
-        if LegacyProtocol == True:
-            if Mode == modeResistance:
-                DesiredForceValue = Target
-                StartStop, StopWatch = 0,0  # GoldenCheetah sends 2-byte data
-                                            #    in sendRunCommand() with
-                                            #    StartStop always zero
-                                            # so we should be good like this
-                format = sc.no_alignment + fDesiredForceValue + fStartStop + fStopWatch
-                data   = struct.pack (format, DesiredForceValue, StartStop, StopWatch)
-            else:
-                data   = False
-        else:
-            format = sc.no_alignment + fControlCommand + fTarget +    fPedalecho + fFiller7 + fMode + fWeight + fCalibrate
-            data   = struct.pack (format, 0x00010801, int(Target),     PedalEcho,              Mode,   Weight,   Calibrate)
+        format = sc.no_alignment + fControlCommand + fTarget + fPedalecho + fFiller7 + fMode +    fWeight + fCalibrate
+        data   = struct.pack (format, 0x00010801,     Target,   PedalEcho,          TacxMode,  int(Weight),  Calibrate)
+        return data
+
+    #---------------------------------------------------------------------------
+    # R e c e i v e F r o m T r a i n e r
+    #---------------------------------------------------------------------------
+    # input     usbDevice
+    #
+    # function  Read status from trainer
+    #
+    # returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
+    #
+    #---------------------------------------------------------------------------
+    def _ReceiveFromTrainer(self):
+        if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer._ReceiveFromTrainer()")
+        #-----------------------------------------------------------------------
+        #  Read from trainer
+        #-----------------------------------------------------------------------
+        data = self.USB_Read()
 
         #-----------------------------------------------------------------------
-        # Send buffer to trainer
-        #-----------------------------------------------------------------------
-        if not SimulateTrainer and data != False:
-            if debug.on(debug.Data2):
-                logfile.Write ("Trainer send data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
-                logfile.Write ("                  target=%s pe=%s mode=%s weight=%s cal=%s" % \
-                                             (int(Target), PedalEcho, Mode, Weight, Calibrate))
-
-            try:
-                devTrainer.write(0x02, data, 30)                             # send data to device
-            except Exception as e:
-                logfile.Console("SendToTrainer: USB WRITE ERROR " + str(e))
-
-#-------------------------------------------------------------------------------
-# R e c e i v e F r o m T r a i n e r
-#-------------------------------------------------------------------------------
-# input     devTrainer
-#
-# function  Read status from trainer
-#
-# returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
-#
-# changes   2020-01-07 originally 'TargetResistance' was returned
-#                      for calibration, now CurrentResistance is also returned
-#               Caller must decide which one to use
-#-------------------------------------------------------------------------------
-def ReceiveFromTrainer(devTrainer):
-    global trainer_type
-
-    Axis              = 0
-    Buttons           = 0
-    Cadence           = 0
-    CurrentPower      = 0
-    CurrentResistance = 0
-    Error             = ""
-    HeartRate         = 0
-    PedalEcho         = 0
-    Speed             = 0
-    TargetResistance  = 0
-
-    #-----------------------------------------------------------------------------
-    #  Read from trainer
-    #-----------------------------------------------------------------------------
-    data = ""
-    try:
-        data = devTrainer.read(0x82, 64, 30)
-    except TimeoutError:
-        pass
-    except Exception as e:
-        if "timeout error" in str(e) or "timed out" in str(e): # trainer did not return any data
-            pass
-        else:
-            logfile.Console("ReceiveFromTrainer: USB READ ERROR: " + str(e))
-    if debug.on(debug.Data2):logfile.Write ("Trainer recv data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
-
-    #-----------------------------------------------------------------------------
-    # Handle data when > 40 bytes (boundary as derived from antifier)
-    #-----------------------------------------------------------------------------
-    if len(data) > 40 and LegacyProtocol == False:
-        #---------------------------------------------------------------------------
         # Define buffer format
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         #nDeviceSerial      =  0                # 0...1
         fDeviceSerial       = sc.unsigned_short
 
@@ -781,130 +1546,36 @@ def ReceiveFromTrainer(devTrainer):
         fFiller49_63        = sc.pad * (63 - 48)# 49...63
 
         format = sc.no_alignment + fDeviceSerial + fFiller2_7 + fYearProduction + \
-                 fFiller9_11 + fHeartRate + fButtons + fHeartDetect + fErrorCount + \
-                 fAxis0 + fAxis1 + fAxis2 + fAxis3 + fHeader + fDistance + fSpeed + \
-                 fFiller34_35 + fFiller36_37 + fCurrentResistance + fTargetResistance + \
-                 fEvents + fFiller43 + fCadence + fFiller45 + fModeEcho + \
-                 fChecksumLSB + fChecksumMSB + fFiller49_63
+                fFiller9_11 + fHeartRate + fButtons + fHeartDetect + fErrorCount + \
+                fAxis0 + fAxis1 + fAxis2 + fAxis3 + fHeader + fDistance + fSpeed + \
+                fFiller34_35 + fFiller36_37 + fCurrentResistance + fTargetResistance + \
+                fEvents + fFiller43 + fCadence + fFiller45 + fModeEcho + \
+                fChecksumLSB + fChecksumMSB + fFiller49_63
 
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         # Buffer must be 64 characters (struct.calcsize(format)),
         # Note that tt_FortiusSB returns 48 bytes only; append with dummy
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         for _v in range( 64 - len(data) ):
             data.append(0)
 
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         # Parse buffer
-        #---------------------------------------------------------------------------
+        #-----------------------------------------------------------------------
         tuple = struct.unpack (format, data)
-        Cadence             = tuple[nCadence]
-        HeartRate           = tuple[nHeartRate]
-        PedalEcho           = tuple[nEvents]
-        TargetResistance    = tuple[nTargetResistance]
-        CurrentResistance   = tuple[nCurrentResistance]
-        Speed               = Wheel2Speed(tuple[nSpeed])
-        CurrentPower        = Resistance2Power(tuple[nCurrentResistance], Speed)
+        self.Axis               = tuple[nAxis1]
+        self.Buttons            = tuple[nButtons]
+        self.Cadence            = tuple[nCadence]
+        self.CurrentResistance  = tuple[nCurrentResistance]
+        self.HeartRate          = tuple[nHeartRate]
+        self.PedalEcho          = tuple[nEvents]
+        self.TargetResistanceFT = tuple[nTargetResistance]
+        self.WheelSpeed         = tuple[nSpeed]
 
-        Buttons             = tuple[nButtons]
-        Axis                = tuple[nAxis1]
+        self.Wheel2Speed()
+        self.CurrentResistance2Power()
 
-    elif LegacyProtocol == True:
-        #---------------------------------------------------------------------------
-        # Define buffer format
-        #---------------------------------------------------------------------------
-        nStatusAndCursors   = 0                 # 0
-        fStatusAndCursors   = sc.unsigned_char
-
-        nSpeed              = 1                 # 1, 2      Wheel speed (Speed = WheelSpeed / SpeedScale in km/h)
-        fSpeed              = sc.unsigned_short
-
-        nCadence            = 2                 # 3
-        fCadence            = sc.unsigned_char
-
-        nHeartRate          = 3                 # 4
-        fHeartRate          = sc.unsigned_char
-
-        #nStopWatch         = 4
-        fStopWatch          = sc.unsigned_int   # 5,6,7,8
-
-        nCurrentResistance  = 5                 # 9
-        fCurrentResistance  = sc.unsigned_char
-
-        nPedalSensor        = 6                 # 10
-        fPedalSensor        = sc.unsigned_char
-
-        #nAxis0             = 7                 # 11
-        fAxis0              = sc.unsigned_char
-
-        nAxis1              = 8                 # 12
-        fAxis1              = sc.unsigned_char
-
-        #nAxis2             = 9                 # 13
-        fAxis2              = sc.unsigned_char
-
-        #nAxis3             = 10                # 14
-        fAxis3              = sc.unsigned_char
-
-        #nCounter           = 11                # 15
-        fCounter            = sc.unsigned_char
-
-        #nWheelCount        = 12                # 16
-        fWheelCount         = sc.unsigned_char
-
-        #nYearProduction    = 13                # 17
-        fYearProduction     = sc.unsigned_char
-
-        #nDeviceSerial      = 14                # 18, 19
-        fDeviceSerial       = sc.unsigned_short
-
-        #nFirmwareVersion   = 15                # 20
-        fFirmwareVersion    = sc.unsigned_char
-
-        #---------------------------------------------------------------------------
-        # Parse buffer
-        # Note that the button-bits have an inversed logic:
-        #   1=not pushed, 0=pushed. Hence the xor.
-        #---------------------------------------------------------------------------
-        format = sc.no_alignment + fStatusAndCursors + fSpeed + fCadence + fHeartRate + fStopWatch + fCurrentResistance + \
-                 fPedalSensor + fAxis0 + fAxis1 + fAxis2 + fAxis3 + fCounter + fWheelCount + \
-                 fYearProduction + fDeviceSerial + fFirmwareVersion
-        tuple = struct.unpack (format, data)
-
-        Cadence             = tuple[nCadence]
-        HeartRate           = tuple[nHeartRate]
-        PedalEcho           = tuple[nPedalSensor]
-        CurrentResistance   = tuple[nCurrentResistance]
-        TargetResistance    = CurrentResistance         # Is not separately returned
-                                                        # is displayed by FortiusANT!
-        Speed               = Wheel2Speed(tuple[nSpeed])
-        Buttons             = ((tuple[nStatusAndCursors] & 0xf0) >> 4) ^ 0x0f
-        Axis                = tuple[nAxis1]
-
-        CurrentPower        = Resistance2Power(CurrentResistance, Speed)
-
-    else:
-        Error = "Not Found"
-
-    if debug.on(debug.Function):
-          logfile.Write ("ReceiveFromTrainer() = hr=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
-                                          (  HeartRate,   Cadence,   Speed, TargetResistance, CurrentResistance, CurrentPower, PedalEcho, Error) \
-                        )
-
-    return Error, Speed, PedalEcho, HeartRate, CurrentPower, Cadence, TargetResistance, CurrentResistance, Buttons, Axis
-
-#-------------------------------------------------------------------------------
-# C a l i b r a t e S u p p o r t e d
-#-------------------------------------------------------------------------------
-# input     trainer_type
-#
-# function  Return whether this trainer support calibration
-#
-# returns   True/False
-#-------------------------------------------------------------------------------
-def CalibrateSupported():
-    global trainer_type
-    if trainer_type == tt_Fortius:              # And perhaps others as well
-        return True
-    else:
-        return False
+        if debug.on(debug.Function):
+            logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
+                        (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
+                          )

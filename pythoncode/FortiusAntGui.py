@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-30"
+WindowTitle = "Fortius Antifier v3.0"
+__version__ = "2020-05-15"
+# 2020-05-15    Window title adjusted to version 3.0, comment on teeth.
+# 2020-05-11    Small corrections
 # 2020-04-30    Pedal stroke analysis added
 #               form class requires clv to be provided when created
 #               Occasional crash in OnClose() resolved
@@ -54,8 +57,6 @@ import RadarGraph
 #-------------------------------------------------------------------------------
 # constants
 #-------------------------------------------------------------------------------
-WindowTitle         = "Fortius Antifier GUI v2.6"
-
 LargeTexts          = True  # 2020-02-07
 
 mode_Basic          = 0     # Basic Resistance
@@ -408,7 +409,7 @@ class frmFortiusAntGui(wx.Frame):
 
         TextCtrlFont2= wx.Font(12, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
         TextCtrlH2   = 25
-        TextCtrlW2   = int(SpeedWH/2)
+        _TextCtrlW2  = int(SpeedWH/2)
 
         # ----------------------------------------------------------------------
 		# self.Speed label & text
@@ -592,7 +593,7 @@ class frmFortiusAntGui(wx.Frame):
         print("callTacx2Dongle not defined by application class")
 #       tr = 255                                    # experimental purpose only
         while self.RunningSwitch == True:
-            t = time.localtime()
+            #t = time.localtime()
             r = (90 + random.randint(1,20)) / 100   # 0.9 ... 1.1
 #           r = .5
 #           self.SetTransparent(tr)                 # frame can be made transparent
@@ -750,8 +751,8 @@ class frmFortiusAntGui(wx.Frame):
 
             elif iTargetMode == mode_Grade:
                 s = "%2.0f%%" % fTargetGrade
-                if iTargetPower > 0:                                            # 2020-01-22
-                    s += "%iW" % iTargetPower                                   # Target power added for reference
+                s += "%iW" % iTargetPower        # Target power added for reference
+                                                 # Can be negative!
                 self.txtTarget.SetValue(s + suffix)
 
             else:
@@ -885,6 +886,15 @@ class frmFortiusAntGui(wx.Frame):
             # The graphical size must decrease with even pixels and is
             #   therefore not calculated but a static table.
             #   Size are determined so that it approximately "looks good".
+            #
+            # The sizes[] table should not be modified without checking UI-design
+            # The casette[] table could be changed,
+            # - the 27,24..9 steps on every gear-change, but at either end
+            #   the displayed cassette remains equal for changing teeth
+            # - if 1.21 steps would be used, the displayed cassette steps once
+            #   on every two gearchanges.
+            # I'm curious whether when a question will be raised on this...
+            #
             #            1   2   3   4   5   6   7   8   9  10  11  12
             cassette = [27, 24, 22, 20, 18, 17, 15, 14, 12, 11, 10, 9] # teeth
             sizes    = [40, 36, 32, 28, 24, 20, 16, 14, 12, 10,  8, 6] # pixels

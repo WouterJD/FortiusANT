@@ -1,0 +1,26 @@
+usage: FortiusAnt.py [-h] [-a] [-A] [-d DEBUG] [-g] [-H HRM] [-m] [-M] [-n]
+                     [-p FACTOR] [-P] [-s] [-t TACXTYPE]
+
+Program to broadcast data from USB Tacx Fortius trainer, and to receive
+resistance data for the trainer
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -a, --autostart       Automatically start
+  -A, --PedalStrokeAnalysis
+                        Pedal Stroke Analysis
+  -d DEBUG, --debug DEBUG
+                        Show debugging data
+  -g, --gui             Run with graphical user interface
+  -H HRM, --hrm HRM     Pair this Heart Rate Monitor (0: any, -1: none)
+  -m, --manual          Run manual power (ignore target from ANT+ Dongle)
+  -M, --manualGrade     Run manual grade (ignore target from ANT+ Dongle)
+  -n, --calibrate       Do not calibrate before start
+  -p FACTOR, --factor FACTOR
+                        Adjust target Power by multiplying by this factor for
+                        static calibration
+  -P, --PowerMode       Power mode has preference over Resistance mode (for 30
+                        seconds)
+  -s, --simulate        Simulated trainer to test ANT+ connectivity
+  -t TACXTYPE, --TacxType TACXTYPE
+                        Specify Tacx Type; e.g. i-Vortex, default=autodetect
