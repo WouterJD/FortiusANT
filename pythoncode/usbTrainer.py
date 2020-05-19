@@ -1,8 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-15"
-# 2020-05-15    Changed: AntDevice initialized in clsTacxAntVortexTrainer
+__version__ = "2020-05-19"
+# 2020-05-19    Changed: exception handling when loading firmware (issue #89)
+# 2020-05-18    Changed: Some clode cleanup in clsTacxAntVortexTrainer
+# 2020-05-15    Changed: self.AntDevice initialized in clsTacxAntVortexTrainer
 # 2020-05-15    Added: logging for SetPower() and SetGrade(), 
 #                    TargetPower2Resistance()
 # 2020-05-14    Changed: Refresh() QuarterSecond added, mandatory fields
@@ -266,7 +268,7 @@ class clsTacxTrainer():
         #-----------------------------------------------------------------------
         msg             = "No Tacx trainer found"
         hu              = None                      # TrainerType
-        dev             = None
+        dev             = False
         LegacyProtocol  = False
 
         #-----------------------------------------------------------------------
@@ -277,7 +279,7 @@ class clsTacxTrainer():
                 if debug.on(debug.Function):
                     logfile.Write ("GetTrainer - Check for trainer %s" % (hex(hu)))
                 dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=hu)      # find trainer USB device
-                if dev != None:
+                if dev:
                     msg = "Connected to Tacx Trainer T" + hex(hu)[2:]          # remove 0x from result
                     if debug.on(debug.Data2 | debug.Function):
                         logfile.Print (dev)
@@ -296,47 +298,46 @@ class clsTacxTrainer():
         #-----------------------------------------------------------------------
         # Initialise trainer (if found)
         #-----------------------------------------------------------------------
-        if hu == 0:
+        if not dev:
+            hu  = 0
             dev = False
-        else:                                                    # found trainer
+        else:                                                  # found trainer
             #-------------------------------------------------------------------
             # iMagic             As defined together with fritz-hh and jegorvin)
             #-------------------------------------------------------------------
             if hu == hu1902:
                 LegacyProtocol = True
-                if debug.on(debug.Function):
-                    logfile.Write ("GetTrainer - Found 1902 head unit (iMagic)")
+                logfile.Console ("Initialising head unit T1902 (iMagic), please wait 5 seconds")
+                logfile.Console (imagic_fw)   # Hint what may be wrong if absent
                 try:
                     fxload.loadHexFirmware(dev, imagic_fw)
-                    if debug.on(debug.Function):
-                        logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
-                    time.sleep(5)
-                    msg = "GetTrainer - 1902 head unit initialised (iMagic)"
-                except:                                              # not found
-                    msg = "GetTrainer - Unable to initialise trainer"
+                except Exception as e:                         # file not found?
+                    msg = "GetTrainer: " + str(e)
                     dev = False
+                else:
+                    time.sleep(5)
+                    msg = "T1902 head unit initialised (iMagic)"
 
             #-------------------------------------------------------------------
             # unintialised Fortius (as provided by antifier original code)
             #-------------------------------------------------------------------
             if hu == hue6be_nfw:
-                if debug.on(debug.Function):
-                    logfile.Write ("GetTrainer - Found uninitialised 1942 head unit (Fortius)")
+                logfile.Console ("Initialising head unit T1942 (Fortius), please wait 5 seconds")
+                logfile.Console (fortius_fw)  # Hint what may be wrong if absent
                 try:
                     fxload.loadHexFirmware(dev, fortius_fw)
-                    if debug.on(debug.Function):
-                        logfile.Write ("GetTrainer - Initialising head unit, please wait 5 seconds")
+                except Exception as e:                         # file not found?
+                    msg = "GetTrainer: " + str(e)
+                    dev = False
+                else:
                     time.sleep(5)
                     dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=hu1942)
                     if dev != None:
-                        msg = "GetTrainer - 1942 head unit initialised (Fortius)"
+                        msg = "T1942 head unit initialised (Fortius)"
                         hu = hu1942
                     else:
                         msg = "GetTrainer - Unable to load firmware"
                         dev = False
-                except:                                              # not found
-                    msg = "GetTrainer - Unable to initialise trainer"
-                    dev = False
 
             #-------------------------------------------------------------------
             # Set configuration
@@ -535,7 +536,12 @@ class clsTacxTrainer():
         #     shown. Numbers like 5,4,3 would be irrealistic in real world.
         #     Of course the number of teeth is a reference number.
         #
-        # Show progress
+        # Set FortiusAntGui.py OnPaint() for details.
+        #       PowercurveFactor = 0.1 = 150 teeth
+        #       PowercurveFactor = 0.5 =  30 teeth
+        #       PowercurveFactor = 1.0 =  15 teeth
+        #       PowercurveFactor = 2.0 =   8 teeth
+        #       PowercurveFactor = 3.0 =   5 teeth
         # ----------------------------------------------------------------------
         self.Teeth = int(15 / self.PowercurveFactor)
             
@@ -747,18 +753,39 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                                                 # the trainer not yet paired!
         self.clv.PowerFactor   = 1              # Not applicable for i-Vortex
 
-        self.__iVortexButtons  = 0
         self.__AntVTXpaired    = False
         self.__AntVHUpaired    = False
-        self.__DeviceNumberVTX = 0              # provided by CHANNEL_ID
+        self.__DeviceNumberVTX = 0              # provided by CHANNEL_ID msg
         self.__DeviceNumberVHU = 0
-        self.__VortexID    = 0                  # provided by datapage 3
+
+        self.__Cadence         = 0              # provided by datapage 0
+        self.__CurrentPower    = 0
+        self.__SpeedKmh        = 0
+
+        self.__VortexID        = 0              # provided by datapage 3
+
+        self.__iVortexButtons  = 0              # provided by datapage 221
 
     #---------------------------------------------------------------------------
-    # ReceiveFromTrainer()
-    # Note: __iVortexButtons are prepared by HandleANTmessage
+    # R e c e i v e F r o m T r a i n e r
+    #---------------------------------------------------------------------------
+    # input     __data as collected by HandleANTmessage
+    #
+    # function  Now provide data to TacxTrainer
+    #
+    # returns   Buttons, Cadence, CurrentPower, SpeedKmh, Message
+    #
+    #           NOT: HeartRate, TargetResistance, CurrentResistance, PedalEcho
+    #                WheelSpeed
     #---------------------------------------------------------------------------
     def _ReceiveFromTrainer(self):
+        # ----------------------------------------------------------------------
+        # Data provided by data pages
+        # ----------------------------------------------------------------------
+        self.Cadence      = self.__Cadence
+        self.CurrentPower = self.__CurrentPower
+        self.SpeedKmh     = self.__SpeedKmh
+
         # ----------------------------------------------------------------------
         # Translate i-Vortex buttons to TacxTrainer.Buttons.
         # Mapping according TotalReverse:
@@ -771,6 +798,19 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
         elif self.__iVortexButtons == 4: self.Buttons = DownButton
         elif self.__iVortexButtons == 5: self.Buttons = EnterButton  # Right
         self.__iVortexButtons = 0
+
+        # ----------------------------------------------------------------------
+        # Compose displayable message
+        # ----------------------------------------------------------------------
+        if self.__DeviceNumberVTX:
+            self.Message = 'Tacx i-Vortex paired: %s' % self.__DeviceNumberVTX
+        else:
+            self.Message = "Pair with Tacx i-Vortex"
+
+        if self.__DeviceNumberVHU:
+            self.Message += ', Headunit: %s' % self.__DeviceNumberVHU
+        else:
+            self.Message += ', Headunit'
 
     #---------------------------------------------------------------------------
     # SendToTrainer()
@@ -812,30 +852,11 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                 self.AntDevice.Write(messages, False, False)
 
     #---------------------------------------------------------------------------
-    # Refresh()
-    #---------------------------------------------------------------------------
-    def Refresh(self, QuarterSecond, TacxMode):
-        super().Refresh(QuarterSecond, TacxMode)
-        if debug.on(debug.Function):logfile.Write ("clsTacxAntVortexTrainer.Refresh()")
-
-        # ----------------------------------------------------------------------
-        # Compose displayable message
-        # ----------------------------------------------------------------------
-        if self.__DeviceNumberVTX:
-            self.Message = 'Tacx i-Vortex paired: %s' % self.__DeviceNumberVTX
-        else:
-            self.Message = "Pair with Tacx i-Vortex"
-
-        if self.__DeviceNumberVHU:
-            self.Message += ', Headunit: %s' % self.__DeviceNumberVHU
-        else:
-            self.Message += ', Headunit'
-
-    #---------------------------------------------------------------------------
     # HandleANTmessage()
     #---------------------------------------------------------------------------
     def HandleANTmessage(self, msg):
-        _synch, _length, id, info, _checksum, _rest, Channel, DataPageNumber = ant.DecomposeMessage(msg)
+        _synch, _length, id, info, _checksum, _rest, Channel, DataPageNumber = \
+                                                       ant.DecomposeMessage(msg)
         dataHandled = False
         messages    = []
         #-----------------------------------------------------------------------
@@ -861,11 +882,10 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                 #---------------------------------------------------------------
                 if DataPageNumber == 0:
                     dataHandled = True
-                    VTX_UsingVirtualSpeed, self.CurrentPower, VTX_Speed, \
-                        VTX_CalibrationState, self.Cadence = \
+                    VTX_UsingVirtualSpeed, self.__CurrentPower, VTX_Speed, \
+                        VTX_CalibrationState, self.__Cadence = \
                         ant.msgUnpage00_TacxVortexDataSpeed(info)
-                    self.SpeedKmh       = round( VTX_Speed / ( 100 * 1000 / 3600 ), 1)
-                    self.WheelSpeed     = 0                         # Not applicable
+                    self.__SpeedKmh = round( VTX_Speed / ( 100 * 1000 / 3600 ), 1)
                     if debug.on(debug.Function):
                         logfile.Write ('i-Vortex Page=%s UsingVirtualSpeed=%s Power=%s Speed=%s State=%s Cadence=%s' % \
                             (DataPageNumber, VTX_UsingVirtualSpeed, self.CurrentPower, \
@@ -1353,19 +1373,46 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
 
     #---------------------------------------------------------------------------
     # Limit Resistance to avoid the Cycle of Death
-    # CoD = if you get tired at a certain power and cycle slower, the resistance
-    #       keeps going up untill Power/0 = infinite and you "die".
-    # Note that interface maximum = 0x7fff = 32767
     #
-    # The protection factor must be Speed, since that is used in Power2Resistance
-    # Note that Speed may drop faster than Cadance!
+    # This a phenomenon occuring in ERGmode (constant power, resistance depends
+    # on (wheel)speed): if you get tired at a certain power and cycle slower, 
+    # the resistance keeps going up untill Power/0 = infinite and you "die".
+    # Starting-up will be quite impossible as well: Power/0.1 is very high!
+    # ==> 1: Resistance must be limitted to a maximum at low wheel-speeds
     #
-    # Note this is just a quite empirically established protection.
+    # Also, Fortius (I do not know for others) does not perform well for high
+    # resistances at low wheelspeed. Practical tests have shown a maximum
+    # of Resistance = 4500 at 10km/hr. Higher resistances cause stuttering.
+    # ==> 2: Same rule, other reason.
+    #
+    # The protection is that when Speed droppes below 10km/hr, the resistance is
+    # limitted. And, if you do not like this, avoid going into this protection,
+    # by keeping the wheelspeed above 10km/hr in ERG-mode rides.
+    #
+    # Note that, the protection factor must be Speed (not Cadence), since that
+    # is used in Power2Resistance. Note that, Speed may drop faster than Cadance!
+    #
+    # Note also that, the figures are empirically determined.
+    # option 1. R=6000 at 15km/hr ==> 6000 / 128866 * (15 * 301) = 210Watt
+    # option 2. R=4500 at 10km/hr ==> 4500 / 128866 * (10 * 301) = 100Watt
+    #
+    # The minium of 1500 is chosen above calibration level to avoid that the
+    # brake is going to spinn (negative power mode).
+    #
+    # It means that the required power is maintained untill 10 km/hr, then drops
+    # to 100Watt and gradually runs down to minimum at zero-speed.
+    # Also, when required power would be 300Watt and you speed up from
+    # 1...10km/hr, the power gradually increases to 100Watt untill above 10km/hr
+    # the real power is set.
+    #
+    # With all this said, a similar function should be present in the LegacyUSB
+    # class; or function generalized and constants 1500 and 4500 (6000) adjusted.
     #---------------------------------------------------------------------------
     def __AvoidCycleOfDeath(self, Resistance):
 
-        if self.SpeedKmh <= 15 and Resistance >= 6000:
-            Resistance = int(max(1500, self.SpeedKmh / 15 * 6000))
+        if self.TargetMode == mode_Power and self.SpeedKmh <= 10 and Resistance >= 6000:
+            Resistance = int(1500 + self.SpeedKmh * 300)
+#           print('__AvoidCycleOfDeath', self.SpeedKmh, Resistance)
 
         return Resistance
 

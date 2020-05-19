@@ -1,8 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v3.0 beta"
-__version__ = "2020-05-14"
+__version__ = "2020-05-15"
+# 2020-05-15    Window title removed here
 # 2020-05-14    pylint error free
 # 2020-05-13    Used: msgUnpage50_WindResistance, msgUnpage51_TrackResistance
 # 2020-05-12    Minor code improvements
@@ -738,19 +738,19 @@ def Tacx2DongleSub(self, Restart):
                 elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddPower(-50)
                 elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddPower( 50)
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
-                else:                                       pass
+                else:                                                   pass
             elif clv.manualGrade:
                 if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
                 elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddGrade(-1)
                 elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddGrade( 1)
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
-                else:                                       pass
+                else:                                                   pass
             else:
                 if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
                 elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.SetPowercurveFactorDown()
                 elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.SetPowercurveFactorUp()
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
-                else:                                       pass
+                else:                                                   pass
 
             #-------------------------------------------------------------------
             # Do ANT work every 1/4 second
@@ -791,8 +791,9 @@ def Tacx2DongleSub(self, Restart):
             # - Information from HRM (if paired)
             # - Information from i-Vortex (if paired)
             #
-            # Note: it'd be better to select the channel first and then the
-            #       message to group by device. Something for future improvement
+            # Input is grouped by messageID, then channel. This has little
+            # practical impact; grouping by Channel would enable to handle all
+            # ANT in a channel (device) module. No advantage today.
             #-------------------------------------------------------------------
             for d in data:
                 synch, length, id, info, checksum, _rest, Channel, DataPageNumber = ant.DecomposeMessage(d)
@@ -801,6 +802,10 @@ def Tacx2DongleSub(self, Restart):
                 if clv.Tacx_iVortex and TacxTrainer.HandleANTmessage(d):
                     pass                    # Message is handled or ignored
 
+                #---------------------------------------------------------------
+                # AcknowledgedData = Slave -> Master
+                #       channel_FE = From CTP (Trainer Road, Zwift) --> Tacx 
+                #---------------------------------------------------------------
                 elif id == ant.msgID_AcknowledgedData:
                     #-----------------------------------------------------------
                     # Fitness Equipment Channel inputs
@@ -923,6 +928,11 @@ def Tacx2DongleSub(self, Restart):
                     #-----------------------------------------------------------
                     else: error="Unknown channel"
 
+                #---------------------------------------------------------------
+                # BroadcastData = Master -> Slave
+                #       channel_HRM_s = Heartbeat received from HRM
+                #       channel_SCS_s = Speed/Cadence received from SCS
+                #---------------------------------------------------------------
                 elif id == ant.msgID_BroadcastData:
                     #-----------------------------------------------------------
                     # Heart Rate Monitor inputs
