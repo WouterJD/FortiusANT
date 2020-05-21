@@ -1,7 +1,11 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-05-14"
+__version__ = "2020-05-20"
+# 2020-05-20    Changed: DecomposeMessage() made foolproof against wrong data
+#                        msgPage172_TacxVortexHU_ChangeHeadunitMode wrong page
+#                        DongleDebugMessage; VHU pages added
+#               Added:  Headunit mode constants
 # 2020-05-14    Added: msgPage000_TacxVortexHU_NoPowerOff
 #                      msgPage172_TacxVortexHU_ChangeHeadunitMode
 #                      msgUnpage221_TacxVortexHU_ButtonPressed
@@ -99,6 +103,10 @@ channel_HRM_s       = 5        # ANT+ channel for Heart Rate Monitor   (slave=di
 channel_VTX_s       = 6        # ANT+ Channel for Tacx i-Vortex        (slave=Cycle Training Program)
 channel_VHU_s       = 7        # ANT+ Channel for Tacx i-Vortex Headunit
 
+
+VHU_Normal          = 0
+VHU_SpecialMode     = 2
+VHU_PCmode          = 4
 
 # There are only 8 channels available and Speed Cadence Sensor is not used
 # Fixed channel assignment is not handy therefore, but since we do not use
@@ -799,19 +807,20 @@ def ComposeMessage(id, info):
     return data
 
 def DecomposeMessage(d):
-    synch    = d[0]
-    length   = d[1]
-    id       = d[2]
-    if length > 0:
-        info = d[3:3+length]            # Info, if length > 0
-    else:
-        info = binascii.unhexlify('')   # NULL-string bytes
-    checksum = d[3+length]              # Character after info
+    synch       = 0
+    length      = 0
+    id          = 0
+    checksum    = 0
+    info        = binascii.unhexlify('')                # NULL-string bytes
+    rest        = ""                                    # No remainder (normal)
 
-    if len(d) > 4 + length:
-        rest = d[4 + length:]           # Remainder (should not occur)
-    else:
-        rest = ""                       # No remainder (normal)
+    if len(d) > 0:          synch    = d[0]             # Carefull approach
+    if len(d) > 1:          length   = d[1]
+    if len(d) > 2:          id       = d[2]
+    if len(d) > 3 + length:
+        if length:          info     = d[3:3+length]    # Info, if length > 0
+        checksum                     = d[3 + length]    # Character after info
+    if len(d) > 4 + length: rest     = d[4 + length:]   # Remainder (should not occur)
 
     Channel         = -1
     DataPageNumber  = -1
@@ -925,6 +934,9 @@ def DongleDebugMessage(text, d):
             elif p        == 81: p_ = 'Product Information'
             elif p        == 82: p_ = 'Battery Status'
 #           elif p        == 89: p_ = 'Add channel ID to list ???'
+            elif p        ==172: p_ = 'VHU Set headunit mode'
+            elif p        ==173: p_ = 'VHU Serial number'
+            elif p        ==221: p_ = 'VHU Button pressed'
             else               : p_ = '??'
 
             p_ = " p=%s(%s)" % (p, p_)                          # Page, show number and name
@@ -949,9 +961,8 @@ def DongleDebugMessage(text, d):
         #-----------------------------------------------------------------------
         # Write to logfile
         #-----------------------------------------------------------------------
-        if debug.on(debug.Data1):
-            logfile.Write ("%s synch=%s, len=%2s, id=%s %-21s, check=%4s, info=%s%s" % \
-                    (text,hex(synch), length, hex(id), id_, hex(checksum),  info_, extra))
+        logfile.Write ("%s synch=%s, len=%2s, id=%s %-21s, check=%4s, info=%s%s" % \
+                (text,hex(synch), length, hex(id), id_, hex(checksum),  info_, extra))
 
 # ==============================================================================
 # ANT+ message interface
@@ -1486,7 +1497,7 @@ def msgPage000_TacxVortexHU_StayAlive (Channel):        # No Power Off
     return info
 
 def msgPage172_TacxVortexHU_ChangeHeadunitMode (Channel, Mode):
-    DataPageNumber      = 16
+    DataPageNumber      = 172
 
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)

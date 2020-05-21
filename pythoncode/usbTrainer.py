@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-19"
+__version__ = "2020-05-20"
+# 2020-05-20    Added: PedalEcho also simulated, for PedalStrokeAnalysis during
+#               simulation, so that screen shots can be made for documentation.
 # 2020-05-19    Changed: exception handling when loading firmware (issue #89)
 # 2020-05-18    Changed: Some clode cleanup in clsTacxAntVortexTrainer
 # 2020-05-15    Changed: self.AntDevice initialized in clsTacxAntVortexTrainer
@@ -696,9 +698,25 @@ class clsSimulatedTrainer(clsTacxTrainer):
     # --------------------------------------------------------------------------
     def Refresh (self, _QuarterSecond=None, _TacxMode=None):
         if debug.on(debug.Function):logfile.Write ("clsSimulatedTrainer.Refresh()")
+        # ----------------------------------------------------------------------
+        # Trigger for pedalstroke analysis
+        # ----------------------------------------------------------------------
+        try:
+            _ = self.__LastPedalEcho
+        except:
+            self.__LastPedalEcho = time.time()
+
+        if self.Cadence and (time.time() - self.__LastPedalEcho) > 60 / self.Cadence:
+            self.__LastPedalEcho= time.time()
+            self.PedalEcho      = 1
+        else:
+            self.PedalEcho      = 0
+
+        # ----------------------------------------------------------------------
+        # Randomize figures
+        # ----------------------------------------------------------------------
         self.Axis               = 0
         self.Buttons            = 0
-        self.PedalEcho          = 0
         self.TargetResistance   = 2345
 
         if self.TargetMode == mode_Grade:
@@ -836,13 +854,23 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     messages.append ( msg )
 
+                    #-----------------------------------------------------------
+                    # And tell to switch to (stay in) PC-mode
+                    #-----------------------------------------------------------
+                    logfile.Console('##PC mode')
+                    info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (\
+                                             ant.channel_VHU_s, ant.VHU_PCmode)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    messages.append ( msg )
+
             elif TacxMode ==  modeStop:
                 #---------------------------------------------------------------
                 # Switch headunit to trainer control mode
                 #---------------------------------------------------------------
                 if self.__AntVHUpaired:
-                    msg = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (\
-                                                           ant.channel_VHU_s, 0)
+                    info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (\
+                                              ant.channel_VHU_s, ant.VHU_Normal)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     messages.append ( msg )
 
             #-------------------------------------------------------------------
@@ -874,6 +902,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                 # Ask what device is paired
                 #---------------------------------------------------------------
                 if not self.__AntVTXpaired:
+                    logfile.Console('##Request ChannelID')
                     msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
                     messages.append ( msg )
 
@@ -951,14 +980,9 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
             elif id == ant.msgID_BroadcastData:
                 #---------------------------------------------------------------
                 # Ask what device is paired
-                # And tell to switch to PC-mode
                 #---------------------------------------------------------------
                 if not self.__AntVHUpaired:
                     msg = ant.msg4D_RequestMessage(ant.channel_VHU_s, ant.msgID_ChannelID)
-                    messages.append ( msg )
-
-                    msg = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (\
-                                             ant.channel_VHU_s, 4)    # PC-mode
                     messages.append ( msg )
 
                 #---------------------------------------------------------------
@@ -982,10 +1006,20 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                 Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \
                     ant.unmsg51_ChannelID(info)
 
-                if Channel == ant.channel_VHU_s and DeviceTypeID == ant.DeviceTypeID_VHU:
+                if DeviceTypeID == ant.DeviceTypeID_VHU:
+                    logfile.Console('##Paired')
                     dataHandled = True
                     self.__AntVHUpaired    = True
                     self.__DeviceNumberVHU = DeviceNumber
+
+                    #-----------------------------------------------------------
+                    # And tell to switch to PC-mode
+                    #-----------------------------------------------------------
+                    logfile.Console('##PC mode')
+                    info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (\
+                                             ant.channel_VHU_s, ant.VHU_PCmode)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    messages.append ( msg )
 
             #-------------------------------------------------------------------
             # Outer loop does not need to handle channel_VHU_s messages
