@@ -103,16 +103,20 @@ channel_HRM_s       = 5        # ANT+ channel for Heart Rate Monitor   (slave=di
 channel_VTX_s       = 6        # ANT+ Channel for Tacx i-Vortex        (slave=Cycle Training Program)
 channel_VHU_s       = 7        # ANT+ Channel for Tacx i-Vortex Headunit
 
-
-VHU_Normal          = 0
-VHU_SpecialMode     = 2
-VHU_PCmode          = 4
-
 # There are only 8 channels available and Speed Cadence Sensor is not used
 # Fixed channel assignment is not handy therefore, but since we do not use
 # SCS, park them for later
 channel_SCS         = -1       # ANT+ Channel for Speed Cadence Sensor
 channel_SCS_s       = -1       # ANT+ Channel for Speed Cadence Sensor (slave=display)
+
+#---------------------------------------------------------------------------
+# i-Vortex Headunit modes
+#---------------------------------------------------------------------------
+VHU_Normal          = 0        # Headunit commands the i-Vortex trainer
+VHU_SpecialMode     = 2        # Headunit controls the i-Vortex and 
+                               #        FortiusANT TargetPower seems ignored.
+VHU_PCmode          = 4        # Headunit only sends buttons to slave (FortiusANT)
+
 
 DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
 DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT uses and
@@ -709,12 +713,13 @@ class clsAntDongle():
         self.Write(messages)
 
     def SlaveVHU_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex Headunit
+                                                        # See comment above msgPage000_TacxVortexHU_StayAlive
         if debug.on(debug.Data1): logfile.Write ("SlaveVHU_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VHU_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
             msg51_ChannelID             (channel_VHU_s, DeviceNumber, DeviceTypeID_VHU, TransmissionType_IC),
             msg45_ChannelRfFrequency    (channel_VHU_s, RfFrequency_2478Mhz),
-            msg43_ChannelPeriod         (channel_VHU_s, ChannelPeriod=0x2000),
+            msg43_ChannelPeriod         (channel_VHU_s, ChannelPeriod=0x0f00),
             msg60_ChannelTransmitPower  (channel_VHU_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_VHU_s),
             msg4D_RequestMessage        (channel_VHU_s, msgID_ChannelID)

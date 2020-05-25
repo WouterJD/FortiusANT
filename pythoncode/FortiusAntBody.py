@@ -1,7 +1,12 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-15"
+__version__ = "2020-05-24"
+# 2020-05-24    i-Vortex adjustments
+#               - in manual mode, ANTdongle must be present as well, so that
+#                 manual mode works for i-Vortex as well. 
+#                 For USB-trainers perhaps not needed, but FortiusANT needs a
+#                   dongle - I would say by name and hence definition!
 # 2020-05-15    Window title removed here
 # 2020-05-14    pylint error free
 # 2020-05-13    Used: msgUnpage50_WindResistance, msgUnpage51_TrackResistance
@@ -230,11 +235,11 @@ def LocateHW(self):
     if AntDongle and AntDongle.OK:
         pass
     else:
-        if clv.manual or clv.manualGrade:
-            self.SetMessages(Dongle="Simulated Dongle (manual mode)")
-        else:
-            AntDongle = ant.clsAntDongle()
-            self.SetMessages(Dongle=AntDongle.Message)
+        AntDongle = ant.clsAntDongle()
+        if AntDongle.OK:
+             if clv.manual:      AntDongle.Message += ' (manual power)'
+             if clv.manualGrade: AntDongle.Message += ' (manual grade)'
+        self.SetMessages(Dongle=AntDongle.Message)
 
     #---------------------------------------------------------------------------
     # Get Trainer and find trainer model for Windows and Linux
@@ -258,10 +263,7 @@ def LocateHW(self):
     # Done
     #---------------------------------------------------------------------------
     if debug.on(debug.Application): logfile.Write ("Scan for hardware - end")
-    if (clv.manual or clv.manualGrade or AntDongle.OK) and TacxTrainer.OK:
-        return True
-    else:
-        return False
+    return (AntDongle.OK and TacxTrainer.OK)
     
 # ------------------------------------------------------------------------------
 # R u n o f f
@@ -448,7 +450,7 @@ def Tacx2Dongle(self):
     Restart = False
     while True:
         rtn = Tacx2DongleSub(self, Restart)
-        if not (clv.manual or clv.manualGrade) and AntDongle.DongleReconnected:
+        if AntDongle.DongleReconnected:
             self.SetMessages(Dongle=AntDongle.Message)
             AntDongle.ApplicationRestart()
             Restart = True
@@ -458,6 +460,10 @@ def Tacx2Dongle(self):
 
 def Tacx2DongleSub(self, Restart):
     global clv, AntDongle, TacxTrainer
+
+    assert(AntDongle   and AntDongle.OK)
+    assert(TacxTrainer and TacxTrainer.OK)
+
     AntHRMpaired = False
 
     #---------------------------------------------------------------------------
@@ -484,47 +490,46 @@ def Tacx2DongleSub(self, Restart):
     #
     # And if you want a dedicated Speed Cadence Sensor, implement like this...
     #---------------------------------------------------------------------------
-    if not (clv.manual or clv.manualGrade):
-        AntDongle.ResetDongle()             # reset dongle
-        AntDongle.Calibrate()               # calibrate ANT+ dongle
-        AntDongle.Trainer_ChannelConfig()   # Create ANT+ master channel for FE-C
-        
-        if clv.hrm == None:
-            AntDongle.HRM_ChannelConfig()   # Create ANT+ master channel for HRM
-        elif clv.hrm < 0:
-            pass                            # No Heartrate at all
-        else:
-            #-------------------------------------------------------------------
-            # Create ANT+ slave channel for HRM;   0: auto pair, nnn: defined HRM
-            #-------------------------------------------------------------------
-            AntDongle.SlaveHRM_ChannelConfig(clv.hrm)
-
-            #-------------------------------------------------------------------
-            # Request what DeviceID is paired to the HRM-channel
-            # No pairing-loop: HRM perhaps not yet active and avoid delay
-            #-------------------------------------------------------------------
-            # msg = ant.msg4D_RequestMessage(ant.channel_HRM_s, ant.msgID_ChannelID)
-            # AntDongle.Write([msg], False, False)
+    AntDongle.ResetDongle()             # reset dongle
+    AntDongle.Calibrate()               # calibrate ANT+ dongle
+    AntDongle.Trainer_ChannelConfig()   # Create ANT+ master channel for FE-C
     
-        if clv.Tacx_iVortex:
-            #-------------------------------------------------------------------
-            # Create ANT+ slave channel for VTX
-            # No pairing-loop: VTX perhaps not yet active and avoid delay
-            #-------------------------------------------------------------------
-            AntDongle.SlaveVTX_ChannelConfig(0)
+    if clv.hrm == None:
+        AntDongle.HRM_ChannelConfig()   # Create ANT+ master channel for HRM
+    elif clv.hrm < 0:
+        pass                            # No Heartrate at all
+    else:
+        #-------------------------------------------------------------------
+        # Create ANT+ slave channel for HRM;   0: auto pair, nnn: defined HRM
+        #-------------------------------------------------------------------
+        AntDongle.SlaveHRM_ChannelConfig(clv.hrm)
 
-            # msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
-            # AntDongle.Write([msg], False, False)
+        #-------------------------------------------------------------------
+        # Request what DeviceID is paired to the HRM-channel
+        # No pairing-loop: HRM perhaps not yet active and avoid delay
+        #-------------------------------------------------------------------
+        # msg = ant.msg4D_RequestMessage(ant.channel_HRM_s, ant.msgID_ChannelID)
+        # AntDongle.Write([msg], False, False)
 
-            #-------------------------------------------------------------------
-            # Create ANT+ slave channel for VHU
-            #-------------------------------------------------------------------
-            AntDongle.SlaveVHU_ChannelConfig(0)
+    if clv.Tacx_iVortex:
+        #-------------------------------------------------------------------
+        # Create ANT+ slave channel for VTX
+        # No pairing-loop: VTX perhaps not yet active and avoid delay
+        #-------------------------------------------------------------------
+        AntDongle.SlaveVTX_ChannelConfig(0)
 
-        if clv.scs != None:
-            AntDongle.SlaveSCS_ChannelConfig(clv.scs)   # Create ANT+ slave channel for SCS
-                                                        # 0: auto pair, nnn: defined SCS
-            pass
+        # msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
+        # AntDongle.Write([msg], False, False)
+
+        #-------------------------------------------------------------------
+        # Create ANT+ slave channel for VHU
+        #-------------------------------------------------------------------
+        AntDongle.SlaveVHU_ChannelConfig(0)
+
+    if clv.scs != None:
+        AntDongle.SlaveSCS_ChannelConfig(clv.scs)   # Create ANT+ slave channel for SCS
+                                                    # 0: auto pair, nnn: defined SCS
+        pass
     
     if not clv.gui: logfile.Console ("Ctrl-C to exit")
 
@@ -546,8 +551,8 @@ def Tacx2DongleSub(self, Restart):
         self.SetMessages(Tacx="* * * * S T A R T   P E D A L L I N G * * * *")
         if debug.on(debug.Function):
             logfile.Write('Tacx2Dongle; start pedalling for calibration')
-    # try:
-    if True:
+    try:
+    # if True:
         while         self.RunningSwitch \
               and     clv.calibrate \
               and not TacxTrainer.Buttons == usbTrainer.CancelButton \
@@ -613,10 +618,10 @@ def Tacx2DongleSub(self, Restart):
             #-------------------------------------------------------------------
             SleepTime = 0.25 - (time.time() - StartTime)
             if SleepTime > 0: time.sleep(SleepTime)
-    # except KeyboardInterrupt:
-    #     logfile.Console ("Stopped")
-    # except Exception as e:
-    #     logfile.Console ("Calibration stopped with exception: %s" % e)
+    except KeyboardInterrupt:
+        logfile.Console ("Stopped")
+    except Exception as e:
+        logfile.Console ("Calibration stopped with exception: %s" % e)
     #---------------------------------------------------------------------------
     # Stop trainer
     #---------------------------------------------------------------------------
@@ -668,8 +673,7 @@ def Tacx2DongleSub(self, Restart):
     #---------------------------------------------------------------------------
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start main loop')
     try:
-        while self.RunningSwitch == True and \
-            ((clv.manual or clv.manualGrade) or not AntDongle.DongleReconnected):
+        while self.RunningSwitch == True and not AntDongle.DongleReconnected:
             StartTime = time.time()
             #-------------------------------------------------------------------
             # ANT process is done once every 250ms
@@ -736,18 +740,21 @@ def Tacx2DongleSub(self, Restart):
             if clv.manual:
                 if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
                 elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddPower(-50)
+                elif TacxTrainer.Buttons == usbTrainer.OKButton:        TacxTrainer.SetPower(100)
                 elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddPower( 50)
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
                 else:                                                   pass
             elif clv.manualGrade:
                 if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
                 elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddGrade(-1)
+                elif TacxTrainer.Buttons == usbTrainer.OKButton:        TacxTrainer.SetGrade(0)
                 elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddGrade( 1)
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
                 else:                                                   pass
             else:
                 if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
                 elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.SetPowercurveFactorDown()
+                elif TacxTrainer.Buttons == usbTrainer.OKButton:        TacxTrainer.ResetPowercurveFactor()
                 elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.SetPowercurveFactorUp()
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
                 else:                                                   pass
@@ -766,16 +773,15 @@ def Tacx2DongleSub(self, Restart):
                 #---------------------------------------------------------------
                 # Broadcast Heartrate message
                 #---------------------------------------------------------------
-                if clv.hrm == None and TacxTrainer.HeartRate > 0 and not (clv.manual or clv.manualGrade):
+                if clv.hrm == None and TacxTrainer.HeartRate > 0:
                     messages.append(hrm.BroadcastHeartrateMessage(HeartRate))
 
                 #---------------------------------------------------------------
                 # Broadcast TrainerData message to the CTP (Trainer Road, ...)
                 #---------------------------------------------------------------
-                if not (clv.manual or clv.manualGrade):
-                    # print('fe.BroadcastTrainerDataMessage', Cadence, CurrentPower, SpeedKmh, HeartRate)
-                    messages.append(fe.BroadcastTrainerDataMessage (TacxTrainer.Cadence, \
-                        TacxTrainer.CurrentPower, TacxTrainer.SpeedKmh, TacxTrainer.HeartRate))
+                # print('fe.BroadcastTrainerDataMessage', Cadence, CurrentPower, SpeedKmh, HeartRate)
+                messages.append(fe.BroadcastTrainerDataMessage (TacxTrainer.Cadence, \
+                    TacxTrainer.CurrentPower, TacxTrainer.SpeedKmh, TacxTrainer.HeartRate))
                     
             #-------------------------------------------------------------------
             # Broadcast and receive ANT+ responses
@@ -1062,9 +1068,7 @@ def Tacx2DongleSub(self, Restart):
     #---------------------------------------------------------------------------
     # Stop devices
     #---------------------------------------------------------------------------
-    if not (clv.manual or clv.manualGrade):
-        AntDongle.ResetDongle()
-    if TacxTrainer and TacxTrainer.OK:
-        TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
+    AntDongle.ResetDongle()
+    TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
 
     return True
