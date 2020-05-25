@@ -523,6 +523,12 @@ def Tacx2DongleSub(self, Restart):
 
         #-------------------------------------------------------------------
         # Create ANT+ slave channel for VHU
+        #
+        # We create this channel right away. At some stage the VTX-channel
+        # sends the Page03_TacxVortexDataCalibration which provides the
+        # VortexID. This VortexID is the DeviceID that could be provided
+        # to SlaveVHU_ChannelConfig() to restrict pairing to that headunit
+        # only. Not relevant in private environments, so left as is here.
         #-------------------------------------------------------------------
         AntDongle.SlaveVHU_ChannelConfig(0)
 

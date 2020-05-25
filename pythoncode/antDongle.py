@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-05-20"
+__version__ = "2020-05-25"
+# 2020-05-25    Changed: DongleDebugMessage() adjusted with some more info
 # 2020-05-20    Changed: DecomposeMessage() made foolproof against wrong data
 #                        msgPage172_TacxVortexHU_ChangeHeadunitMode wrong page
 #                        DongleDebugMessage; VHU pages added
@@ -900,8 +901,7 @@ def DongleDebugMessage(text, d):
         p_    = ''                                              # There is not always page-info, do not show
 
         if   id == msgID_ChannelResponse or id == msgID_RequestMessage:
-                        Channel = -1                         # There is no channel number for this message
-                        extra   = " msg=" + hex(p)           # No page but acknowledged/requested message
+                        extra = " (ch=%s, msg=%s)" % (Channel, hex(p))
 
         elif id == msgID_ANTversion:
                         Channel = -1                         # There is no channel number for this message
@@ -961,7 +961,7 @@ def DongleDebugMessage(text, d):
             pass                                                        # Already filled
         else:
             if   Channel == -1:  extra = ""                             # No Channel, do not show
-            else              :  extra = " [ch=%s%s]" % (Channel, p_)   # Channel, show it with optional pageinfo
+            else              :  extra = " (ch=%s%s)" % (Channel, p_)   # Channel, show it with optional pageinfo
 
         #-----------------------------------------------------------------------
         # Write to logfile
