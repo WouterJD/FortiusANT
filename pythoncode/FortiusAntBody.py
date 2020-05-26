@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-24"
+__version__ = "2020-05-26"
+# 2020-05-26    Added: msgPage71_CommandStatus handled
 # 2020-05-24    i-Vortex adjustments
 #               - in manual mode, ANTdongle must be present as well, so that
 #                 manual mode works for i-Vortex as well. 
@@ -467,6 +468,17 @@ def Tacx2DongleSub(self, Restart):
     AntHRMpaired = False
 
     #---------------------------------------------------------------------------
+    # Command status data
+    #---------------------------------------------------------------------------
+    p71_LastReceivedCommandID   = 255
+    p71_SequenceNr              = 0
+    p71_CommandStatus           = 255
+    p71_Data1                   = 0xff
+    p71_Data2                   = 0xff
+    p71_Data3                   = 0xff
+    p71_Data4                   = 0xff
+
+    #---------------------------------------------------------------------------
     # Info from ANT slave channels
     #---------------------------------------------------------------------------
     HeartRate       = 0         # This field is displayed
@@ -832,6 +844,12 @@ def Tacx2DongleSub(self, Restart):
                             # TargetMode            = mode_Basic
                             # TargetGradeFromDongle = 0
                             # TargetPowerFromDongle = ant.msgUnpage48_BasicResistance(info) * 1000  # n % of maximum of 1000Watt
+                            p71_LastReceivedCommandID   = DataPageNumber
+                            p71_SequenceNr              = (p71_SequenceNr + 1) & 0xff
+                            p71_CommandStatus           = 0xff
+                            p71_Data2                   = 0xff
+                            p71_Data3                   = 0xff
+                            p71_Data4                   = 0xff
                             
                         #-------------------------------------------------------
                         # Data page 49 (0x31) Target Power
@@ -842,6 +860,13 @@ def Tacx2DongleSub(self, Restart):
                             if False and clv.PowerMode and debug.on(debug.Application):
                                 logfile.Write('PowerMode: TargetPower info received - timestamp set')
 
+                            p71_LastReceivedCommandID   = DataPageNumber
+                            p71_SequenceNr              = (p71_SequenceNr + 1) & 0xff
+                            p71_CommandStatus           = 0
+                            p71_Data2                   = 0xff
+                            p71_Data3                   = TacxTrainer.TargetPower & 0x00ff
+                            p71_Data4                   = (TacxTrainer.TargetPower & 0xff00) >> 8
+
                         #-------------------------------------------------------
                         # Data page 50 (0x32) Wind Resistance
                         #-------------------------------------------------------
@@ -849,6 +874,13 @@ def Tacx2DongleSub(self, Restart):
                             WindResistance, WindSpeed, DraftingFactor = \
                                 ant.msgUnpage50_WindResistance(info)
                             TacxTrainer.SetWind(WindResistance, WindSpeed, DraftingFactor)
+
+                            p71_LastReceivedCommandID   = DataPageNumber
+                            p71_SequenceNr              = (p71_SequenceNr + 1) & 0xff
+                            p71_CommandStatus           = 0
+                            p71_Data2                   = WindResistance
+                            p71_Data3                   = WindSpeed
+                            p71_Data4                   = DraftingFactor
 
                         #-------------------------------------------------------
                         # Data page 51 (0x33) Track resistance
@@ -875,7 +907,14 @@ def Tacx2DongleSub(self, Restart):
                                 TacxTrainer.SetGrade(Grade)
                                 TacxTrainer.SetRollingResistance(RollingResistance)
                                 PowerModeActive       = ''
-                            
+
+                            p71_LastReceivedCommandID   = DataPageNumber
+                            p71_SequenceNr              = (p71_SequenceNr + 1) & 0xff
+                            p71_CommandStatus           = 0
+                            p71_Data2                   =  TacxTrainer.TargetPower & 0x00ff
+                            p71_Data3                   = (TacxTrainer.TargetPower & 0xff00) >> 8
+                            p71_Data4                   = RollingResistance
+
                         #-------------------------------------------------------
                         # Data page 55 User configuration
                         #-------------------------------------------------------
@@ -900,6 +939,10 @@ def Tacx2DongleSub(self, Restart):
                                 # bit 1 = Target/Power/Ergo mode
                                 # bit 2 = Simulation/Restance/Slope mode
                                 info = ant.msgPage54_FE_Capabilities(ant.channel_FE, 0xff, 0xff, 0xff, 0xff, 1000, 0x07)
+
+                            elif RequestedPageNumber == 71:
+                                info = ant.msgPage71_CommandStatus(ant.channel_FE, p71_LastReceivedCommandID, \
+                                    p71_SequenceNr, p71_CommandStatus, p71_Data1, p71_Data2, p71_Data3, p71_Data4)
 
                             elif RequestedPageNumber == 80:
                                 info = ant.msgPage80_ManufacturerInfo(ant.channel_FE, 0xff, 0xff, \

@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-05-25"
+__version__ = "2020-05-26"
+# 2020-05-26    Added:   msgPage71_CommandStatus
 # 2020-05-25    Changed: DongleDebugMessage() adjusted with some more info
 # 2020-05-20    Changed: DecomposeMessage() made foolproof against wrong data
 #                        msgPage172_TacxVortexHU_ChangeHeadunitMode wrong page
@@ -1881,6 +1882,30 @@ def msgPage54_FE_Capabilities(Channel, Reserved1, Reserved2, Reserved3, Reserved
 
     format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fReserved2 + fReserved3 + fReserved4 + fMaximumResistance + fCapabilitiesBits
     info  = struct.pack (format,  Channel,   DataPageNumber,   Reserved1 ,  Reserved2 ,  Reserved3 ,  Reserved4 ,  MaximumResistance,   CapabilitiesBits)
+
+    return info
+
+# ------------------------------------------------------------------------------
+# P a g e 7 1 _ C o m m a n d S t a t u s
+# ------------------------------------------------------------------------------
+# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
+# D000001231_-_ANT+_Device_Profile_-_Fitness_Equipment_-_Rev_5.0_(6).pdf
+# ------------------------------------------------------------------------------
+def msgPage71_CommandStatus(Channel, LastReceivedCommandID, SequenceNr, CommandStatus, Data1, Data2, Data3, Data4):
+    DataPageNumber          = 71
+
+    fChannel                = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber         = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fLastReceivedCommandID  = sc.unsigned_char
+    fSequenceNr             = sc.unsigned_char
+    fCommandStatus          = sc.unsigned_char
+    fData1                  = sc.unsigned_char
+    fData2                  = sc.unsigned_char
+    fData3                  = sc.unsigned_char
+    fData4                  = sc.unsigned_char
+
+    format=    sc.no_alignment + fChannel + fDataPageNumber + fLastReceivedCommandID + fSequenceNr + fCommandStatus + fData1 + fData2 + fData3 + fData4
+    info  = struct.pack (format,  Channel,   DataPageNumber,   LastReceivedCommandID,   SequenceNr,   CommandStatus,   Data1,   Data2,   Data3,   Data4)
 
     return info
 
