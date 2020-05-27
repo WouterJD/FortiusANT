@@ -1,8 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-26"
-# 2020-05-26    Added: msgPage71_CommandStatus handled
+__version__ = "2020-05-27"
+# 2020-05-27    Added: msgPage71_CommandStatus handled -- and tested
 # 2020-05-24    i-Vortex adjustments
 #               - in manual mode, ANTdongle must be present as well, so that
 #                 manual mode works for i-Vortex as well. 
@@ -845,7 +845,7 @@ def Tacx2DongleSub(self, Restart):
                             # TargetGradeFromDongle = 0
                             # TargetPowerFromDongle = ant.msgUnpage48_BasicResistance(info) * 1000  # n % of maximum of 1000Watt
                             p71_LastReceivedCommandID   = DataPageNumber
-                            p71_SequenceNr              = (p71_SequenceNr + 1) & 0xff
+                            p71_SequenceNr              = int(p71_SequenceNr + 1) & 0xff
                             p71_CommandStatus           = 0xff
                             p71_Data2                   = 0xff
                             p71_Data3                   = 0xff
@@ -861,11 +861,11 @@ def Tacx2DongleSub(self, Restart):
                                 logfile.Write('PowerMode: TargetPower info received - timestamp set')
 
                             p71_LastReceivedCommandID   = DataPageNumber
-                            p71_SequenceNr              = (p71_SequenceNr + 1) & 0xff
+                            p71_SequenceNr              = int(p71_SequenceNr + 1) & 0xff
                             p71_CommandStatus           = 0
                             p71_Data2                   = 0xff
-                            p71_Data3                   = TacxTrainer.TargetPower & 0x00ff
-                            p71_Data4                   = (TacxTrainer.TargetPower & 0xff00) >> 8
+                            p71_Data3                   =  int(TacxTrainer.TargetPower) & 0x00ff
+                            p71_Data4                   = (int(TacxTrainer.TargetPower) & 0xff00) >> 8
 
                         #-------------------------------------------------------
                         # Data page 50 (0x32) Wind Resistance
@@ -876,7 +876,7 @@ def Tacx2DongleSub(self, Restart):
                             TacxTrainer.SetWind(WindResistance, WindSpeed, DraftingFactor)
 
                             p71_LastReceivedCommandID   = DataPageNumber
-                            p71_SequenceNr              = (p71_SequenceNr + 1) & 0xff
+                            p71_SequenceNr              = int(p71_SequenceNr + 1) & 0xff
                             p71_CommandStatus           = 0
                             p71_Data2                   = WindResistance
                             p71_Data3                   = WindSpeed
@@ -909,10 +909,10 @@ def Tacx2DongleSub(self, Restart):
                                 PowerModeActive       = ''
 
                             p71_LastReceivedCommandID   = DataPageNumber
-                            p71_SequenceNr              = (p71_SequenceNr + 1) & 0xff
+                            p71_SequenceNr              = int(p71_SequenceNr + 1) & 0xff
                             p71_CommandStatus           = 0
-                            p71_Data2                   =  TacxTrainer.TargetPower & 0x00ff
-                            p71_Data3                   = (TacxTrainer.TargetPower & 0xff00) >> 8
+                            p71_Data2                   =  int(TacxTrainer.TargetPower) & 0x00ff
+                            p71_Data3                   = (int(TacxTrainer.TargetPower) & 0xff00) >> 8
                             p71_Data4                   = RollingResistance
 
                         #-------------------------------------------------------
