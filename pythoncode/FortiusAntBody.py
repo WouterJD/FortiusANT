@@ -839,7 +839,7 @@ def Tacx2DongleSub(self, Restart):
                         # Data page 48 (0x30) Basic resistance
                         #-------------------------------------------------------
                         if   DataPageNumber == 48:
-                            logfile.Write('Data page 48 Basic mode not implemented')
+                            logfile.Console('Data page 48 Basic mode not implemented')
                             # I never saw this appear anywhere (2020-05-08)
                             # TargetMode            = mode_Basic
                             # TargetGradeFromDongle = 0

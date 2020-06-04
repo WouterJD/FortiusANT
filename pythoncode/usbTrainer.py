@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-24"
+__version__ = "2020-05-27"
+# 2020-05-27    Changed: SetGrade() limits Grade to -30...+30
+#                        clsSimulatedTrainer improved
 # 2020-05-24    Changed: logfile typo's
 # 2020-05-20    Added: PedalEcho also simulated, for PedalStrokeAnalysis during
 #               simulation, so that screen shots can be made for documentation.
@@ -406,7 +408,11 @@ class clsTacxTrainer():
         self.SetPower(self.TargetPower + deltaPower)
 
     def SetGrade(self, Grade):
-        if debug.on(debug.Function):logfile.Write ("SetGrade(%s)" % Grade)
+        if debug.on(debug.Function):  logfile.Write   ("SetGrade(%s)" % Grade)
+        if Grade < -30 or Grade > 30: logfile.Console ("Grade limitted to range -30 ... 30")
+        if Grade >  30: Grade =  30
+        if Grade < -30: Grade = -30
+
         self.TargetMode         = mode_Grade
         self.TargetGrade        = Grade
         self.TargetPower        = 0             # .Refresh() must be called
@@ -742,7 +748,7 @@ class clsSimulatedTrainer(clsTacxTrainer):
                 self.CurrentPower = self.CurrentPower + deltaPower / 8          # Step towards TargetPower
             self.CurrentPower *= (1 + random.randint(-3,3) / 100)               # Variation of 5%
 
-            self.Cadence       = 100 - deltaPower / 10                          # Cadence drops when Target increases
+            self.Cadence       = 100 - min(10, deltaPower) / 10                 # Cadence drops when Target increases
             self.Cadence      *= (1 + random.randint(-2,2) / 100)               # Variation of 2%
 
             self.SpeedKmh      = 35 * self.Cadence / 100                        # Speed is 35 kmh at cadence 100 (My highest gear)
