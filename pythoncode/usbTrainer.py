@@ -1,7 +1,13 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-27"
+__version__ = "2020-06-08"
+# 2020-06-08    Changed: clsTacxAntVortexTrainer uses TargetResistance, even 
+#                   when expressed in Watts, so that also PowerFactor applies.
+#                   Previously TargetPower was used directly, short-cutting
+#                   this mechanism, only because Watts were needed.
+#                   Now also Resistance is displayed, which usually equals
+#                   TargetPower.
 # 2020-05-27    Changed: SetGrade() limits Grade to -30...+30
 #                        clsSimulatedTrainer improved
 # 2020-05-24    Changed: logfile typo's
@@ -153,6 +159,7 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 #     def Refresh(QuarterSecond, TacxMode)                    # Receive, Calculate, Send
 #     def SendToTrainer(QuarterSecond, TacxMode)              # To be defined by child class
 #     def _ReceiveFromTrainer()                               # To be defined by child class
+#     def TargetPower2Resistance()                            # To be defined by child class
 #
 #     def CalibrateSupported()                                # Return whether calibration supported
 #
@@ -167,6 +174,7 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 #     def Refresh(QuarterSecond, TacxMode)
 #     def SendToTrainer(QuarterSecond, TacxMode)
 #     def _ReceiveFromTrainer()
+#     def TargetPower2Resistance()                            # Conversion TargetPower -> TargetResistance
 #     def HandleANTmessage(message)
 #
 # class clsTacxUsbTrainer(clsTacxTrainer)
@@ -776,7 +784,6 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
         self.AntDevice         = AntDevice
         self.OK                = True           # The AntDevice is there,
                                                 # the trainer not yet paired!
-        self.clv.PowerFactor   = 1              # Not applicable for i-Vortex
 
         self.__ResetTrainer()
 
@@ -861,10 +868,11 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
             if TacxMode ==  modeResistance:
                 #---------------------------------------------------------------
                 # Set target power
+                # TargetResistance is used, so that virtual gearbox works!
                 #---------------------------------------------------------------
                 if self.__AntVTXpaired and self.__VortexID:
                     info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, \
-                                self.__VortexID, self.TargetPower)
+                                self.__VortexID, self.TargetResistance)
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     messages.append ( msg )
 
@@ -891,6 +899,15 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
             #-------------------------------------------------------------------
             if messages:
                 self.AntDevice.Write(messages, False, False)
+
+    #---------------------------------------------------------------------------
+    # TargetPower2Resistance
+    #
+    # TargetResistance is used for the i-Vortex, even when expressed in Watt, so
+    # that PowerFactor and PowercurveFactor apply; see clsUsbTrainer.Refresh().
+    #---------------------------------------------------------------------------
+    def TargetPower2Resistance(self):
+        self.TargetResistance = self.TargetPower
 
     #---------------------------------------------------------------------------
     # Refresh()
