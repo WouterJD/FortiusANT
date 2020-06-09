@@ -1,8 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v3.0"
-__version__ = "2020-05-15"
+WindowTitle = "Fortius Antifier v3.1"
+__version__ = "2020-05-24"
+# 2020-05-24    Initial GUI messages made more general
+#               TargetResistance not displayed when zero (for i-Vortex)
 # 2020-05-15    Window title adjusted to version 3.0, comment on teeth.
 # 2020-05-11    Small corrections
 # 2020-04-30    Pedal stroke analysis added
@@ -539,9 +541,9 @@ class frmFortiusAntGui(wx.Frame):
 		# Set initial values
         # ----------------------------------------------------------------------
         self.ResetValues()
-        self.SetMessages(Tacx  ="Tacx USB Trainer")
+        self.SetMessages(Tacx  ="Tacx Trainer")
         self.SetMessages(Dongle="ANT+ Dongle")
-        self.SetMessages(HRM   ="ANT+ HRM paired")
+        self.SetMessages(HRM   ="ANT+ Heart Rate Monitor")
 
     # --------------------------------------------------------------------------
     # F u n c t i o n s  --  to be provided by subclass.
@@ -737,7 +739,10 @@ class frmFortiusAntGui(wx.Frame):
                 self.txtSpeed.SetValue ("%4.1fkm/h"   % fSpeed  + suffix)
                 self.txtRevs.SetValue  ("%i/min"      % iRevs   + suffix)
                 self.txtPower.SetValue ("%iW"         % iPower  + suffix)
-                self.txtTacx.SetValue  ("%i"          % iTacx   + suffix)
+                if iTacx == 0:
+                    self.txtTacx.SetValue  ("")
+                else:
+                    self.txtTacx.SetValue  ("%i"      % iTacx   + suffix)
                 fTargetPower = "%iW"
             else:
                 self.txtSpeed.SetValue ("%4.1f km/h"  % fSpeed  + suffix)
