@@ -1,7 +1,13 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-05-14"
+__version__ = "2020-05-26"
+# 2020-05-26    Added:   msgPage71_CommandStatus
+# 2020-05-25    Changed: DongleDebugMessage() adjusted with some more info
+# 2020-05-20    Changed: DecomposeMessage() made foolproof against wrong data
+#                        msgPage172_TacxVortexHU_ChangeHeadunitMode wrong page
+#                        DongleDebugMessage; VHU pages added
+#               Added:  Headunit mode constants
 # 2020-05-14    Added: msgPage000_TacxVortexHU_NoPowerOff
 #                      msgPage172_TacxVortexHU_ChangeHeadunitMode
 #                      msgUnpage221_TacxVortexHU_ButtonPressed
@@ -99,12 +105,20 @@ channel_HRM_s       = 5        # ANT+ channel for Heart Rate Monitor   (slave=di
 channel_VTX_s       = 6        # ANT+ Channel for Tacx i-Vortex        (slave=Cycle Training Program)
 channel_VHU_s       = 7        # ANT+ Channel for Tacx i-Vortex Headunit
 
-
 # There are only 8 channels available and Speed Cadence Sensor is not used
 # Fixed channel assignment is not handy therefore, but since we do not use
 # SCS, park them for later
 channel_SCS         = -1       # ANT+ Channel for Speed Cadence Sensor
 channel_SCS_s       = -1       # ANT+ Channel for Speed Cadence Sensor (slave=display)
+
+#---------------------------------------------------------------------------
+# i-Vortex Headunit modes
+#---------------------------------------------------------------------------
+VHU_Normal          = 0        # Headunit commands the i-Vortex trainer
+VHU_SpecialMode     = 2        # Headunit controls the i-Vortex and 
+                               #        FortiusANT TargetPower seems ignored.
+VHU_PCmode          = 4        # Headunit only sends buttons to slave (FortiusANT)
+
 
 DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
 DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT uses and
@@ -701,12 +715,13 @@ class clsAntDongle():
         self.Write(messages)
 
     def SlaveVHU_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex Headunit
+                                                        # See comment above msgPage000_TacxVortexHU_StayAlive
         if debug.on(debug.Data1): logfile.Write ("SlaveVHU_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VHU_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
             msg51_ChannelID             (channel_VHU_s, DeviceNumber, DeviceTypeID_VHU, TransmissionType_IC),
             msg45_ChannelRfFrequency    (channel_VHU_s, RfFrequency_2478Mhz),
-            msg43_ChannelPeriod         (channel_VHU_s, ChannelPeriod=0x2000),
+            msg43_ChannelPeriod         (channel_VHU_s, ChannelPeriod=0x0f00),
             msg60_ChannelTransmitPower  (channel_VHU_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_VHU_s),
             msg4D_RequestMessage        (channel_VHU_s, msgID_ChannelID)
@@ -799,19 +814,20 @@ def ComposeMessage(id, info):
     return data
 
 def DecomposeMessage(d):
-    synch    = d[0]
-    length   = d[1]
-    id       = d[2]
-    if length > 0:
-        info = d[3:3+length]            # Info, if length > 0
-    else:
-        info = binascii.unhexlify('')   # NULL-string bytes
-    checksum = d[3+length]              # Character after info
+    synch       = 0
+    length      = 0
+    id          = 0
+    checksum    = 0
+    info        = binascii.unhexlify('')                # NULL-string bytes
+    rest        = ""                                    # No remainder (normal)
 
-    if len(d) > 4 + length:
-        rest = d[4 + length:]           # Remainder (should not occur)
-    else:
-        rest = ""                       # No remainder (normal)
+    if len(d) > 0:          synch    = d[0]             # Carefull approach
+    if len(d) > 1:          length   = d[1]
+    if len(d) > 2:          id       = d[2]
+    if len(d) > 3 + length:
+        if length:          info     = d[3:3+length]    # Info, if length > 0
+        checksum                     = d[3 + length]    # Character after info
+    if len(d) > 4 + length: rest     = d[4 + length:]   # Remainder (should not occur)
 
     Channel         = -1
     DataPageNumber  = -1
@@ -886,8 +902,7 @@ def DongleDebugMessage(text, d):
         p_    = ''                                              # There is not always page-info, do not show
 
         if   id == msgID_ChannelResponse or id == msgID_RequestMessage:
-                        Channel = -1                         # There is no channel number for this message
-                        extra   = " msg=" + hex(p)           # No page but acknowledged/requested message
+                        extra = " (ch=%s, msg=%s)" % (Channel, hex(p))
 
         elif id == msgID_ANTversion:
                         Channel = -1                         # There is no channel number for this message
@@ -925,6 +940,9 @@ def DongleDebugMessage(text, d):
             elif p        == 81: p_ = 'Product Information'
             elif p        == 82: p_ = 'Battery Status'
 #           elif p        == 89: p_ = 'Add channel ID to list ???'
+            elif p        ==172: p_ = 'VHU Set headunit mode'
+            elif p        ==173: p_ = 'VHU Serial number'
+            elif p        ==221: p_ = 'VHU Button pressed'
             else               : p_ = '??'
 
             p_ = " p=%s(%s)" % (p, p_)                          # Page, show number and name
@@ -944,14 +962,13 @@ def DongleDebugMessage(text, d):
             pass                                                        # Already filled
         else:
             if   Channel == -1:  extra = ""                             # No Channel, do not show
-            else              :  extra = " [ch=%s%s]" % (Channel, p_)   # Channel, show it with optional pageinfo
+            else              :  extra = " (ch=%s%s)" % (Channel, p_)   # Channel, show it with optional pageinfo
 
         #-----------------------------------------------------------------------
         # Write to logfile
         #-----------------------------------------------------------------------
-        if debug.on(debug.Data1):
-            logfile.Write ("%s synch=%s, len=%2s, id=%s %-21s, check=%4s, info=%s%s" % \
-                    (text,hex(synch), length, hex(id), id_, hex(checksum),  info_, extra))
+        logfile.Write ("%s synch=%s, len=%2s, id=%s %-21s, check=%4s, info=%s%s" % \
+                (text,hex(synch), length, hex(id), id_, hex(checksum),  info_, extra))
 
 # ==============================================================================
 # ANT+ message interface
@@ -1486,7 +1503,7 @@ def msgPage000_TacxVortexHU_StayAlive (Channel):        # No Power Off
     return info
 
 def msgPage172_TacxVortexHU_ChangeHeadunitMode (Channel, Mode):
-    DataPageNumber      = 16
+    DataPageNumber      = 172
 
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
@@ -1865,6 +1882,30 @@ def msgPage54_FE_Capabilities(Channel, Reserved1, Reserved2, Reserved3, Reserved
 
     format=    sc.no_alignment + fChannel + fDataPageNumber + fReserved1 + fReserved2 + fReserved3 + fReserved4 + fMaximumResistance + fCapabilitiesBits
     info  = struct.pack (format,  Channel,   DataPageNumber,   Reserved1 ,  Reserved2 ,  Reserved3 ,  Reserved4 ,  MaximumResistance,   CapabilitiesBits)
+
+    return info
+
+# ------------------------------------------------------------------------------
+# P a g e 7 1 _ C o m m a n d S t a t u s
+# ------------------------------------------------------------------------------
+# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
+# D000001231_-_ANT+_Device_Profile_-_Fitness_Equipment_-_Rev_5.0_(6).pdf
+# ------------------------------------------------------------------------------
+def msgPage71_CommandStatus(Channel, LastReceivedCommandID, SequenceNr, CommandStatus, Data1, Data2, Data3, Data4):
+    DataPageNumber          = 71
+
+    fChannel                = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber         = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fLastReceivedCommandID  = sc.unsigned_char
+    fSequenceNr             = sc.unsigned_char
+    fCommandStatus          = sc.unsigned_char
+    fData1                  = sc.unsigned_char
+    fData2                  = sc.unsigned_char
+    fData3                  = sc.unsigned_char
+    fData4                  = sc.unsigned_char
+
+    format=    sc.no_alignment + fChannel + fDataPageNumber + fLastReceivedCommandID + fSequenceNr + fCommandStatus + fData1 + fData2 + fData3 + fData4
+    info  = struct.pack (format,  Channel,   DataPageNumber,   LastReceivedCommandID,   SequenceNr,   CommandStatus,   Data1,   Data2,   Data3,   Data4)
 
     return info
 

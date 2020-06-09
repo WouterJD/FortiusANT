@@ -1,3 +1,6 @@
-
 *.log
 *.pyc
+*.lnk
+pythoncode/build/
+pythoncode/dist/
+Miscellaneous/

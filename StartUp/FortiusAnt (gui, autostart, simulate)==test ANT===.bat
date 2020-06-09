@@ -5,5 +5,6 @@ rem Function        = 0x02      # 2
 rem Data1           = 0x04      # 4			antDongle
 rem Data2           = 0x08      # 8			usbTrainer
 rem Multiprocessing = 0x10      # 16
-..\pythoncode\FortiusAnt.py -g -a -A -H0 -s -P -d7
+rem ..\pythoncode\FortiusAnt.py -g -a -A -H0 -s -P -d7
+..\pythoncode\FortiusAnt.py -g -a -s -d127
 pause

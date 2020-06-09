@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-29"
+__version__ = "2020-05-24"
+# 2020-05-24    WindowTitle in logfile
 # 2020-04-23    First version; core functions separated into FortiusAntBody.py
 #               This module contains program startup, GUI-binding and
 #               multi-processing functionality only
@@ -476,6 +477,7 @@ if __name__ == "__main__":
     #-------------------------------------------------------------------------------
     if debug.on(debug.Any):
         logfile.Write('Version info for the components' )
+        logfile.Write(gui.WindowTitle)
         s = " %20s = %s"
         logfile.Write(s % ('FortiusAnt',                    __version__ ))
         logfile.Write(s % ('antDongle',                 ant.__version__ ))
