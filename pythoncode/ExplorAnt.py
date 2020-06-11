@@ -349,6 +349,10 @@ while AntDongle.OK:
                 AntDongle.SlaveTrainer_ChannelConfig(clv.fe)
                 logfile.Console ('FE  slave channel %s opened; listening to master device %s' % (ant.channel_FE_s,  clv.fe))
 
+            if clv.scs > 0:
+                AntDongle.SlaveSCS_ChannelConfig(clv.scs)
+                logfile.Console ('SCS slave channel %s opened; listening to master device %s' % (ant.channel_SCS_s,  clv.scs))
+
             if clv.vtx > 0:
                 AntDongle.SlaveVTX_ChannelConfig(clv.vtx)
                 logfile.Console ('VTX slave channel %s opened; listening to master device %s' % (ant.channel_VTX_s, 0))
@@ -377,6 +381,8 @@ while AntDongle.OK:
             FE_HeartRate        = -1
             FE_page80_done      = False
             FE_page81_done      = False
+
+            SCS_s_count         = 0
 
             VTX_UsingVirtualSpeed, VTX_Power, VTX_Speed, VTX_CalibrationState, VTX_Cadence = 0,0,0,0,0
             VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm = 0,0,0,0
@@ -565,6 +571,41 @@ while AntDongle.OK:
                                                    (DataPageNumber, FE_SWrevisionMain, FE_SWrevisionSupp, FE_SerialNumber))
 
                         #-------------------------------------------------------
+                        # SCS_s = Heart rate Monitor Display
+                        # We are slave, listening to a master (Speed Cadence Sensor)
+                        #-------------------------------------------------------
+                        if Channel == ant.channel_SCS_s:
+                            SCS_s_count += 1
+                            if SCS_s_count > 99: SCS_s_count= 0
+
+                            #---------------------------------------------------
+                            # Only one Data page for SCS! msgUnpage_SCS
+                            #---------------------------------------------------
+                            Unknown = False
+                            EventTime, CadenceRevolutionCount, _EventTime, \
+                                SpeedRevolutionCount = ant.msgUnpage_SCS(info)
+
+                            try:
+                                _ = pEventTime
+                            except:
+                                pass
+                            else:
+                                if EventTime != pEventTime:
+                                    cadence = 60 * (CadenceRevolutionCount - pCadenceRevolutionCount) * 1024 / \
+                                                (EventTime - pEventTime)
+                                    cadence = int(cadence)
+
+                                    speed   = (SpeedRevolutionCount - pSpeedRevolutionCount) * 2.096 * 3.600 /  \
+                                                (EventTime - pEventTime)
+                                    print ('EventTime=%5s (%5s) CadenceRevolutionCount=%5s (%5s) Cadence=%3s EventTime=%5s SpeedRevolutionCount=%5s Speed=%4.1f' % \
+                                        (EventTime, EventTime - pEventTime, \
+                                         CadenceRevolutionCount, CadenceRevolutionCount - pCadenceRevolutionCount, \
+                                         cadence, _EventTime, SpeedRevolutionCount, speed))
+                            pCadenceRevolutionCount = CadenceRevolutionCount
+                            pSpeedRevolutionCount   = SpeedRevolutionCount
+                            pEventTime              = EventTime
+
+                        #-------------------------------------------------------
                         # VTX_s = Tacx i-Vortex trainer
                         # We are slave, listening to a master (the real trainer)
                         #-------------------------------------------------------
@@ -707,9 +748,10 @@ while AntDongle.OK:
                                         )
 
                     else:
-                        logfile.Console ("HRM#=%2s hr=%3s FE-C#=%2s Speed=%4s Cadence=%3s Power=%3s hr=%3s VTX ID=%s Speed=%4s Cadence=%3s Target=%s" % \
+                        logfile.Console ("HRM#=%2s hr=%3s FE-C#=%2s Speed=%4s Cadence=%3s Power=%3s hr=%3s SCS#=%2s VTX ID=%s Speed=%4s Cadence=%3s Target=%s" % \
                                          (HRM_s_count, HRM_HeartRate, \
                                           FE_s_count, FE_Speed, FE_Cadence, FE_Power, FE_HeartRate, \
+                                          SCS_s_count, \
                                           VTX_VortexID, VTX_Speed, VTX_Cadence, Power
                                          )\
                                         )

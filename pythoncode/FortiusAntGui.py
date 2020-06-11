@@ -1,8 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v3.1"
-__version__ = "2020-05-24"
+WindowTitle = "Fortius Antifier v3.2"
+__version__ = "2020-06-11"
+# 2020-05-11    Version 3.2 with SCS and PWR profile
 # 2020-05-24    Initial GUI messages made more general
 #               TargetResistance not displayed when zero (for i-Vortex)
 # 2020-05-15    Window title adjusted to version 3.0, comment on teeth.

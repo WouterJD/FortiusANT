@@ -1,8 +1,10 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-05-26"
-# 2020-05-26    Added:   msgPage71_CommandStatus
+__version__ = "2020-06-10"
+# 2020-06-10    Changed: ChannelPeriods defined decimal, like ANT+ specification
+# 2020-06-09    Added: SpeedAndCadenceSensor 
+# 2020-05-26    Added: msgPage71_CommandStatus
 # 2020-05-25    Changed: DongleDebugMessage() adjusted with some more info
 # 2020-05-20    Changed: DecomposeMessage() made foolproof against wrong data
 #                        msgPage172_TacxVortexHU_ChangeHeadunitMode wrong page
@@ -99,17 +101,15 @@ import FortiusAntCommand    as cmd
 channel_FE          = 0        # ANT+ channel for Fitness Equipment
 channel_HRM         = 1        # ANT+ channel for Heart Rate Monitor
 channel_VTX         = 2        # ANT+ Channel for Tacx i-Vortex
+channel_SCS         = 3        # ANT+ Channel for Speed Cadence Sensor
 
 channel_FE_s        = 4        # ANT+ channel for Fitness Equipment    (slave=Cycle Training Program)
 channel_HRM_s       = 5        # ANT+ channel for Heart Rate Monitor   (slave=display)
 channel_VTX_s       = 6        # ANT+ Channel for Tacx i-Vortex        (slave=Cycle Training Program)
 channel_VHU_s       = 7        # ANT+ Channel for Tacx i-Vortex Headunit
 
-# There are only 8 channels available and Speed Cadence Sensor is not used
-# Fixed channel assignment is not handy therefore, but since we do not use
-# SCS, park them for later
-channel_SCS         = -1       # ANT+ Channel for Speed Cadence Sensor
-channel_SCS_s       = -1       # ANT+ Channel for Speed Cadence Sensor (slave=display)
+channel_SCS_s       = channel_SCS # ANT+ Channel for Speed Cadence Sensor (slave=display)
+                               # So an executable is either master OR slave
 
 #---------------------------------------------------------------------------
 # i-Vortex Headunit modes
@@ -125,6 +125,7 @@ DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT u
 DeviceNumber_HRM    = 57592    #       slaves (TrainerRoad, Zwift, ExplorANT) will find.
 DeviceNumber_VTX    = 57593    #
 DeviceNumber_VHU    = 57594    #
+DeviceNumber_SCS    = 57595    #
 
 ModelNumber_FE      = 2875     # short antifier-value=0x8385, Tacx Neo=2875
 SerialNumber_FE     = 19590705 # int   1959-7-5
@@ -631,7 +632,7 @@ class clsAntDongle():
             msg42_AssignChannel         (channel_FE, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
             msg51_ChannelID             (channel_FE, DeviceNumber_FE, DeviceTypeID_FE, TransmissionType_IC_GDP),
             msg45_ChannelRfFrequency    (channel_FE, RfFrequency_2457Mhz),
-            msg43_ChannelPeriod         (channel_FE, ChannelPeriod=0x2000),                                     # 4 Hz
+            msg43_ChannelPeriod         (channel_FE, ChannelPeriod=8192),           # 4 Hz
             msg60_ChannelTransmitPower  (channel_FE, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_FE)
         ]
@@ -643,7 +644,7 @@ class clsAntDongle():
             msg42_AssignChannel         (channel_FE_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
             msg51_ChannelID             (channel_FE_s, DeviceNumber, DeviceTypeID_FE, TransmissionType_IC_GDP),
             msg45_ChannelRfFrequency    (channel_FE_s, RfFrequency_2457Mhz),
-            msg43_ChannelPeriod         (channel_FE_s, ChannelPeriod=0x2000),                                     # 4 Hz
+            msg43_ChannelPeriod         (channel_FE_s, ChannelPeriod=8192),         # 4 Hz
             msg60_ChannelTransmitPower  (channel_FE_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_FE_s),
             msg4D_RequestMessage        (channel_FE_s, msgID_ChannelID)
@@ -656,7 +657,7 @@ class clsAntDongle():
             msg42_AssignChannel         (channel_HRM, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
             msg51_ChannelID             (channel_HRM, DeviceNumber_HRM, DeviceTypeID_HRM, TransmissionType_IC),
             msg45_ChannelRfFrequency    (channel_HRM, RfFrequency_2457Mhz),
-            msg43_ChannelPeriod         (channel_HRM, ChannelPeriod=0x1f86),
+            msg43_ChannelPeriod         (channel_HRM, ChannelPeriod=8070),          # 4,06 Hz
             msg60_ChannelTransmitPower  (channel_HRM, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_HRM)
         ]
@@ -668,10 +669,22 @@ class clsAntDongle():
             msg42_AssignChannel         (channel_HRM_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
             msg51_ChannelID             (channel_HRM_s, DeviceNumber, DeviceTypeID_HRM, TransmissionType_IC),
             msg45_ChannelRfFrequency    (channel_HRM_s, RfFrequency_2457Mhz),
-            msg43_ChannelPeriod         (channel_HRM_s, ChannelPeriod=0x1f86),
+            msg43_ChannelPeriod         (channel_HRM_s, ChannelPeriod=8070),        # 4,06 Hz
             msg60_ChannelTransmitPower  (channel_HRM_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_HRM_s),
             msg4D_RequestMessage        (channel_HRM_s, msgID_ChannelID)
+        ]
+        self.Write(messages)
+
+    def SCS_ChannelConfig(self, DeviceNumber):
+        if debug.on(debug.Data1): logfile.Write ("SCS_ChannelConfig()")
+        messages=[
+            msg42_AssignChannel         (channel_SCS, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
+            msg51_ChannelID             (channel_SCS, DeviceNumber_SCS, DeviceTypeID_SCS, TransmissionType_IC),
+            msg45_ChannelRfFrequency    (channel_SCS, RfFrequency_2457Mhz),
+            msg43_ChannelPeriod         (channel_SCS, ChannelPeriod=8086),          # 4,05 Hz
+            msg60_ChannelTransmitPower  (channel_SCS, TransmitPower_0dBm),
+            msg4B_OpenChannel           (channel_SCS),
         ]
         self.Write(messages)
 
@@ -681,7 +694,7 @@ class clsAntDongle():
             msg42_AssignChannel         (channel_SCS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
             msg51_ChannelID             (channel_SCS_s, DeviceNumber, DeviceTypeID_SCS, TransmissionType_IC),
             msg45_ChannelRfFrequency    (channel_SCS_s, RfFrequency_2457Mhz),
-            msg43_ChannelPeriod         (channel_SCS_s, ChannelPeriod=0x1f86),
+            msg43_ChannelPeriod         (channel_SCS_s, ChannelPeriod=8086),        # 4,05 Hz
             msg60_ChannelTransmitPower  (channel_SCS_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_SCS_s),
             msg4D_RequestMessage        (channel_SCS_s, msgID_ChannelID)
@@ -915,7 +928,10 @@ def DongleDebugMessage(text, d):
         elif id == msgID_BroadcastData or id == msgID_AcknowledgedData:
                                                     # Pagenumber in Payload
             if   p        <   0: pass
-            elif p & 0x7f ==  0: p_ = 'Default data page'             # D00000693_-_ANT+_Device_Profile_-_Heart_Rate_Rev_2.1
+            elif Channel  in (channel_SCS, channel_SCS_s):
+                                 p_ = ' Speed and Cadence Sensor datapage'
+                                 p  = None
+            elif p & 0x7f ==  0: p_ = 'Default data page'           # D00000693_-_ANT+_Device_Profile_-_Heart_Rate_Rev_2.1
                                                                     # Also called "Unknown data page"
                                                                     # 'HRM' but other devices have other meanings
                                                                     #    Left for future improvements.
@@ -945,7 +961,7 @@ def DongleDebugMessage(text, d):
             elif p        ==221: p_ = 'VHU Button pressed'
             else               : p_ = '??'
 
-            p_ = " p=%s(%s)" % (p, p_)                          # Page, show number and name
+            if p != None:        p_ = " p=%s(%s)" % (p, p_)     # Page, show number and name
 
         elif id == msgID_RF_EVENT:
             pass                                                # We could fill info with error code
@@ -2058,3 +2074,45 @@ def msgUnpage_Hrm (info):
     tuple = struct.unpack (format, info)
 
     return tuple[0], tuple[1], tuple[2], tuple[3], tuple[4], tuple[5], tuple[6], tuple[7]
+
+# ------------------------------------------------------------------------------
+# P a g e 0   S p e e d C a d e n c e S e n s o r
+# ------------------------------------------------------------------------------
+# https://www.thisisant.com/developer/resources/downloads#documents_tab
+# D00001163_-_ANT+_Device_Profile_-_Bicycle_Speed_and_Cadence_2.1.pdf
+# ------------------------------------------------------------------------------
+def msgPage_SCS (Channel, CadenceEventTime, CadenceRevolutionCount, SpeedEventTime, SpeedRevolutionCount):
+    _DataPageNumber         = 0
+    CadenceEventTime        = int(min(0xffff, CadenceEventTime      ))
+    CadenceRevolutionCount  = int(min(0xffff, CadenceRevolutionCount))
+    SpeedEventTime          = int(min(0xffff, SpeedEventTime        ))
+    SpeedRevolutionCount    = int(min(0xffff, SpeedRevolutionCount  ))
+
+    fChannel                = sc.unsigned_char  # First byte of the ANT+ message content
+    _fDataPageNumber        = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fCadenceEventTime       = sc.unsigned_short
+    fCadenceRevolutionCount = sc.unsigned_short
+    fSpeedEventTime         = sc.unsigned_short
+    fSpeedRevolutionCount   = sc.unsigned_short
+
+    format      = sc.no_alignment + fChannel + fCadenceEventTime + \
+                        fCadenceRevolutionCount + fSpeedEventTime + fSpeedRevolutionCount
+    info        = struct.pack (format, Channel, CadenceEventTime,   \
+                        CadenceRevolutionCount,    SpeedEventTime,   SpeedRevolutionCount)
+
+    return info
+
+def msgUnpage_SCS (info):
+    fChannel                = sc.unsigned_char  # First byte of the ANT+ message content
+    _fDataPageNumber        = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fCadenceEventTime       = sc.unsigned_short
+    fCadenceRevolutionCount = sc.unsigned_short
+    fSpeedEventTime         = sc.unsigned_short
+    fSpeedRevolutionCount   = sc.unsigned_short
+
+    format      = sc.no_alignment + fChannel + fCadenceEventTime + \
+                        fCadenceRevolutionCount + fSpeedEventTime + fSpeedRevolutionCount
+    tuple = struct.unpack (format, info)
+
+    #      EventTime, CadenceRevolutionCount, EventTime, SpeedRevolutionCount
+    return tuple[1],  tuple[2],               tuple[3],  tuple[4]

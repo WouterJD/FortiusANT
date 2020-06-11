@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-27"
+__version__ = "2020-06-09"
+# 2020-06-09    Added: SpeedAndCadenceSensor (master)
 # 2020-05-27    Added: msgPage71_CommandStatus handled -- and tested
 # 2020-05-24    i-Vortex adjustments
 #               - in manual mode, ANTdongle must be present as well, so that
@@ -169,6 +170,7 @@ from   datetime                     import datetime
 import antDongle         as ant
 import antHRM            as hrm
 import antFE             as fe
+import antSCS            as scs
 import debug
 from   FortiusAntGui                import mode_Power, mode_Grade
 import logfile
@@ -544,9 +546,17 @@ def Tacx2DongleSub(self, Restart):
         #-------------------------------------------------------------------
         AntDongle.SlaveVHU_ChannelConfig(0)
 
-    if clv.scs != None:
-        AntDongle.SlaveSCS_ChannelConfig(clv.scs)   # Create ANT+ slave channel for SCS
-                                                    # 0: auto pair, nnn: defined SCS
+    if clv.scs == None:
+        #-------------------------------------------------------------------
+        # Create ANT+ master channel for SCS
+        #-------------------------------------------------------------------
+        AntDongle.SCS_ChannelConfig(ant.channel_SCS)
+    else:
+        #-------------------------------------------------------------------
+        # Create ANT+ slave channel for SCS
+        # 0: auto pair, nnn: defined SCS
+        #-------------------------------------------------------------------
+        AntDongle.SlaveSCS_ChannelConfig(clv.scs)
         pass
     
     if not clv.gui: logfile.Console ("Ctrl-C to exit")
@@ -670,6 +680,7 @@ def Tacx2DongleSub(self, Restart):
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; initialize ANT')
     hrm.Initialize()
     fe.Initialize()
+    scs.Initialize()
     
     #---------------------------------------------------------------------------
     # Initialize CycleTime: fast for PedalStrokeAnalysis
@@ -713,8 +724,8 @@ def Tacx2DongleSub(self, Restart):
             # Hook for future development
             #-------------------------------------------------------------------
             # if clv.scs == None:
-            #     SpeedKmh   = SpeedKmhT  
-            #     Cadence    = CadenceT
+            #     SpeedKmh   = SpeedKmhSCS
+            #     Cadence    = CadenceSCS
 
             #-------------------------------------------------------------------
             # If NO HRM defined, use the HeartRate from the trainer
@@ -793,6 +804,14 @@ def Tacx2DongleSub(self, Restart):
                 #---------------------------------------------------------------
                 if clv.hrm == None and TacxTrainer.HeartRate > 0:
                     messages.append(hrm.BroadcastHeartrateMessage(HeartRate))
+
+                #---------------------------------------------------------------
+                # Broadcast Speed and Cadence Sensor message
+                #---------------------------------------------------------------
+                if clv.scs == None:
+                    messages.append(scs.BroadcastMessage( \
+                        TacxTrainer.PedalEchoTime, TacxTrainer.PedalEchoCount, \
+                        TacxTrainer.VirtualSpeedKmh, TacxTrainer.Cadence))
 
                 #---------------------------------------------------------------
                 # Broadcast TrainerData message to the CTP (Trainer Road, ...)
