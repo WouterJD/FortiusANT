@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v3.1"
+WindowTitle = "Fortius Antifier v3.1.1"
 __version__ = "2020-05-24"
 # 2020-05-24    Initial GUI messages made more general
 #               TargetResistance not displayed when zero (for i-Vortex)
