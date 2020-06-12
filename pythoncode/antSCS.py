@@ -49,9 +49,8 @@ def BroadcastMessage (_PedalEchoTime, PedalEchoCount, SpeedKmh, Cadence):
         SpeedEventTime  += ElapsedTime * 1024
         SpeedEventCount += WheelCycles
 
-
     #-------------------------------------------------------------------------
-    # Cadence event time is in 1/1024 seconds; Rollover after 0xffff
+    # Rollover after 0xffff
     #-------------------------------------------------------------------------
     if CadenceEventTime > 0xffff or CadenceEventCount > 0xffff or \
          SpeedEventTime > 0xffff or   SpeedEventCount > 0xffff:

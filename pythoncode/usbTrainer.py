@@ -2,6 +2,7 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-09-11"
+# 2020-06-11    Changed: if clsTacxNewUsbTrainer less than 40 bytes received, retry
 # 2020-06-10    Changed: Speed and Cadence Sensor metrics (PedalEchoCount)
 # 2020-06-09    Changed: VirtualSpeed in clsSimulatedTrainer corrected
 # 2020-06-08    Changed: clsTacxAntVortexTrainer uses TargetResistance, even 
@@ -1544,9 +1545,19 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     def _ReceiveFromTrainer(self):
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer._ReceiveFromTrainer()")
         #-----------------------------------------------------------------------
-        #  Read from trainer
+        # Read from trainer
+        # 64 bytes are expected
+        # 48 bytes are returned by some trainers
+        # 24 bytes are sometimes returned (T1932, Gui Leite 2020-06-11) and
+        #           seem to be incomplete buffers and are ignored.
         #-----------------------------------------------------------------------
-        data = self.USB_Read()
+        retry = 4
+        data  = []
+        while retry and len(data) < 40:
+            data = self.USB_Read()
+            retry -= 1
+
+        if len(data) < 40: logfile.Console('Tacx returns insufficient data, len=%s' % len(data))
 
         #-----------------------------------------------------------------------
         # Define buffer format

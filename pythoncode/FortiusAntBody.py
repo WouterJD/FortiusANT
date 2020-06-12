@@ -2,6 +2,7 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-06-09"
+# 2020-06-11    Added: BikePowerProfile (master)
 # 2020-06-09    Added: SpeedAndCadenceSensor (master)
 # 2020-05-27    Added: msgPage71_CommandStatus handled -- and tested
 # 2020-05-24    i-Vortex adjustments
@@ -168,8 +169,9 @@ import wx
 from   datetime                     import datetime
 
 import antDongle         as ant
-import antHRM            as hrm
 import antFE             as fe
+import antHRM            as hrm
+import antPWR            as pwr
 import antSCS            as scs
 import debug
 from   FortiusAntGui                import mode_Power, mode_Grade
@@ -546,6 +548,12 @@ def Tacx2DongleSub(self, Restart):
         #-------------------------------------------------------------------
         AntDongle.SlaveVHU_ChannelConfig(0)
 
+    if True:
+        #-------------------------------------------------------------------
+        # Create ANT+ master channel for PWR
+        #-------------------------------------------------------------------
+        AntDongle.PWR_ChannelConfig(ant.channel_PWR)
+
     if clv.scs == None:
         #-------------------------------------------------------------------
         # Create ANT+ master channel for SCS
@@ -678,8 +686,9 @@ def Tacx2DongleSub(self, Restart):
     # Initialize antHRM and antFE module
     #---------------------------------------------------------------------------
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; initialize ANT')
-    hrm.Initialize()
     fe.Initialize()
+    hrm.Initialize()
+    pwr.Initialize()
     scs.Initialize()
     
     #---------------------------------------------------------------------------
@@ -804,6 +813,13 @@ def Tacx2DongleSub(self, Restart):
                 #---------------------------------------------------------------
                 if clv.hrm == None and TacxTrainer.HeartRate > 0:
                     messages.append(hrm.BroadcastHeartrateMessage(HeartRate))
+
+                #---------------------------------------------------------------
+                # Broadcast Bike Power message
+                #---------------------------------------------------------------
+                if True:
+                    messages.append(pwr.BroadcastMessage( \
+                        TacxTrainer.CurrentPower, TacxTrainer.Cadence))
 
                 #---------------------------------------------------------------
                 # Broadcast Speed and Cadence Sensor message
@@ -1124,7 +1140,7 @@ def Tacx2DongleSub(self, Restart):
                 if debug.on(debug.Data2): logfile.Write ("Sleep(%4.2f) to fill %s seconds done." % (SleepTime, CycleTime) )
             else:
                 if ElapsedTime > CycleTime * 2 and debug.on(debug.Any):
-                    logfile.Console ("Tacx2Dongle; Processing time %5.3f is %5.3f longer than planned %5.3f (seconds)" % (ElapsedTime, SleepTime * -1, CycleTime) )
+                    logfile.Write ("Tacx2Dongle; Processing time %5.3f is %5.3f longer than planned %5.3f (seconds)" % (ElapsedTime, SleepTime * -1, CycleTime) )
                 pass
 
             EventCounter += 1           # Increment and ...
