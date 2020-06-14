@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-09-11"
+__version__ = "2020-06-12"
+# 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
 # 2020-06-11    Changed: if clsTacxNewUsbTrainer less than 40 bytes received, retry
 # 2020-06-10    Changed: Speed and Cadence Sensor metrics (PedalEchoCount)
 # 2020-06-09    Changed: VirtualSpeed in clsSimulatedTrainer corrected

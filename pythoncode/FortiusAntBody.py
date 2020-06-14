@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-06-09"
+__version__ = "2020-06-12"
+# 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
 # 2020-06-11    Added: BikePowerProfile (master)
 # 2020-06-09    Added: SpeedAndCadenceSensor (master)
 # 2020-05-27    Added: msgPage71_CommandStatus handled -- and tested

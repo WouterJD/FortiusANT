@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-06-10"
+__version__ = "2020-06-12"
+# 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
 # 2020-06-10    Changed: ChannelPeriods defined decimal, like ANT+ specification
 # 2020-06-09    Added: SpeedAndCadenceSensor 
 # 2020-05-26    Added: msgPage71_CommandStatus
