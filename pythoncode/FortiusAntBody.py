@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-27"
+__version__ = "2020-06-12"
+# 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
+# 2020-06-11    Added: BikePowerProfile (master)
+# 2020-06-09    Added: SpeedAndCadenceSensor (master)
 # 2020-05-27    Added: msgPage71_CommandStatus handled -- and tested
 # 2020-05-24    i-Vortex adjustments
 #               - in manual mode, ANTdongle must be present as well, so that
@@ -167,8 +170,10 @@ import wx
 from   datetime                     import datetime
 
 import antDongle         as ant
-import antHRM            as hrm
 import antFE             as fe
+import antHRM            as hrm
+import antPWR            as pwr
+import antSCS            as scs
 import debug
 from   FortiusAntGui                import mode_Power, mode_Grade
 import logfile
@@ -544,9 +549,23 @@ def Tacx2DongleSub(self, Restart):
         #-------------------------------------------------------------------
         AntDongle.SlaveVHU_ChannelConfig(0)
 
-    if clv.scs != None:
-        AntDongle.SlaveSCS_ChannelConfig(clv.scs)   # Create ANT+ slave channel for SCS
-                                                    # 0: auto pair, nnn: defined SCS
+    if True:
+        #-------------------------------------------------------------------
+        # Create ANT+ master channel for PWR
+        #-------------------------------------------------------------------
+        AntDongle.PWR_ChannelConfig(ant.channel_PWR)
+
+    if clv.scs == None:
+        #-------------------------------------------------------------------
+        # Create ANT+ master channel for SCS
+        #-------------------------------------------------------------------
+        AntDongle.SCS_ChannelConfig(ant.channel_SCS)
+    else:
+        #-------------------------------------------------------------------
+        # Create ANT+ slave channel for SCS
+        # 0: auto pair, nnn: defined SCS
+        #-------------------------------------------------------------------
+        AntDongle.SlaveSCS_ChannelConfig(clv.scs)
         pass
     
     if not clv.gui: logfile.Console ("Ctrl-C to exit")
@@ -668,8 +687,10 @@ def Tacx2DongleSub(self, Restart):
     # Initialize antHRM and antFE module
     #---------------------------------------------------------------------------
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; initialize ANT')
-    hrm.Initialize()
     fe.Initialize()
+    hrm.Initialize()
+    pwr.Initialize()
+    scs.Initialize()
     
     #---------------------------------------------------------------------------
     # Initialize CycleTime: fast for PedalStrokeAnalysis
@@ -713,8 +734,8 @@ def Tacx2DongleSub(self, Restart):
             # Hook for future development
             #-------------------------------------------------------------------
             # if clv.scs == None:
-            #     SpeedKmh   = SpeedKmhT  
-            #     Cadence    = CadenceT
+            #     SpeedKmh   = SpeedKmhSCS
+            #     Cadence    = CadenceSCS
 
             #-------------------------------------------------------------------
             # If NO HRM defined, use the HeartRate from the trainer
@@ -793,6 +814,21 @@ def Tacx2DongleSub(self, Restart):
                 #---------------------------------------------------------------
                 if clv.hrm == None and TacxTrainer.HeartRate > 0:
                     messages.append(hrm.BroadcastHeartrateMessage(HeartRate))
+
+                #---------------------------------------------------------------
+                # Broadcast Bike Power message
+                #---------------------------------------------------------------
+                if True:
+                    messages.append(pwr.BroadcastMessage( \
+                        TacxTrainer.CurrentPower, TacxTrainer.Cadence))
+
+                #---------------------------------------------------------------
+                # Broadcast Speed and Cadence Sensor message
+                #---------------------------------------------------------------
+                if clv.scs == None:
+                    messages.append(scs.BroadcastMessage( \
+                        TacxTrainer.PedalEchoTime, TacxTrainer.PedalEchoCount, \
+                        TacxTrainer.VirtualSpeedKmh, TacxTrainer.Cadence))
 
                 #---------------------------------------------------------------
                 # Broadcast TrainerData message to the CTP (Trainer Road, ...)
@@ -1105,7 +1141,7 @@ def Tacx2DongleSub(self, Restart):
                 if debug.on(debug.Data2): logfile.Write ("Sleep(%4.2f) to fill %s seconds done." % (SleepTime, CycleTime) )
             else:
                 if ElapsedTime > CycleTime * 2 and debug.on(debug.Any):
-                    logfile.Console ("Tacx2Dongle; Processing time %5.3f is %5.3f longer than planned %5.3f (seconds)" % (ElapsedTime, SleepTime * -1, CycleTime) )
+                    logfile.Write ("Tacx2Dongle; Processing time %5.3f is %5.3f longer than planned %5.3f (seconds)" % (ElapsedTime, SleepTime * -1, CycleTime) )
                 pass
 
             EventCounter += 1           # Increment and ...

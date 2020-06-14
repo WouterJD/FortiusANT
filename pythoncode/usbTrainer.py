@@ -1,8 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-06-11"
+__version__ = "2020-06-12"
+# 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
 # 2020-06-11    Changed: if clsTacxNewUsbTrainer less than 40 bytes received, retry
+# 2020-06-10    Changed: Speed and Cadence Sensor metrics (PedalEchoCount)
+# 2020-06-09    Changed: VirtualSpeed in clsSimulatedTrainer corrected
 # 2020-06-08    Changed: clsTacxAntVortexTrainer uses TargetResistance, even 
 #                   when expressed in Watts, so that also PowerFactor applies.
 #                   Previously TargetPower was used directly, short-cutting
@@ -233,6 +236,9 @@ class clsTacxTrainer():
     CurrentResistance       = 0             # int
     HeartRate               = 0             # int
     PedalEcho               = 0
+    PreviousPedalEcho       = 0             # detection for PedalEcho=1
+    PedalEchoCount          = 0             # count of PedalEcho=1 events
+    PedalEchoTime           = time.time()   # the time of the last PedalEcho event
     SpeedKmh                = 0             # round(,1)
     VirtualSpeedKmh         = 0             #           see Grade_mode
     TargetResistanceFT      = 0             # int       Returned from trainer
@@ -493,6 +499,14 @@ class clsTacxTrainer():
         #-----------------------------------------------------------------------
 
         #-----------------------------------------------------------------------
+        # PedalEcho for Speed and Cadence Sensor
+        #-----------------------------------------------------------------------
+        if self.PedalEcho == 1 and self.PreviousPedalEcho == 0:
+            self.PedalEchoCount += 1
+            self.PedalEchoTime   = time.time()
+        self.PreviousPedalEcho = self.PedalEcho
+
+        #-----------------------------------------------------------------------
         # Calculate Virtual speed applying the digital gearbox
         # if DOWN has been pressed, we pretend to be riding slower than the
         #       trainer wheel rotates
@@ -715,18 +729,15 @@ class clsSimulatedTrainer(clsTacxTrainer):
     def Refresh (self, _QuarterSecond=None, _TacxMode=None):
         if debug.on(debug.Function):logfile.Write ("clsSimulatedTrainer.Refresh()")
         # ----------------------------------------------------------------------
-        # Trigger for pedalstroke analysis
+        # Trigger for pedalstroke analysis (PedalEcho)
+        # Data for Speed and Cadence Sensor (-Time and -Count)
         # ----------------------------------------------------------------------
-        try:
-            _ = self.__LastPedalEcho
-        except:
-            self.__LastPedalEcho = time.time()
-
-        if self.Cadence and (time.time() - self.__LastPedalEcho) > 60 / self.Cadence:
-            self.__LastPedalEcho= time.time()
-            self.PedalEcho      = 1
+        if self.Cadence and (time.time() - self.PedalEchoTime) > 60 / self.Cadence:
+            self.PedalEchoTime   = time.time()
+            self.PedalEcho       = 1
+            self.PedalEchoCount += 1
         else:
-            self.PedalEcho      = 0
+            self.PedalEcho       = 0
 
         # ----------------------------------------------------------------------
         # Randomize figures
@@ -761,7 +772,6 @@ class clsSimulatedTrainer(clsTacxTrainer):
             self.Cadence      *= (1 + random.randint(-2,2) / 100)               # Variation of 2%
 
             self.SpeedKmh      = 35 * self.Cadence / 100                        # Speed is 35 kmh at cadence 100 (My highest gear)
-            self.VirtualSpeedKmh= self.SpeedKmh
 
             self.HeartRate     = HRmax * (0.5 + ((self.CurrentPower - 100) / (ftp - 100) ) * 0.3)
                                                                                 # As if power is linear with power
@@ -771,6 +781,8 @@ class clsSimulatedTrainer(clsTacxTrainer):
             if self.HeartRate < HRmax * 0.5: self.HeartRate = HRmax * 0.5       # minimize HR
             if self.HeartRate > HRmax:       self.HeartRate = HRmax             # maximize HR
             self.HeartRate    += random.randint(-5,5)                           # Variation of heartrate by 5 beats
+
+        self.VirtualSpeedKmh= self.SpeedKmh
 
 #-------------------------------------------------------------------------------
 # c l s T a c x A n t V o r t e x T r a i n e r

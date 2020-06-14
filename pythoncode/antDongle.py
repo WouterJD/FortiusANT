@@ -1,8 +1,11 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-05-26"
-# 2020-05-26    Added:   msgPage71_CommandStatus
+__version__ = "2020-06-12"
+# 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
+# 2020-06-10    Changed: ChannelPeriods defined decimal, like ANT+ specification
+# 2020-06-09    Added: SpeedAndCadenceSensor 
+# 2020-05-26    Added: msgPage71_CommandStatus
 # 2020-05-25    Changed: DongleDebugMessage() adjusted with some more info
 # 2020-05-20    Changed: DecomposeMessage() made foolproof against wrong data
 #                        msgPage172_TacxVortexHU_ChangeHeadunitMode wrong page
@@ -91,25 +94,27 @@ import FortiusAntCommand    as cmd
 #---------------------------------------------------------------------------
 # Our own choice what channels are used
 #
-# A different channel is used for HRM as HRM_d, even though usually a device
-# will be either one or the other. ExplorANT can be both.
+# Note that a running program cannot be slave AND master for same device
+# since the channels are statically assigned!
 #---------------------------------------------------------------------------
 # M A X #   c h a n n e l s   m a y   b e   8   s o   b e w a r e   h e r e !
 #---------------------------------------------------------------------------
-channel_FE          = 0        # ANT+ channel for Fitness Equipment
-channel_HRM         = 1        # ANT+ channel for Heart Rate Monitor
-channel_VTX         = 2        # ANT+ Channel for Tacx i-Vortex
+channel_FE          = 0           # ANT+ channel for Fitness Equipment
+channel_FE_s        = channel_FE  # slave=Cycle Training Program
 
-channel_FE_s        = 4        # ANT+ channel for Fitness Equipment    (slave=Cycle Training Program)
-channel_HRM_s       = 5        # ANT+ channel for Heart Rate Monitor   (slave=display)
-channel_VTX_s       = 6        # ANT+ Channel for Tacx i-Vortex        (slave=Cycle Training Program)
-channel_VHU_s       = 7        # ANT+ Channel for Tacx i-Vortex Headunit
+channel_HRM         = 1           # ANT+ channel for Heart Rate Monitor
+channel_HRM_s       = channel_HRM # slave=display or Cycle Training Program
 
-# There are only 8 channels available and Speed Cadence Sensor is not used
-# Fixed channel assignment is not handy therefore, but since we do not use
-# SCS, park them for later
-channel_SCS         = -1       # ANT+ Channel for Speed Cadence Sensor
-channel_SCS_s       = -1       # ANT+ Channel for Speed Cadence Sensor (slave=display)
+channel_PWR         = 2           # ANT+ Channel for Power Profile
+
+channel_SCS         = 3           # ANT+ Channel for Speed Cadence Sensor
+channel_SCS_s       = channel_SCS # slave=display or Cycle Training Program
+
+channel_VTX         = 4           # ANT+ Channel for Tacx i-Vortex
+channel_VTX_s       = channel_VTX # slave=Cycle Training Program
+
+channel_VHU_s       = 5           # ANT+ Channel for Tacx i-Vortex Headunit
+                                  # slave=Cycle Training Program
 
 #---------------------------------------------------------------------------
 # i-Vortex Headunit modes
@@ -125,6 +130,8 @@ DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT u
 DeviceNumber_HRM    = 57592    #       slaves (TrainerRoad, Zwift, ExplorANT) will find.
 DeviceNumber_VTX    = 57593    #
 DeviceNumber_VHU    = 57594    #
+DeviceNumber_SCS    = 57595    #
+DeviceNumber_PWR    = 57596    #
 
 ModelNumber_FE      = 2875     # short antifier-value=0x8385, Tacx Neo=2875
 SerialNumber_FE     = 19590705 # int   1959-7-5
@@ -136,6 +143,13 @@ ModelNumber_HRM     = 0x33     # char  antifier-value
 SerialNumber_HRM    = 5975     # short 1959-7-5
 HWrevision_HRM      = 1        # char
 SWversion_HRM       = 1        # char
+
+ModelNumber_PWR      = 2161     # Garmin Vector 2 (profile.xlsx, garmin_product)
+SerialNumber_PWR     = 19590702 # int   1959-7-2
+HWrevision_PWR       = 1        # char
+SWrevisionMain_PWR   = 1        # char
+SWrevisionSupp_PWR   = 1        # char
+
 
 if False:                      # Tacx Neo Erik OT; perhaps relevant for Tacx Desktop App
                                # because TDA does not want to pair with FortiusAnt...
@@ -213,9 +227,9 @@ Manufacturer_dynastream	                = 15
 Manufacturer_tacx                       = 89
 Manufacturer_trainer_road	            =281
 
-
 DeviceTypeID_FE         = DeviceTypeID_fitness_equipment
 DeviceTypeID_HRM        = DeviceTypeID_heart_rate
+DeviceTypeID_PWR        = DeviceTypeID_bike_power
 DeviceTypeID_SCS        = DeviceTypeID_bike_speed_cadence
 DeviceTypeID_VTX        = 61            # Tacx i-Vortex
                                         # 0x3d  according TotalReverse
@@ -614,6 +628,7 @@ class clsAntDongle():
     def SlavePair_ChannelConfig(self, channel_pair, \
                                 DeviceNumber=0, DeviceTypeID=0, TransmissionType=0):
                                 # Slave, by default full wildcards ChannelID, see msg51 comment
+        logfile.Console ('FortiusANT tries to pair with any ANT+ device')
         if debug.on(debug.Data1): logfile.Write ("SlavePair_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_pair, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
@@ -626,24 +641,26 @@ class clsAntDongle():
         self.Write(messages, True, False)
 
     def Trainer_ChannelConfig(self):
+        logfile.Console ('FortiusANT broadcasts data as an ANT+ Controlled Fitness Equipent device (FE-C), id=%s' % DeviceNumber_FE)
         if debug.on(debug.Data1): logfile.Write ("Trainer_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_FE, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
             msg51_ChannelID             (channel_FE, DeviceNumber_FE, DeviceTypeID_FE, TransmissionType_IC_GDP),
             msg45_ChannelRfFrequency    (channel_FE, RfFrequency_2457Mhz),
-            msg43_ChannelPeriod         (channel_FE, ChannelPeriod=0x2000),                                     # 4 Hz
+            msg43_ChannelPeriod         (channel_FE, ChannelPeriod=8192),           # 4 Hz
             msg60_ChannelTransmitPower  (channel_FE, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_FE)
         ]
         self.Write(messages)
 
     def SlaveTrainer_ChannelConfig(self, DeviceNumber):
+        logfile.Console ('FortiusANT receives data from an ANT+ Controlled Fitness Equipent device (FE-C)')
         if debug.on(debug.Data1): logfile.Write ("SlaveTrainer_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_FE_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
             msg51_ChannelID             (channel_FE_s, DeviceNumber, DeviceTypeID_FE, TransmissionType_IC_GDP),
             msg45_ChannelRfFrequency    (channel_FE_s, RfFrequency_2457Mhz),
-            msg43_ChannelPeriod         (channel_FE_s, ChannelPeriod=0x2000),                                     # 4 Hz
+            msg43_ChannelPeriod         (channel_FE_s, ChannelPeriod=8192),         # 4 Hz
             msg60_ChannelTransmitPower  (channel_FE_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_FE_s),
             msg4D_RequestMessage        (channel_FE_s, msgID_ChannelID)
@@ -651,37 +668,66 @@ class clsAntDongle():
         self.Write(messages)
 
     def HRM_ChannelConfig(self):
+        logfile.Console ('FortiusANT broadcasts data as an ANT+ Heart Rate Monitor (HRM), id=%s' % DeviceNumber_HRM)
         if debug.on(debug.Data1): logfile.Write ("HRM_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_HRM, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
             msg51_ChannelID             (channel_HRM, DeviceNumber_HRM, DeviceTypeID_HRM, TransmissionType_IC),
             msg45_ChannelRfFrequency    (channel_HRM, RfFrequency_2457Mhz),
-            msg43_ChannelPeriod         (channel_HRM, ChannelPeriod=0x1f86),
+            msg43_ChannelPeriod         (channel_HRM, ChannelPeriod=8070),          # 4,06 Hz
             msg60_ChannelTransmitPower  (channel_HRM, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_HRM)
         ]
         self.Write(messages)
 
     def SlaveHRM_ChannelConfig(self, DeviceNumber):
+        logfile.Console ('FortiusANT receives data from an ANT+ Heart Rate Monitor (HRM display)')
         if debug.on(debug.Data1): logfile.Write ("SlaveHRM_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_HRM_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
             msg51_ChannelID             (channel_HRM_s, DeviceNumber, DeviceTypeID_HRM, TransmissionType_IC),
             msg45_ChannelRfFrequency    (channel_HRM_s, RfFrequency_2457Mhz),
-            msg43_ChannelPeriod         (channel_HRM_s, ChannelPeriod=0x1f86),
+            msg43_ChannelPeriod         (channel_HRM_s, ChannelPeriod=8070),        # 4,06 Hz
             msg60_ChannelTransmitPower  (channel_HRM_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_HRM_s),
             msg4D_RequestMessage        (channel_HRM_s, msgID_ChannelID)
         ]
         self.Write(messages)
 
+    def PWR_ChannelConfig(self, DeviceNumber):
+        logfile.Console ('FortiusANT broadcasts data as an ANT+ Bicycle Power Sensor (PWR), id=%s' % DeviceNumber_PWR)
+        if debug.on(debug.Data1): logfile.Write ("PWR_ChannelConfig()")
+        messages=[
+            msg42_AssignChannel         (channel_PWR, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
+            msg51_ChannelID             (channel_PWR, DeviceNumber_PWR, DeviceTypeID_PWR, TransmissionType_IC),
+            msg45_ChannelRfFrequency    (channel_PWR, RfFrequency_2457Mhz),
+            msg43_ChannelPeriod         (channel_PWR, ChannelPeriod=8182),          # 4,0059 Hz
+            msg60_ChannelTransmitPower  (channel_PWR, TransmitPower_0dBm),
+            msg4B_OpenChannel           (channel_PWR),
+        ]
+        self.Write(messages)
+
+    def SCS_ChannelConfig(self, DeviceNumber):
+        logfile.Console ('FortiusANT broadcasts data as an ANT+ Speed and Cadence Sensor (SCS), id=%s' % DeviceNumber_SCS)
+        if debug.on(debug.Data1): logfile.Write ("SCS_ChannelConfig()")
+        messages=[
+            msg42_AssignChannel         (channel_SCS, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
+            msg51_ChannelID             (channel_SCS, DeviceNumber_SCS, DeviceTypeID_SCS, TransmissionType_IC),
+            msg45_ChannelRfFrequency    (channel_SCS, RfFrequency_2457Mhz),
+            msg43_ChannelPeriod         (channel_SCS, ChannelPeriod=8086),          # 4,05 Hz
+            msg60_ChannelTransmitPower  (channel_SCS, TransmitPower_0dBm),
+            msg4B_OpenChannel           (channel_SCS),
+        ]
+        self.Write(messages)
+
     def SlaveSCS_ChannelConfig(self, DeviceNumber):
+        logfile.Console ('FortiusANT receives data from an ANT+ Speed and Cadence Sensor (SCS Display)')
         if debug.on(debug.Data1): logfile.Write ("SlaveSCS_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_SCS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
             msg51_ChannelID             (channel_SCS_s, DeviceNumber, DeviceTypeID_SCS, TransmissionType_IC),
             msg45_ChannelRfFrequency    (channel_SCS_s, RfFrequency_2457Mhz),
-            msg43_ChannelPeriod         (channel_SCS_s, ChannelPeriod=0x1f86),
+            msg43_ChannelPeriod         (channel_SCS_s, ChannelPeriod=8086),        # 4,05 Hz
             msg60_ChannelTransmitPower  (channel_SCS_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_SCS_s),
             msg4D_RequestMessage        (channel_SCS_s, msgID_ChannelID)
@@ -689,6 +735,7 @@ class clsAntDongle():
         self.Write(messages)
 
     def VTX_ChannelConfig(self):                         # Pretend to be a Tacx i-Vortex
+        logfile.Console ('FortiusANT broadcasts data as an ANT+ Tacx i-Vortex (VTX), id=%s' % DeviceNumber_VTX)
         if debug.on(debug.Data1): logfile.Write ("VTX_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VTX, ChannelType_BidirectionalTransmit, NetworkNumber=0x01),
@@ -702,6 +749,7 @@ class clsAntDongle():
         self.Write(messages)
 
     def SlaveVTX_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex
+        logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Vortex (VTX Controller)')
         if debug.on(debug.Data1): logfile.Write ("SlaveVTX_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
@@ -716,6 +764,7 @@ class clsAntDongle():
 
     def SlaveVHU_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex Headunit
                                                         # See comment above msgPage000_TacxVortexHU_StayAlive
+        logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Vortex Headunit (VHU Controller)')
         if debug.on(debug.Data1): logfile.Write ("SlaveVHU_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VHU_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
@@ -915,7 +964,10 @@ def DongleDebugMessage(text, d):
         elif id == msgID_BroadcastData or id == msgID_AcknowledgedData:
                                                     # Pagenumber in Payload
             if   p        <   0: pass
-            elif p & 0x7f ==  0: p_ = 'Default data page'             # D00000693_-_ANT+_Device_Profile_-_Heart_Rate_Rev_2.1
+            elif Channel  in (channel_SCS, channel_SCS_s):
+                                 p_ = ' Speed and Cadence Sensor datapage'
+                                 p  = None
+            elif p & 0x7f ==  0: p_ = 'Default data page'           # D00000693_-_ANT+_Device_Profile_-_Heart_Rate_Rev_2.1
                                                                     # Also called "Unknown data page"
                                                                     # 'HRM' but other devices have other meanings
                                                                     #    Left for future improvements.
@@ -926,7 +978,7 @@ def DongleDebugMessage(text, d):
             elif p & 0x7f ==  4: p_ = 'HRM Previous Heart beat'
             elif p & 0x7f ==  5: p_ = 'HRM Swim interval summary'
             elif p & 0x7f ==  6: p_ = 'HRM Capabilities'
-            elif p        == 16: p_ = 'General FE data'
+            elif p        == 16: p_ = 'Main data page'
             elif p        == 25: p_ = 'Trainer Data'
             elif p        == 48: p_ = 'Basic Resistance'
             elif p        == 49: p_ = 'Target Power'
@@ -945,7 +997,7 @@ def DongleDebugMessage(text, d):
             elif p        ==221: p_ = 'VHU Button pressed'
             else               : p_ = '??'
 
-            p_ = " p=%s(%s)" % (p, p_)                          # Page, show number and name
+            if p != None:        p_ = " p=%s(%s)" % (p, p_)     # Page, show number and name
 
         elif id == msgID_RF_EVENT:
             pass                                                # We could fill info with error code
@@ -1096,6 +1148,34 @@ def unmsg64_ChannelResponse(info):
     tuple  = struct.unpack (format, info)
 
     return tuple[nChannel], tuple[nInitiatingMessageID], tuple[nResponseCode]
+
+# ------------------------------------------------------------------------------
+# P a g e 1 6   P o w e r   p r o f i l e
+# ------------------------------------------------------------------------------
+# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
+#  trainer: D00001086_ANT+_Device_Profile_-_Bicycle_Power_Rev_5.1.pdf
+#           Data page 16 (0x10) Power-only Main Data Page
+# ------------------------------------------------------------------------------
+def msgPage16_PowerOnly (Channel, EventCount, Cadence, AccumulatedPower, CurrentPower):
+    DataPageNumber      = 16
+
+    EventCount            = int(min(0xff,   EventCount      ))
+    Cadence               = int(min(0xff,   Cadence         ))
+    AccumulatedPower      = int(min(0xffff, AccumulatedPower))
+    CurrentPower          = int(min(0xffff, CurrentPower    ))
+
+    fChannel              = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber       = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fEventCount           = sc.unsigned_char
+    fPedalPower           = sc.unsigned_char
+    fInstantaneousCadence = sc.unsigned_char
+    fAccumulatedPower     = sc.unsigned_short
+    fInstantaneousPower   = sc.unsigned_short
+
+    format = sc.no_alignment +  fChannel + fDataPageNumber + fEventCount + fPedalPower + fInstantaneousCadence + fAccumulatedPower + fInstantaneousPower
+    info   = struct.pack(format, Channel,   DataPageNumber,   EventCount,   0xff,         Cadence,                AccumulatedPower,   CurrentPower)
+
+    return info
 
 # ------------------------------------------------------------------------------
 # P a g e 0 0   T a c x V o r t e x D a t a S p e e d
@@ -2058,3 +2138,45 @@ def msgUnpage_Hrm (info):
     tuple = struct.unpack (format, info)
 
     return tuple[0], tuple[1], tuple[2], tuple[3], tuple[4], tuple[5], tuple[6], tuple[7]
+
+# ------------------------------------------------------------------------------
+# P a g e 0   S p e e d C a d e n c e S e n s o r
+# ------------------------------------------------------------------------------
+# https://www.thisisant.com/developer/resources/downloads#documents_tab
+# D00001163_-_ANT+_Device_Profile_-_Bicycle_Speed_and_Cadence_2.1.pdf
+# ------------------------------------------------------------------------------
+def msgPage_SCS (Channel, CadenceEventTime, CadenceRevolutionCount, SpeedEventTime, SpeedRevolutionCount):
+    _DataPageNumber         = 0
+    CadenceEventTime        = int(min(0xffff, CadenceEventTime      ))
+    CadenceRevolutionCount  = int(min(0xffff, CadenceRevolutionCount))
+    SpeedEventTime          = int(min(0xffff, SpeedEventTime        ))
+    SpeedRevolutionCount    = int(min(0xffff, SpeedRevolutionCount  ))
+
+    fChannel                = sc.unsigned_char  # First byte of the ANT+ message content
+    _fDataPageNumber        = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fCadenceEventTime       = sc.unsigned_short
+    fCadenceRevolutionCount = sc.unsigned_short
+    fSpeedEventTime         = sc.unsigned_short
+    fSpeedRevolutionCount   = sc.unsigned_short
+
+    format      = sc.no_alignment + fChannel + fCadenceEventTime + \
+                        fCadenceRevolutionCount + fSpeedEventTime + fSpeedRevolutionCount
+    info        = struct.pack (format, Channel, CadenceEventTime,   \
+                        CadenceRevolutionCount,    SpeedEventTime,   SpeedRevolutionCount)
+
+    return info
+
+def msgUnpage_SCS (info):
+    fChannel                = sc.unsigned_char  # First byte of the ANT+ message content
+    _fDataPageNumber        = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fCadenceEventTime       = sc.unsigned_short
+    fCadenceRevolutionCount = sc.unsigned_short
+    fSpeedEventTime         = sc.unsigned_short
+    fSpeedRevolutionCount   = sc.unsigned_short
+
+    format      = sc.no_alignment + fChannel + fCadenceEventTime + \
+                        fCadenceRevolutionCount + fSpeedEventTime + fSpeedRevolutionCount
+    tuple = struct.unpack (format, info)
+
+    #      EventTime, CadenceRevolutionCount, EventTime, SpeedRevolutionCount
+    return tuple[1],  tuple[2],               tuple[3],  tuple[4]
