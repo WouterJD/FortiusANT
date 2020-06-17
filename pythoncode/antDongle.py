@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-06-12"
+__version__ = "2020-06-16"
+# 2020-06-16    Added: When pairing with a master, the master-id is printed
 # 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
 # 2020-06-10    Changed: ChannelPeriods defined decimal, like ANT+ specification
 # 2020-06-09    Added: SpeedAndCadenceSensor 
@@ -628,7 +629,9 @@ class clsAntDongle():
     def SlavePair_ChannelConfig(self, channel_pair, \
                                 DeviceNumber=0, DeviceTypeID=0, TransmissionType=0):
                                 # Slave, by default full wildcards ChannelID, see msg51 comment
-        logfile.Console ('FortiusANT tries to pair with any ANT+ device')
+        if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
+        else:                s = ", any device"
+        logfile.Console ('FortiusANT tries to pair with an ANT+ device' + s)
         if debug.on(debug.Data1): logfile.Write ("SlavePair_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_pair, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
@@ -654,7 +657,9 @@ class clsAntDongle():
         self.Write(messages)
 
     def SlaveTrainer_ChannelConfig(self, DeviceNumber):
-        logfile.Console ('FortiusANT receives data from an ANT+ Controlled Fitness Equipent device (FE-C)')
+        if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
+        else:                s = ", any device"
+        logfile.Console ('FortiusANT receives data from an ANT+ Controlled Fitness Equipent device (FE-C)' + s)
         if debug.on(debug.Data1): logfile.Write ("SlaveTrainer_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_FE_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
@@ -681,7 +686,9 @@ class clsAntDongle():
         self.Write(messages)
 
     def SlaveHRM_ChannelConfig(self, DeviceNumber):
-        logfile.Console ('FortiusANT receives data from an ANT+ Heart Rate Monitor (HRM display)')
+        if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
+        else:                s = ", any device"
+        logfile.Console ('FortiusANT receives data from an ANT+ Heart Rate Monitor (HRM display)' + s)
         if debug.on(debug.Data1): logfile.Write ("SlaveHRM_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_HRM_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
@@ -721,7 +728,9 @@ class clsAntDongle():
         self.Write(messages)
 
     def SlaveSCS_ChannelConfig(self, DeviceNumber):
-        logfile.Console ('FortiusANT receives data from an ANT+ Speed and Cadence Sensor (SCS Display)')
+        if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
+        else:                s = ", any device"
+        logfile.Console ('FortiusANT receives data from an ANT+ Speed and Cadence Sensor (SCS Display)' + s)
         if debug.on(debug.Data1): logfile.Write ("SlaveSCS_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_SCS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
@@ -749,7 +758,9 @@ class clsAntDongle():
         self.Write(messages)
 
     def SlaveVTX_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex
-        logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Vortex (VTX Controller)')
+        if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
+        else:                s = ", any device"
+        logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Vortex (VTX Controller)' + s)
         if debug.on(debug.Data1): logfile.Write ("SlaveVTX_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
@@ -764,7 +775,10 @@ class clsAntDongle():
 
     def SlaveVHU_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex Headunit
                                                         # See comment above msgPage000_TacxVortexHU_StayAlive
-        logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Vortex Headunit (VHU Controller)')
+        
+        if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
+        else:                s = ", any device"
+        logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Vortex Headunit (VHU Controller)' + s)
         if debug.on(debug.Data1): logfile.Write ("SlaveVHU_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VHU_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),

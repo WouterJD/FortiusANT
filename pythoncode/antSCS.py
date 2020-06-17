@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-06-09"
+__version__ = "2020-06-16"
+# 2020-06-16    Modified: device-by-zero due to zero Cadence/SpeedKmh
 # 2020-06-09    First version, based upon antHRM.py
 #-------------------------------------------------------------------------------
 import time
@@ -22,8 +23,9 @@ def BroadcastMessage (_PedalEchoTime, PedalEchoCount, SpeedKmh, Cadence):
     #-------------------------------------------------------------------------
     # If pedal passed the magnet, calculate new values
     # Otherwise repeat previous message
+    # Avoid device-by-zero!
     #-------------------------------------------------------------------------
-    if PedalEchoCount != PedalEchoPreviousCount:
+    if PedalEchoCount != PedalEchoPreviousCount and Cadence > 0 and SpeedKmh > 0:
         #---------------------------------------------------------------------
         # Cadence variables
         # Based upon the number of pedal-cycles that are done and the given

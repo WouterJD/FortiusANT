@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-06-12"
+__version__ = "2020-06-16"
+# 2020-06-16    Corrected: USB_read() must always return array of bytes
 # 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
 # 2020-06-11    Changed: if clsTacxNewUsbTrainer less than 40 bytes received, retry
 # 2020-06-10    Changed: Speed and Cadence Sensor metrics (PedalEchoCount)
@@ -86,6 +87,7 @@ __version__ = "2020-06-12"
 # 2020-01-08    Grade2Resistance() modified; test-version to be removed
 # 2019-12-25    Target grade implemented; modes defined
 #-------------------------------------------------------------------------------
+import array
 import usb.core
 import os
 import random
@@ -1132,7 +1134,8 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     # returns   data
     #---------------------------------------------------------------------------
     def USB_Read(self):
-        data = ""
+        data = array.array('B', [])             # Empty array of bytes
+        logfile.Print(data, type(data))
         try:
             data = self.UsbDevice.read(0x82, 64, 30)
         except TimeoutError:
@@ -1143,7 +1146,8 @@ class clsTacxUsbTrainer(clsTacxTrainer):
             else:
                 logfile.Console("Read from USB trainer error: " + str(e))
         if debug.on(debug.Data2):
-            logfile.Write ("Trainer recv data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
+            logfile.Write   ("Trainer recv data=%s (len=%s)"    % (logfile.HexSpace(data), len(data)))
+#           logfile.Console ("Trainer recv data=%s (len=%s) %s" % (logfile.HexSpace(data), len(data), type(data)))
         
         return data
 
@@ -1551,9 +1555,10 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         # 48 bytes are returned by some trainers
         # 24 bytes are sometimes returned (T1932, Gui Leite 2020-06-11) and
         #           seem to be incomplete buffers and are ignored.
+        # Also my own tacx returns empty buffers, very seldomly though
         #-----------------------------------------------------------------------
         retry = 4
-        data  = []
+        data  = array.array('B', [])            # Empty Binary array
         while retry and len(data) < 40:
             data = self.USB_Read()
             retry -= 1
@@ -1669,4 +1674,4 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         if debug.on(debug.Function):
             logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
                         (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
-                          )
+                        )
