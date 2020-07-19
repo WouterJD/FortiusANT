@@ -2,7 +2,7 @@
 # Version info
 #---------------------------------------------------------------------------
 __version__ = "2020-06-16"
-# 2020-06-16    Added: When pairing with a master, the master-id is printed
+# 2020-06-16    Added: When pairing with a main, the main-id is printed
 # 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
 # 2020-06-10    Changed: ChannelPeriods defined decimal, like ANT+ specification
 # 2020-06-09    Added: SpeedAndCadenceSensor 
@@ -15,7 +15,7 @@ __version__ = "2020-06-16"
 # 2020-05-14    Added: msgPage000_TacxVortexHU_NoPowerOff
 #                      msgPage172_TacxVortexHU_ChangeHeadunitMode
 #                      msgUnpage221_TacxVortexHU_ButtonPressed
-#               Changed: msgID_ChannelID issued in SlaveXXX_ChannelConfig
+#               Changed: msgID_ChannelID issued in SubordinateXXX_ChannelConfig
 # 2020-05-13    Added:    msgUnpage50_WindResistance
 #               Modified: msgUnpage51_TrackResistance
 #               #55 Support for Data Page 50 - Wind Resistance
@@ -23,7 +23,7 @@ __version__ = "2020-06-16"
 # 2020-05-08    Linux: detach_kernel_driver added 
 # 2020-05-07    clsAntDongle encapsulates all functions
 # 2020-05-07    pylint error free
-# 2020-05-01    Added: SlaveVHU_ChannelConfig()
+# 2020-05-01    Added: SubordinateVHU_ChannelConfig()
 #               Disabled: SCS because of lack of channel numbers
 # 2020-04-29    msgUnpage00_TacxVortexDataSpeed, speed corrected (0x03ff)
 # 2020-04-28    crash when checksum incorrect; conditions were in wrong sequence
@@ -67,7 +67,7 @@ __version__ = "2020-06-16"
 #               Calibrate() changed with respect to reset-dongle
 # 2020-02-10    SCS added (example code, not tested)
 # 2020-02-02    Function EnumerateAll() added, GetDongle() has optional input
-#               Function SlaveTrainer_ChannelConfig(), SlaveHRM_ChannelConfig()
+#               Function SubordinateTrainer_ChannelConfig(), SubordinateHRM_ChannelConfig()
 #                   for device pairing, with related constants
 #               Improved logging, major overhaul
 # 2020-01-23    OS-dependant code seems unnecessary; disabled
@@ -95,27 +95,27 @@ import FortiusAntCommand    as cmd
 #---------------------------------------------------------------------------
 # Our own choice what channels are used
 #
-# Note that a running program cannot be slave AND master for same device
+# Note that a running program cannot be subordinate AND main for same device
 # since the channels are statically assigned!
 #---------------------------------------------------------------------------
 # M A X #   c h a n n e l s   m a y   b e   8   s o   b e w a r e   h e r e !
 #---------------------------------------------------------------------------
 channel_FE          = 0           # ANT+ channel for Fitness Equipment
-channel_FE_s        = channel_FE  # slave=Cycle Training Program
+channel_FE_s        = channel_FE  # subordinate=Cycle Training Program
 
 channel_HRM         = 1           # ANT+ channel for Heart Rate Monitor
-channel_HRM_s       = channel_HRM # slave=display or Cycle Training Program
+channel_HRM_s       = channel_HRM # subordinate=display or Cycle Training Program
 
 channel_PWR         = 2           # ANT+ Channel for Power Profile
 
 channel_SCS         = 3           # ANT+ Channel for Speed Cadence Sensor
-channel_SCS_s       = channel_SCS # slave=display or Cycle Training Program
+channel_SCS_s       = channel_SCS # subordinate=display or Cycle Training Program
 
 channel_VTX         = 4           # ANT+ Channel for Tacx i-Vortex
-channel_VTX_s       = channel_VTX # slave=Cycle Training Program
+channel_VTX_s       = channel_VTX # subordinate=Cycle Training Program
 
 channel_VHU_s       = 5           # ANT+ Channel for Tacx i-Vortex Headunit
-                                  # slave=Cycle Training Program
+                                  # subordinate=Cycle Training Program
 
 #---------------------------------------------------------------------------
 # i-Vortex Headunit modes
@@ -123,12 +123,12 @@ channel_VHU_s       = 5           # ANT+ Channel for Tacx i-Vortex Headunit
 VHU_Normal          = 0        # Headunit commands the i-Vortex trainer
 VHU_SpecialMode     = 2        # Headunit controls the i-Vortex and 
                                #        FortiusANT TargetPower seems ignored.
-VHU_PCmode          = 4        # Headunit only sends buttons to slave (FortiusANT)
+VHU_PCmode          = 4        # Headunit only sends buttons to subordinate (FortiusANT)
 
 
-DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
+DeviceNumber_EA     = 57590    # short Subordinate device-number for ExplorANT
 DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT uses and
-DeviceNumber_HRM    = 57592    #       slaves (TrainerRoad, Zwift, ExplorANT) will find.
+DeviceNumber_HRM    = 57592    #       subordinates (TrainerRoad, Zwift, ExplorANT) will find.
 DeviceNumber_VTX    = 57593    #
 DeviceNumber_VHU    = 57594    #
 DeviceNumber_SCS    = 57595    #
@@ -160,17 +160,17 @@ if False:                      # Tacx Neo Erik OT; perhaps relevant for Tacx Des
 #---------------------------------------------------------------------------
 # D00000652_ANT_Message_Protocol_and_Usage_Rev_5.1.pdf
 # 5.2.1 Channel Type
-# 5.3   Establishing a channel (defines master/slave)
+# 5.3   Establishing a channel (defines main/subordinate)
 # 9.3   ANT Message summary
 #---------------------------------------------------------------------------
-ChannelType_BidirectionalReceive        = 0x00          # Slave
-ChannelType_BidirectionalTransmit       = 0x10          # Master
+ChannelType_BidirectionalReceive        = 0x00          # Subordinate
+ChannelType_BidirectionalTransmit       = 0x10          # Main
 
-ChannelType_UnidirectionalReceiveOnly   = 0x40          # Slave
-ChannelType_UnidirectionalTransmitOnly  = 0x50          # Master
+ChannelType_UnidirectionalReceiveOnly   = 0x40          # Subordinate
+ChannelType_UnidirectionalTransmitOnly  = 0x50          # Main
 
-ChannelType_SharedBidirectionalReceive  = 0x20          # Slave
-ChannelType_SharedBidirectionalTransmit = 0x30          # Master
+ChannelType_SharedBidirectionalReceive  = 0x20          # Subordinate
+ChannelType_SharedBidirectionalTransmit = 0x30          # Main
 
 msgID_RF_EVENT                          = 0x01
 
@@ -189,7 +189,7 @@ msgID_ResetSystem                       = 0x4a
 msgID_OpenChannel                       = 0x4b
 msgID_RequestMessage                    = 0x4d
 
-msgID_ChannelID                         = 0x51          # Set, but also receive master channel - but how/when?
+msgID_ChannelID                         = 0x51          # Set, but also receive main channel - but how/when?
 msgID_ChannelTransmitPower              = 0x60
 
 msgID_StartUp                           = 0x6f
@@ -626,13 +626,13 @@ class clsAntDongle():
             self.Write(messages, False)
         time.sleep(0.500)                           # After Reset, 500ms before next action
 
-    def SlavePair_ChannelConfig(self, channel_pair, \
+    def SubordinatePair_ChannelConfig(self, channel_pair, \
                                 DeviceNumber=0, DeviceTypeID=0, TransmissionType=0):
-                                # Slave, by default full wildcards ChannelID, see msg51 comment
+                                # Subordinate, by default full wildcards ChannelID, see msg51 comment
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         logfile.Console ('FortiusANT tries to pair with an ANT+ device' + s)
-        if debug.on(debug.Data1): logfile.Write ("SlavePair_ChannelConfig()")
+        if debug.on(debug.Data1): logfile.Write ("SubordinatePair_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_pair, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
             msg51_ChannelID             (channel_pair, DeviceNumber, DeviceTypeID, TransmissionType),
@@ -656,11 +656,11 @@ class clsAntDongle():
         ]
         self.Write(messages)
 
-    def SlaveTrainer_ChannelConfig(self, DeviceNumber):
+    def SubordinateTrainer_ChannelConfig(self, DeviceNumber):
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         logfile.Console ('FortiusANT receives data from an ANT+ Controlled Fitness Equipent device (FE-C)' + s)
-        if debug.on(debug.Data1): logfile.Write ("SlaveTrainer_ChannelConfig()")
+        if debug.on(debug.Data1): logfile.Write ("SubordinateTrainer_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_FE_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
             msg51_ChannelID             (channel_FE_s, DeviceNumber, DeviceTypeID_FE, TransmissionType_IC_GDP),
@@ -685,11 +685,11 @@ class clsAntDongle():
         ]
         self.Write(messages)
 
-    def SlaveHRM_ChannelConfig(self, DeviceNumber):
+    def SubordinateHRM_ChannelConfig(self, DeviceNumber):
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         logfile.Console ('FortiusANT receives data from an ANT+ Heart Rate Monitor (HRM display)' + s)
-        if debug.on(debug.Data1): logfile.Write ("SlaveHRM_ChannelConfig()")
+        if debug.on(debug.Data1): logfile.Write ("SubordinateHRM_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_HRM_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
             msg51_ChannelID             (channel_HRM_s, DeviceNumber, DeviceTypeID_HRM, TransmissionType_IC),
@@ -727,11 +727,11 @@ class clsAntDongle():
         ]
         self.Write(messages)
 
-    def SlaveSCS_ChannelConfig(self, DeviceNumber):
+    def SubordinateSCS_ChannelConfig(self, DeviceNumber):
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         logfile.Console ('FortiusANT receives data from an ANT+ Speed and Cadence Sensor (SCS Display)' + s)
-        if debug.on(debug.Data1): logfile.Write ("SlaveSCS_ChannelConfig()")
+        if debug.on(debug.Data1): logfile.Write ("SubordinateSCS_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_SCS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
             msg51_ChannelID             (channel_SCS_s, DeviceNumber, DeviceTypeID_SCS, TransmissionType_IC),
@@ -757,11 +757,11 @@ class clsAntDongle():
         ]
         self.Write(messages)
 
-    def SlaveVTX_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex
+    def SubordinateVTX_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Vortex (VTX Controller)' + s)
-        if debug.on(debug.Data1): logfile.Write ("SlaveVTX_ChannelConfig()")
+        if debug.on(debug.Data1): logfile.Write ("SubordinateVTX_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
             msg51_ChannelID             (channel_VTX_s, DeviceNumber, DeviceTypeID_VTX, TransmissionType_IC),
@@ -773,13 +773,13 @@ class clsAntDongle():
         ]
         self.Write(messages)
 
-    def SlaveVHU_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex Headunit
+    def SubordinateVHU_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex Headunit
                                                         # See comment above msgPage000_TacxVortexHU_StayAlive
         
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Vortex Headunit (VHU Controller)' + s)
-        if debug.on(debug.Data1): logfile.Write ("SlaveVHU_ChannelConfig()")
+        if debug.on(debug.Data1): logfile.Write ("SubordinateVHU_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VHU_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
             msg51_ChannelID             (channel_VHU_s, DeviceNumber, DeviceTypeID_VHU, TransmissionType_IC),
@@ -1898,23 +1898,23 @@ def msgUnpage55_UserConfiguration(info):
 # D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
 # Common Data Page 70: (0x46) RequestDataPage
 # ------------------------------------------------------------------------------
-def msgPage70_RequestDataPage(Channel, SlaveSerialNumber, DescriptorByte1, \
+def msgPage70_RequestDataPage(Channel, SubordinateSerialNumber, DescriptorByte1, \
                 DescriptorByte2, NrTimes, RequestedPageNumber, CommandType):
     DataPageNumber      = 70
 
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
-    fSlaveSerialNumber  = sc.unsigned_short
+    fSubordinateSerialNumber  = sc.unsigned_short
     fDescriptorByte1    = sc.unsigned_char
     fDescriptorByte2    = sc.unsigned_char
     fReqTransmissionResp= sc.unsigned_char
     fRequestedPageNumber= sc.unsigned_char
     fCommandType        = sc.unsigned_char
 
-    format=    sc.no_alignment + fChannel + fDataPageNumber + fSlaveSerialNumber + fDescriptorByte1 + \
+    format=    sc.no_alignment + fChannel + fDataPageNumber + fSubordinateSerialNumber + fDescriptorByte1 + \
                fDescriptorByte2 + fReqTransmissionResp + fRequestedPageNumber + fCommandType
 
-    info  = struct.pack (format,  Channel,   DataPageNumber,   SlaveSerialNumber,   DescriptorByte1,  \
+    info  = struct.pack (format,  Channel,   DataPageNumber,   SubordinateSerialNumber,   DescriptorByte1,  \
                 DescriptorByte2,   NrTimes,               RequestedPageNumber,   CommandType)
 
     return info
@@ -1926,8 +1926,8 @@ def msgUnpage70_RequestDataPage(info):
     _nDataPageNumber    = 1
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
 
-    nSlaveSerialNumber  = 2
-    fSlaveSerialNumber  = sc.unsigned_short
+    nSubordinateSerialNumber  = 2
+    fSubordinateSerialNumber  = sc.unsigned_short
 
     nDescriptorByte1    = 3
     fDescriptorByte1    = sc.unsigned_char
@@ -1944,7 +1944,7 @@ def msgUnpage70_RequestDataPage(info):
     nCommandType        = 7
     fCommandType        = sc.unsigned_char
 
-    format = sc.no_alignment + fChannel + fDataPageNumber + fSlaveSerialNumber + \
+    format = sc.no_alignment + fChannel + fDataPageNumber + fSubordinateSerialNumber + \
              fDescriptorByte1 + fDescriptorByte2 + fReqTransmissionResp + \
              fRequestedPageNumber + fCommandType
     tuple  = struct.unpack (format, info)
@@ -1953,7 +1953,7 @@ def msgUnpage70_RequestDataPage(info):
     AckRequired         = ReqTranmissionResponse & 0x80
     NrTimes             = ReqTranmissionResponse & 0x7f
 
-    return tuple[nSlaveSerialNumber], tuple[nDescriptorByte1], tuple[nDescriptorByte2], \
+    return tuple[nSubordinateSerialNumber], tuple[nDescriptorByte1], tuple[nDescriptorByte2], \
            AckRequired, NrTimes, tuple[nRequestedPageNumber], tuple[nCommandType]
 
 # ------------------------------------------------------------------------------

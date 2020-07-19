@@ -210,8 +210,8 @@ class CommandLineVariables(object):
 
         #-----------------------------------------------------------------------
         # Get HRM
-        # - None: read HRM from Tacx Fortius and broadcast as HRM master device
-        # - -1  : no master and no slave device
+        # - None: read HRM from Tacx Fortius and broadcast as HRM main device
+        # - -1  : no main and no subordinate device
         # - 0   : pair with the first ANT+ HRM that is found
         # - next: pair with the defined ANT+ HRM monitor
         #             the number can be found with ExplorANT

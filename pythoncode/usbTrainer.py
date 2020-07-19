@@ -950,7 +950,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                 dataHandled = True
 
             #-------------------------------------------------------------------
-            # BroadcastData - info received from the master device
+            # BroadcastData - info received from the main device
             #-------------------------------------------------------------------
             elif id == ant.msgID_BroadcastData:
                 #---------------------------------------------------------------
@@ -1004,7 +1004,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                             (DataPageNumber, VTX_Calibration, self.__VortexID))
 
             #-------------------------------------------------------------------
-            # ChannelID - the info that a master on the network is paired
+            # ChannelID - the info that a main on the network is paired
             #-------------------------------------------------------------------
             elif id == ant.msgID_ChannelID:
                 Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \
@@ -1034,7 +1034,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                               ant.msgUnpage221_TacxVortexHU_ButtonPressed (info)
 
             #-------------------------------------------------------------------
-            # BroadcastData - info received from the master device
+            # BroadcastData - info received from the main device
             #-------------------------------------------------------------------
             elif id == ant.msgID_BroadcastData:
                 #---------------------------------------------------------------
@@ -1051,7 +1051,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                     dataHandled = True
 
             #-------------------------------------------------------------------
-            # ChannelID - the info that a master on the network is paired
+            # ChannelID - the info that a main on the network is paired
             #-------------------------------------------------------------------
             elif id == ant.msgID_ChannelID:
                 Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \

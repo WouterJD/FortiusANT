@@ -3,8 +3,8 @@
 #-------------------------------------------------------------------------------
 __version__ = "2020-06-12"
 # 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
-# 2020-06-11    Added: BikePowerProfile (master)
-# 2020-06-09    Added: SpeedAndCadenceSensor (master)
+# 2020-06-11    Added: BikePowerProfile (main)
+# 2020-06-09    Added: SpeedAndCadenceSensor (main)
 # 2020-05-27    Added: msgPage71_CommandStatus handled -- and tested
 # 2020-05-24    i-Vortex adjustments
 #               - in manual mode, ANTdongle must be present as well, so that
@@ -484,11 +484,11 @@ def Tacx2DongleSub(self, Restart):
     p71_Data4                   = 0xff
 
     #---------------------------------------------------------------------------
-    # Info from ANT slave channels
+    # Info from ANT subordinate channels
     #---------------------------------------------------------------------------
     HeartRate       = 0         # This field is displayed
                                 # We have two sources: the trainer or
-                                # our own HRM slave channel.
+                                # our own HRM subordinate channel.
     #Cadence        = 0         # Analogously for Speed Cadence Sensor
                                 # But is not yet implemented
     #---------------------------------------------------------------------------
@@ -509,17 +509,17 @@ def Tacx2DongleSub(self, Restart):
     #---------------------------------------------------------------------------
     AntDongle.ResetDongle()             # reset dongle
     AntDongle.Calibrate()               # calibrate ANT+ dongle
-    AntDongle.Trainer_ChannelConfig()   # Create ANT+ master channel for FE-C
+    AntDongle.Trainer_ChannelConfig()   # Create ANT+ main channel for FE-C
     
     if clv.hrm == None:
-        AntDongle.HRM_ChannelConfig()   # Create ANT+ master channel for HRM
+        AntDongle.HRM_ChannelConfig()   # Create ANT+ main channel for HRM
     elif clv.hrm < 0:
         pass                            # No Heartrate at all
     else:
         #-------------------------------------------------------------------
-        # Create ANT+ slave channel for HRM;   0: auto pair, nnn: defined HRM
+        # Create ANT+ subordinate channel for HRM;   0: auto pair, nnn: defined HRM
         #-------------------------------------------------------------------
-        AntDongle.SlaveHRM_ChannelConfig(clv.hrm)
+        AntDongle.SubordinateHRM_ChannelConfig(clv.hrm)
 
         #-------------------------------------------------------------------
         # Request what DeviceID is paired to the HRM-channel
@@ -530,42 +530,42 @@ def Tacx2DongleSub(self, Restart):
 
     if clv.Tacx_iVortex:
         #-------------------------------------------------------------------
-        # Create ANT+ slave channel for VTX
+        # Create ANT+ subordinate channel for VTX
         # No pairing-loop: VTX perhaps not yet active and avoid delay
         #-------------------------------------------------------------------
-        AntDongle.SlaveVTX_ChannelConfig(0)
+        AntDongle.SubordinateVTX_ChannelConfig(0)
 
         # msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
         # AntDongle.Write([msg], False, False)
 
         #-------------------------------------------------------------------
-        # Create ANT+ slave channel for VHU
+        # Create ANT+ subordinate channel for VHU
         #
         # We create this channel right away. At some stage the VTX-channel
         # sends the Page03_TacxVortexDataCalibration which provides the
         # VortexID. This VortexID is the DeviceID that could be provided
-        # to SlaveVHU_ChannelConfig() to restrict pairing to that headunit
+        # to SubordinateVHU_ChannelConfig() to restrict pairing to that headunit
         # only. Not relevant in private environments, so left as is here.
         #-------------------------------------------------------------------
-        AntDongle.SlaveVHU_ChannelConfig(0)
+        AntDongle.SubordinateVHU_ChannelConfig(0)
 
     if True:
         #-------------------------------------------------------------------
-        # Create ANT+ master channel for PWR
+        # Create ANT+ main channel for PWR
         #-------------------------------------------------------------------
         AntDongle.PWR_ChannelConfig(ant.channel_PWR)
 
     if clv.scs == None:
         #-------------------------------------------------------------------
-        # Create ANT+ master channel for SCS
+        # Create ANT+ main channel for SCS
         #-------------------------------------------------------------------
         AntDongle.SCS_ChannelConfig(ant.channel_SCS)
     else:
         #-------------------------------------------------------------------
-        # Create ANT+ slave channel for SCS
+        # Create ANT+ subordinate channel for SCS
         # 0: auto pair, nnn: defined SCS
         #-------------------------------------------------------------------
-        AntDongle.SlaveSCS_ChannelConfig(clv.scs)
+        AntDongle.SubordinateSCS_ChannelConfig(clv.scs)
         pass
     
     if not clv.gui: logfile.Console ("Ctrl-C to exit")
@@ -863,7 +863,7 @@ def Tacx2DongleSub(self, Restart):
                     pass                    # Message is handled or ignored
 
                 #---------------------------------------------------------------
-                # AcknowledgedData = Slave -> Master
+                # AcknowledgedData = Subordinate -> Main
                 #       channel_FE = From CTP (Trainer Road, Zwift) --> Tacx 
                 #---------------------------------------------------------------
                 elif id == ant.msgID_AcknowledgedData:
@@ -964,7 +964,7 @@ def Tacx2DongleSub(self, Restart):
                         # Data page 70 Request data page
                         #-------------------------------------------------------
                         elif DataPageNumber == 70:
-                            _SlaveSerialNumber, _DescriptorByte1, _DescriptorByte2, \
+                            _SubordinateSerialNumber, _DescriptorByte1, _DescriptorByte2, \
                                 _AckRequired, NrTimes, RequestedPageNumber, \
                                 _CommandType = ant.msgUnpage70_RequestDataPage(info)
                             
@@ -1020,7 +1020,7 @@ def Tacx2DongleSub(self, Restart):
                     else: error="Unknown channel"
 
                 #---------------------------------------------------------------
-                # BroadcastData = Master -> Slave
+                # BroadcastData = Main -> Subordinate
                 #       channel_HRM_s = Heartbeat received from HRM
                 #       channel_SCS_s = Speed/Cadence received from SCS
                 #---------------------------------------------------------------
@@ -1091,7 +1091,7 @@ def Tacx2DongleSub(self, Restart):
                     else: error = "Unknown channel"
 
                 #---------------------------------------------------------------
-                # ChannelID - the info that a master on the network is paired
+                # ChannelID - the info that a main on the network is paired
                 #---------------------------------------------------------------
                 elif id == ant.msgID_ChannelID:
                     Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \

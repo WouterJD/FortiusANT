@@ -107,7 +107,7 @@ if AntDongle.OK and not clv.SimulateTrainer:
     #---------------------------------------------------------------------------
     # We are going to look what MASTER devices there are
     #---------------------------------------------------------------------------
-    logfile.Console ("ExplorANT: We're in slave mode, listening to master ANT+ devices")
+    logfile.Console ("ExplorANT: We're in subordinate mode, listening to main ANT+ devices")
 
     #---------------------------------------------------------------------------
     # Initialize dongle
@@ -115,18 +115,18 @@ if AntDongle.OK and not clv.SimulateTrainer:
     AntDongle.Calibrate()                          # calibrate ANT+ dongle
 
     #---------------------------------------------------------------------------
-    # Create ANT+ slave channels for pairing to a master device (HRM, FE, ...)
+    # Create ANT+ subordinate channels for pairing to a main device (HRM, FE, ...)
     #
-    # A channel with a wild-card is established when a master-device found.
+    # A channel with a wild-card is established when a main-device found.
     # After that moment, no other device will be seen on that channel.
     #
-    # If ant.SlaveHRM_ChannelConfig(0) is used, the first HRM will
+    # If ant.SubordinateHRM_ChannelConfig(0) is used, the first HRM will
     # be found and not a list of HRM's.
     #
     # Therefore, open as many channels as devices you want to find.
     #
-    # There may be masters around with the pairing bit set and they will be
-    # found only when the slave has the pairing bit set as well
+    # There may be mains around with the pairing bit set and they will be
+    # found only when the subordinate has the pairing bit set as well
     #
     # Therefore set the pairing bit on every odd channel...
     #
@@ -138,15 +138,15 @@ if AntDongle.OK and not clv.SimulateTrainer:
     for i in range(0, NrDevicesToPair):
         print (i, end=' ')
         if i == ant.channel_VTX_s:
-            AntDongle.SlaveVTX_ChannelConfig(0)
+            AntDongle.SubordinateVTX_ChannelConfig(0)
         elif i == ant.channel_VHU_s:
-            AntDongle.SlaveVHU_ChannelConfig(0)
+            AntDongle.SubordinateVHU_ChannelConfig(0)
         else:
             DeviceNumber    =0
             DeviceTypeID    =0
             TransmissionType=0
             if i % 1 == 1: DeviceTypeID &= 0x80
-            AntDongle.SlavePair_ChannelConfig(i, DeviceNumber, DeviceTypeID, TransmissionType)
+            AntDongle.SubordinatePair_ChannelConfig(i, DeviceNumber, DeviceTypeID, TransmissionType)
     print ('')
 
     deviceIDs = []
@@ -178,7 +178,7 @@ if AntDongle.OK and not clv.SimulateTrainer:
             #-------------------------------------------------------------------
             # Only handle ChannelID messages and ignore everyting else
             #
-            # After msgID_ChannelID is received, the master-messages will be
+            # After msgID_ChannelID is received, the main-messages will be
             # received, but we ignore them here because we want to pair only.
             #-------------------------------------------------------------------
             Unknown = True
@@ -193,13 +193,13 @@ if AntDongle.OK and not clv.SimulateTrainer:
                     Unknown = False
 
                 #---------------------------------------------------------------
-                # Message BroadcastData, provides a datapage from master
+                # Message BroadcastData, provides a datapage from main
                 #---------------------------------------------------------------
                 elif id == ant.msgID_BroadcastData:
                     Unknown = False
 
                 #---------------------------------------------------------------
-                # ChannelID - the info from a Master device on the network
+                # ChannelID - the info from a Main device on the network
                 #---------------------------------------------------------------
                 elif id == ant.msgID_ChannelID:
                     Unknown = False
@@ -324,42 +324,42 @@ while AntDongle.OK:
             #-----------------------------------------------------------------------
             # We are going to simulate MASTER devices
             #-----------------------------------------------------------------------
-            logfile.Console ("ExplorANT: We're simulating master ANT+ devices")
+            logfile.Console ("ExplorANT: We're simulating main ANT+ devices")
 
             if clv.hrm >= 0:
                 hrm.Initialize()
                 AntDongle.HRM_ChannelConfig()
-                logfile.Console ('HRM master channel %s opened; device %s (act as an HRM)' % (ant.channel_HRM, ant.DeviceNumber_HRM))
+                logfile.Console ('HRM main channel %s opened; device %s (act as an HRM)' % (ant.channel_HRM, ant.DeviceNumber_HRM))
 
             if clv.fe  >= 0:
                 fe.Initialize()
                 AntDongle.Trainer_ChannelConfig()
-                logfile.Console ('FE  master channel %s opened; device %s (act as a Tacx Trainer)' % (ant.channel_FE, ant.DeviceNumber_FE))
+                logfile.Console ('FE  main channel %s opened; device %s (act as a Tacx Trainer)' % (ant.channel_FE, ant.DeviceNumber_FE))
 
             if clv.vtx >= 0:
                 AntDongle.VTX_ChannelConfig()
-                logfile.Console ('VTX master channel %s opened; device %s (act as a Tacx -Vortex)' % (ant.channel_VTX, ant.DeviceNumber_VTX))
+                logfile.Console ('VTX main channel %s opened; device %s (act as a Tacx -Vortex)' % (ant.channel_VTX, ant.DeviceNumber_VTX))
 
         else:
             if clv.hrm > 0:
-                AntDongle.SlaveHRM_ChannelConfig(clv.hrm)
-                logfile.Console ('HRM slave channel %s opened; listening to master device %s' % (ant.channel_HRM_s, clv.hrm))
+                AntDongle.SubordinateHRM_ChannelConfig(clv.hrm)
+                logfile.Console ('HRM subordinate channel %s opened; listening to main device %s' % (ant.channel_HRM_s, clv.hrm))
 
             if clv.fe  > 0:
-                AntDongle.SlaveTrainer_ChannelConfig(clv.fe)
-                logfile.Console ('FE  slave channel %s opened; listening to master device %s' % (ant.channel_FE_s,  clv.fe))
+                AntDongle.SubordinateTrainer_ChannelConfig(clv.fe)
+                logfile.Console ('FE  subordinate channel %s opened; listening to main device %s' % (ant.channel_FE_s,  clv.fe))
 
             if clv.scs > 0:
-                AntDongle.SlaveSCS_ChannelConfig(clv.scs)
-                logfile.Console ('SCS slave channel %s opened; listening to master device %s' % (ant.channel_SCS_s,  clv.scs))
+                AntDongle.SubordinateSCS_ChannelConfig(clv.scs)
+                logfile.Console ('SCS subordinate channel %s opened; listening to main device %s' % (ant.channel_SCS_s,  clv.scs))
 
             if clv.vtx > 0:
-                AntDongle.SlaveVTX_ChannelConfig(clv.vtx)
-                logfile.Console ('VTX slave channel %s opened; listening to master device %s' % (ant.channel_VTX_s, 0))
+                AntDongle.SubordinateVTX_ChannelConfig(clv.vtx)
+                logfile.Console ('VTX subordinate channel %s opened; listening to main device %s' % (ant.channel_VTX_s, 0))
 
             if clv.vhu > 0:
-                AntDongle.SlaveVHU_ChannelConfig(clv.vhu)
-                logfile.Console ('VHU slave channel %s opened; listening to master device %s' % (ant.channel_VHU_s, 0))
+                AntDongle.SubordinateVHU_ChannelConfig(clv.vhu)
+                logfile.Console ('VHU subordinate channel %s opened; listening to main device %s' % (ant.channel_VHU_s, 0))
 
         # ----------------------------------------------------------------------
         # Get info from the devices
@@ -408,7 +408,7 @@ while AntDongle.OK:
             while RunningSwitch == True and not AntDongle.DongleReconnected:
                 StartTime = time.time()
                 #---------------------------------------------------------------
-                # Simulate HRM, FE-S, VTX (master device, broadcasting data)
+                # Simulate HRM, FE-S, VTX (main device, broadcasting data)
                 #---------------------------------------------------------------
                 messages     = []
 
@@ -479,12 +479,12 @@ while AntDongle.OK:
                         Unknown = False
 
                     #-----------------------------------------------------------
-                    # Message BroadcastData, provides a datapage from master
+                    # Message BroadcastData, provides a datapage from main
                     #-----------------------------------------------------------
                     elif id == ant.msgID_BroadcastData:
                         #-------------------------------------------------------
                         # HRM_s = Heart rate Monitor Display
-                        # We are slave, listening to a master (Heartrate belt)
+                        # We are subordinate, listening to a main (Heartrate belt)
                         #-------------------------------------------------------
                         if Channel == ant.channel_HRM_s:
                             HRM_s_count += 1
@@ -522,7 +522,7 @@ while AntDongle.OK:
 
                         #-------------------------------------------------------
                         # FE_s = Cycle Training Program (e.g. Zwift, Trainer Road)
-                        # We are slave, listening to a master Tacx Trainer
+                        # We are subordinate, listening to a main Tacx Trainer
                         #-------------------------------------------------------
                         elif Channel == ant.channel_FE_s:
                             FE_s_count += 1
@@ -572,7 +572,7 @@ while AntDongle.OK:
 
                         #-------------------------------------------------------
                         # SCS_s = Heart rate Monitor Display
-                        # We are slave, listening to a master (Speed Cadence Sensor)
+                        # We are subordinate, listening to a main (Speed Cadence Sensor)
                         #-------------------------------------------------------
                         if Channel == ant.channel_SCS_s:
                             SCS_s_count += 1
@@ -607,7 +607,7 @@ while AntDongle.OK:
 
                         #-------------------------------------------------------
                         # VTX_s = Tacx i-Vortex trainer
-                        # We are slave, listening to a master (the real trainer)
+                        # We are subordinate, listening to a main (the real trainer)
                         #-------------------------------------------------------
                         elif Channel == ant.channel_VTX_s:
                             #---------------------------------------------------
@@ -650,7 +650,7 @@ while AntDongle.OK:
 
                         #-------------------------------------------------------
                         # VTX = Cycle Training Program (e.g. Zwift, Trainer Road)
-                        # We are slave, listening to a master Fortius ANT or TTS
+                        # We are subordinate, listening to a main Fortius ANT or TTS
                         #
                         #-------------------------------------------------------
                         elif Channel == ant.channel_VTX:
@@ -692,7 +692,7 @@ while AntDongle.OK:
                             #-------------------------------------------------------
                             elif DataPageNumber == 70:
                                 dpRequestDatapage += 1
-                                SlaveSerialNumber, DescriptorByte1, DescriptorByte2, AckRequired, NrTimes, \
+                                SubordinateSerialNumber, DescriptorByte1, DescriptorByte2, AckRequired, NrTimes, \
                                     RequestedPageNumber, CommandType = ant.msgUnpage70_RequestDataPage(info)
 
                                 info = False

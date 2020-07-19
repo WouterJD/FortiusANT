@@ -40,7 +40,7 @@ class CommandLineVariables(object):
         parser = argparse.ArgumentParser(description='Program to explore ANT devices in the system')
         parser.add_argument('-a','--autostart', help='Automatically start',                 required=False, action='store_true')
         parser.add_argument('-d','--debug',     help='Show debugging data',                 required=False, default=False)
-        parser.add_argument('-s','--simulate',  help='Simulate master HRM and FE-C',        required=False, action='store_true')
+        parser.add_argument('-s','--simulate',  help='Simulate main HRM and FE-C',        required=False, action='store_true')
         parser.add_argument('-D','--dongle',    help='Use this ANT dongle',                 required=False, default=False)
         parser.add_argument('-H','--hrm',       help='Pair with this Heart Rate Monitor',   required=False, default=False)
         parser.add_argument('-F','--fe',        help='Pair with this Fitness Equipment',    required=False, default=False)
