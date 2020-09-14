@@ -1,8 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v3.2.1"
-__version__ = "2020-06-17"
+WindowTitle = "Fortius Antifier v3.2.2"
+__version__ = "2020-09-13"
+# 2020-09-13    Version 3.2.2; fixed issue with trainers sending 24 and 48 bytes
+#               of data. The 24 bytes are no longer processed preventing data
+#               to be set to values for e.g. speed to 0.
 # 2020-05-17    Version 3.2.1; two crashes solved
 # 2020-05-12    Version 3.2 with SCS and PWR profile
 # 2020-05-24    Initial GUI messages made more general
