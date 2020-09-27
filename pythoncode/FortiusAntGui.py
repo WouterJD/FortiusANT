@@ -454,7 +454,7 @@ class frmFortiusAntGui(wx.Frame):
         # - Is positioned UNDER the Speed control
         # - Has width of Speed + Cadence control
         # ----------------------------------------------------------------------
-        self.txtUsbTrainer = wx.TextCtrl(self, value="txtUsbTrainer", size=(10,TextCtrlH2), style=wx.TE_LEFT | wx.TE_READONLY)
+        self.txtUsbTrainer = wx.TextCtrl(self, value="txtUsbTrainer", size=(10,-1), style=wx.TE_LEFT | wx.TE_READONLY)
         self.txtUsbTrainer.SetSize((self.Revs.Position[0] + self.Revs.Size[0] - Margin, -1))
         self.txtUsbTrainer.SetPosition((Margin, self.Speed.Position[1] + self.Speed.Size[1] + 5))
         self.txtUsbTrainer.SetBackgroundColour(bg)
@@ -462,7 +462,7 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# ANT Dongle
         # ----------------------------------------------------------------------
-        self.txtAntDongle = wx.TextCtrl(self, value="txtAntDongle", size=(10,TextCtrlH2), style=wx.TE_LEFT | wx.TE_READONLY)
+        self.txtAntDongle = wx.TextCtrl(self, value="txtAntDongle", size=(10,-1), style=wx.TE_LEFT | wx.TE_READONLY)
         self.txtAntDongle.SetSize((self.txtUsbTrainer.Size[0], -1))
         self.txtAntDongle.SetPosition((Margin, self.txtUsbTrainer.Position[1] + self.txtUsbTrainer.Size[1] + 5))
         self.txtAntDongle.SetBackgroundColour(bg)
@@ -470,7 +470,7 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# ANT Heart Rate Monitor
         # ----------------------------------------------------------------------
-        self.txtAntHRM = wx.TextCtrl(self, value="txtAntHRM", size=(10,TextCtrlH2), style=wx.TE_LEFT | wx.TE_READONLY)
+        self.txtAntHRM = wx.TextCtrl(self, value="txtAntHRM", size=(10,-1), style=wx.TE_LEFT | wx.TE_READONLY)
         self.txtAntHRM.SetSize((self.txtUsbTrainer.Size[0], -1))
         self.txtAntHRM.SetPosition((Margin, self.txtAntDongle.Position[1] + self.txtAntDongle.Size[1] + 5))
         self.txtAntHRM.SetBackgroundColour(bg)

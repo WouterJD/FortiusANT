@@ -1,6 +1,8 @@
 *.log
 *.pyc
 *.lnk
+.history
+.vscode
 pythoncode/build/
 pythoncode/dist/
 Miscellaneous/
