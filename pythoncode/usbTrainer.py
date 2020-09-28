@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-06-16"
+__version__ = "2020-09-28"
+# 2020-09-28    Short buffer <40 error recovery improved
 # 2020-06-16    Corrected: USB_read() must always return array of bytes
 # 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
 # 2020-06-11    Changed: if clsTacxNewUsbTrainer less than 40 bytes received, retry
@@ -1556,122 +1557,142 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         # 24 bytes are sometimes returned (T1932, Gui Leite 2020-06-11) and
         #           seem to be incomplete buffers and are ignored.
         # Also my own tacx returns empty buffers, very seldomly though
+        #-----
+        # TotalReverse, 2020-09-27:
+        # One more Information: the brake only sends an answer after receiving a
+        # command from the head unit. And the 1942 head unit only sends a command
+        # to the brake after receiving a frame from the host.
+        # You first have to increase the send rate to receive more frames
+        # (answers) from the brake.
+        #
+        # 2020-09-28 Practice shows that retry works; if not a message is given.
+        # Then the buffer is ignored to avoid returning wrong data. The outer
+        # loop will send a command and then receive again.
+        # Perhaps just ignoring the short buffer would be enough as well, but
+        # this has been tested and found working so I leave it.
         #-----------------------------------------------------------------------
         retry = 4
-        data  = array.array('B', [])            # Empty Binary array
+        data  = array.array('B', [])        # Empty Binary array
         while retry and len(data) < 40:
+            time.sleep(0.1)                 # 2020-09-28 short delay @RogerPleijers
             data = self.USB_Read()
             retry -= 1
 
-        if len(data) < 40: logfile.Console('Tacx returns insufficient data, len=%s' % len(data))
+        if len(data) < 40:
+            # 2020-09-28 the buffer is ignored when too short (was processed before)
+            logfile.Console('Tacx returns insufficient data, len=%s' % len(data))
+            if self.PedalStrokeAnalysis:
+                logfile.Console('To resolve, try to run without Pedal Stroke Analysis.')
+            else:
+                logfile.Console('To resolve, check all cabling for loose contacts.')
+        else:
+            #-----------------------------------------------------------------------
+            # Define buffer format
+            #-----------------------------------------------------------------------
+            #nDeviceSerial      =  0                # 0...1
+            fDeviceSerial       = sc.unsigned_short
 
-        #-----------------------------------------------------------------------
-        # Define buffer format
-        #-----------------------------------------------------------------------
-        #nDeviceSerial      =  0                # 0...1
-        fDeviceSerial       = sc.unsigned_short
+            fFiller2_7          = sc.pad * ( 7 - 1) # 2...7
 
-        fFiller2_7          = sc.pad * ( 7 - 1) # 2...7
+            #nYearProduction    =  1                # 8
+            fYearProduction     = sc.unsigned_char
 
-        #nYearProduction    =  1                # 8
-        fYearProduction     = sc.unsigned_char
+            fFiller9_11         = sc.pad * (11 - 8) # 9...11
 
-        fFiller9_11         = sc.pad * (11 - 8) # 9...11
+            nHeartRate          =  2                # 12
+            fHeartRate          = sc.unsigned_char
 
-        nHeartRate          =  2                # 12
-        fHeartRate          = sc.unsigned_char
+            nButtons            =  3                # 13
+            fButtons            = sc.unsigned_char
 
-        nButtons            =  3                # 13
-        fButtons            = sc.unsigned_char
+            #nHeartDetect       =  4                # 14
+            fHeartDetect        = sc.unsigned_char
 
-        #nHeartDetect       =  4                # 14
-        fHeartDetect        = sc.unsigned_char
+            #nErrorCount        =  5                # 15
+            fErrorCount         = sc.unsigned_char
 
-        #nErrorCount        =  5                # 15
-        fErrorCount         = sc.unsigned_char
+            #nAxis0             =  6                # 16-17
+            fAxis0              = sc.unsigned_short
 
-        #nAxis0             =  6                # 16-17
-        fAxis0              = sc.unsigned_short
+            nAxis1              =  7                # 18-19
+            fAxis1              = sc.unsigned_short
 
-        nAxis1              =  7                # 18-19
-        fAxis1              = sc.unsigned_short
+            #nAxis2             =  8                # 20-21
+            fAxis2              = sc.unsigned_short
 
-        #nAxis2             =  8                # 20-21
-        fAxis2              = sc.unsigned_short
+            #nAxis3             =  9                # 22-23
+            fAxis3              = sc.unsigned_short
 
-        #nAxis3             =  9                # 22-23
-        fAxis3              = sc.unsigned_short
+            #nHeader            = 10                # 24-27
+            fHeader             = sc.unsigned_int
 
-        #nHeader            = 10                # 24-27
-        fHeader             = sc.unsigned_int
+            #nDistance          = 11                # 28-31
+            fDistance           = sc.unsigned_int
 
-        #nDistance          = 11                # 28-31
-        fDistance           = sc.unsigned_int
+            nSpeed              = 12                # 32, 33            Wheel speed (Speed = WheelSpeed / SpeedScale in km/h)
+            fSpeed              = sc.unsigned_short
 
-        nSpeed              = 12                # 32, 33            Wheel speed (Speed = WheelSpeed / SpeedScale in km/h)
-        fSpeed              = sc.unsigned_short
+            fFiller34_35        = sc.pad * 2        # 34...35           Increases if you accellerate?
+            fFiller36_37        = sc.pad * 2        # 36...37           Average power?
 
-        fFiller34_35        = sc.pad * 2        # 34...35           Increases if you accellerate?
-        fFiller36_37        = sc.pad * 2        # 36...37           Average power?
+            nCurrentResistance  = 13                # 38, 39
+            fCurrentResistance  = sc.short
 
-        nCurrentResistance  = 13                # 38, 39
-        fCurrentResistance  = sc.short
+            nTargetResistance   = 14                # 40, 41
+            fTargetResistance   = sc.short
 
-        nTargetResistance   = 14                # 40, 41
-        fTargetResistance   = sc.short
+            nEvents             = 15                # 42
+            fEvents             = sc.unsigned_char
 
-        nEvents             = 15                # 42
-        fEvents             = sc.unsigned_char
+            fFiller43           = sc.pad            # 43
 
-        fFiller43           = sc.pad            # 43
+            nCadence            = 16                # 44
+            fCadence            = sc.unsigned_char
 
-        nCadence            = 16                # 44
-        fCadence            = sc.unsigned_char
+            fFiller45           = sc.pad            # 45
 
-        fFiller45           = sc.pad            # 45
+            #nModeEcho          = 17                # 46
+            fModeEcho           = sc.unsigned_char
 
-        #nModeEcho          = 17                # 46
-        fModeEcho           = sc.unsigned_char
+            #nChecksumLSB       = 18                # 47
+            fChecksumLSB        = sc.unsigned_char
 
-        #nChecksumLSB       = 18                # 47
-        fChecksumLSB        = sc.unsigned_char
+            #nChecksumMSB       = 19                # 48
+            fChecksumMSB        = sc.unsigned_char
 
-        #nChecksumMSB       = 19                # 48
-        fChecksumMSB        = sc.unsigned_char
+            fFiller49_63        = sc.pad * (63 - 48)# 49...63
 
-        fFiller49_63        = sc.pad * (63 - 48)# 49...63
+            format = sc.no_alignment + fDeviceSerial + fFiller2_7 + fYearProduction + \
+                    fFiller9_11 + fHeartRate + fButtons + fHeartDetect + fErrorCount + \
+                    fAxis0 + fAxis1 + fAxis2 + fAxis3 + fHeader + fDistance + fSpeed + \
+                    fFiller34_35 + fFiller36_37 + fCurrentResistance + fTargetResistance + \
+                    fEvents + fFiller43 + fCadence + fFiller45 + fModeEcho + \
+                    fChecksumLSB + fChecksumMSB + fFiller49_63
 
-        format = sc.no_alignment + fDeviceSerial + fFiller2_7 + fYearProduction + \
-                fFiller9_11 + fHeartRate + fButtons + fHeartDetect + fErrorCount + \
-                fAxis0 + fAxis1 + fAxis2 + fAxis3 + fHeader + fDistance + fSpeed + \
-                fFiller34_35 + fFiller36_37 + fCurrentResistance + fTargetResistance + \
-                fEvents + fFiller43 + fCadence + fFiller45 + fModeEcho + \
-                fChecksumLSB + fChecksumMSB + fFiller49_63
+            #-----------------------------------------------------------------------
+            # Buffer must be 64 characters (struct.calcsize(format)),
+            # Note that tt_FortiusSB returns 48 bytes only; append with dummy
+            #-----------------------------------------------------------------------
+            for _v in range( 64 - len(data) ):
+                data.append(0)
 
-        #-----------------------------------------------------------------------
-        # Buffer must be 64 characters (struct.calcsize(format)),
-        # Note that tt_FortiusSB returns 48 bytes only; append with dummy
-        #-----------------------------------------------------------------------
-        for _v in range( 64 - len(data) ):
-            data.append(0)
+            #-----------------------------------------------------------------------
+            # Parse buffer
+            #-----------------------------------------------------------------------
+            tuple = struct.unpack (format, data)
+            self.Axis               = tuple[nAxis1]
+            self.Buttons            = tuple[nButtons]
+            self.Cadence            = tuple[nCadence]
+            self.CurrentResistance  = tuple[nCurrentResistance]
+            self.HeartRate          = tuple[nHeartRate]
+            self.PedalEcho          = tuple[nEvents]
+            self.TargetResistanceFT = tuple[nTargetResistance]
+            self.WheelSpeed         = tuple[nSpeed]
 
-        #-----------------------------------------------------------------------
-        # Parse buffer
-        #-----------------------------------------------------------------------
-        tuple = struct.unpack (format, data)
-        self.Axis               = tuple[nAxis1]
-        self.Buttons            = tuple[nButtons]
-        self.Cadence            = tuple[nCadence]
-        self.CurrentResistance  = tuple[nCurrentResistance]
-        self.HeartRate          = tuple[nHeartRate]
-        self.PedalEcho          = tuple[nEvents]
-        self.TargetResistanceFT = tuple[nTargetResistance]
-        self.WheelSpeed         = tuple[nSpeed]
+            self.Wheel2Speed()
+            self.CurrentResistance2Power()
 
-        self.Wheel2Speed()
-        self.CurrentResistance2Power()
-
-        if debug.on(debug.Function):
-            logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
-                        (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
-                        )
+            if debug.on(debug.Function):
+                logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
+                            (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
+                            )
