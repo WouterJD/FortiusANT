@@ -1,4 +1,5 @@
 keyboard
+numpy
 pyusb
 pygame
 pynput
