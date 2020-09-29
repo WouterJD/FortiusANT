@@ -1,11 +1,12 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-09-28"
-# 2020-09-28    If NO ANTdongle present; users want to be able to test
+__version__ = "2020-09-29"
+# 2020-09-29    If NO ANTdongle present; users want to be able to test
 #               FortiusANT to evaluate the software before bying dongles.
 #               Therefore in manual mode, no ANTdongle required.
 #               Of course for USB-trainers only (==> not clv.Tacx_iVortex)
+#               Typo's corrected (thanks RogerPleijers)
 # 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
 # 2020-06-11    Added: BikePowerProfile (master)
 # 2020-06-09    Added: SpeedAndCadenceSensor (master)
@@ -246,7 +247,7 @@ def LocateHW(self):
         pass
     else:
         AntDongle = ant.clsAntDongle()
-        if AntDongle.OK or not clv.Tacx_iVortex:                    # 2020-09-28
+        if AntDongle.OK or not clv.Tacx_iVortex:                    # 2020-09-29
              if clv.manual:      AntDongle.Message += ' (manual power)'
              if clv.manualGrade: AntDongle.Message += ' (manual grade)'
         self.SetMessages(Dongle=AntDongle.Message)
@@ -273,8 +274,8 @@ def LocateHW(self):
     # Done
     #---------------------------------------------------------------------------
     if debug.on(debug.Application): logfile.Write ("Scan for hardware - end")
-                                                                    # 2020-09-28
-    return ((AntDongle.OK or (not clv.Tacx_iVortex AND (clv.manual or clv.manualgrade))) \
+                                                                    # 2020-09-29
+    return ((AntDongle.OK or (not clv.Tacx_iVortex and (clv.manual or clv.manualGrade))) \
             and TacxTrainer.OK)
     
 # ------------------------------------------------------------------------------

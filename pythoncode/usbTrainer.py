@@ -1,8 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-09-28"
-# 2020-09-28    Short buffer <40 error recovery improved
+__version__ = "2020-09-29"
+# 2020-09-29    Short buffer <40 error recovery improved
+#               Typo's corrected (thanks RogerPleijers)
 # 2020-06-16    Corrected: USB_read() must always return array of bytes
 # 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
 # 2020-06-11    Changed: if clsTacxNewUsbTrainer less than 40 bytes received, retry
@@ -1565,7 +1566,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         # You first have to increase the send rate to receive more frames
         # (answers) from the brake.
         #
-        # 2020-09-28 Practice shows that retry works; if not a message is given.
+        # 2020-09-29 Practice shows that retry works; if not a message is given.
         # Then the buffer is ignored to avoid returning wrong data. The outer
         # loop will send a command and then receive again.
         # Perhaps just ignoring the short buffer would be enough as well, but
@@ -1574,14 +1575,14 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         retry = 4
         data  = array.array('B', [])        # Empty Binary array
         while retry and len(data) < 40:
-            time.sleep(0.1)                 # 2020-09-28 short delay @RogerPleijers
+            time.sleep(0.1)                 # 2020-09-29 short delay @RogerPleijers
             data = self.USB_Read()
             retry -= 1
 
         if len(data) < 40:
-            # 2020-09-28 the buffer is ignored when too short (was processed before)
+            # 2020-09-29 the buffer is ignored when too short (was processed before)
             logfile.Console('Tacx returns insufficient data, len=%s' % len(data))
-            if self.PedalStrokeAnalysis:
+            if self.clv.PedalStrokeAnalysis:
                 logfile.Console('To resolve, try to run without Pedal Stroke Analysis.')
             else:
                 logfile.Console('To resolve, check all cabling for loose contacts.')
