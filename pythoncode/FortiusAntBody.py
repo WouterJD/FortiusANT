@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-09-29"
+__version__ = "2020-09-30"
+# 2020-09-30    During Runoff, modeCalibrate was used instead of modeResistance
+#                   an error introduced with release 3.0 and now resolved.
 # 2020-09-29    If NO ANTdongle present; users want to be able to test
 #               FortiusANT to evaluate the software before bying dongles.
 #               Therefore in manual mode, no ANTdongle required.
@@ -330,7 +332,7 @@ def Runoff(self):
         #-----------------------------------------------------------------------
         # Get data from trainer
         #-----------------------------------------------------------------------
-        TacxTrainer.Refresh(True, usbTrainer.modeCalibrate) # This cannot be an ANT trainer
+        TacxTrainer.Refresh(True, usbTrainer.modeResistance) # This cannot be an ANT trainer
 
         #-----------------------------------------------------------------------
         # Show what happens
