@@ -1,8 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v3.2.1"
-__version__ = "2020-06-17"
+WindowTitle = "Fortius Antifier v3.2.2"
+__version__ = "2020-10-01"
+# 2020-10-01    Version 3.2.2:
+#               - Enable manual mode withoout ANT dongle
+#               - Correct runoff procedure
 # 2020-05-17    Version 3.2.1; two crashes solved
 # 2020-05-12    Version 3.2 with SCS and PWR profile
 # 2020-05-24    Initial GUI messages made more general
