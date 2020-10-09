@@ -2,6 +2,7 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-10-09"
+# 2020-10-09    Added: -u uphill
 # 2020-05-12    Default flags when no command-line arguments specified
 #               especially for the novice users.
 # 2020-04-30    Added: PedalStrokeAnalysis
@@ -16,7 +17,6 @@ __version__ = "2020-10-09"
 #               disabled (#scs) on command-line since not implemented
 # 2020-02-09    Added: -H hrm
 # 2020-01-23    Added: -m manualGrade
-# 2020-10-09    Added: -u uphill
 #-------------------------------------------------------------------------------
 import argparse
 import sys

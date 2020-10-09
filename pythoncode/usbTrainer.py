@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-09-29"
+__version__ = "2020-10-09"
+# 2020-10-09    Added: -u uphill
 # 2020-09-29    Short buffer <40 error recovery improved
 #               Typo's corrected (thanks RogerPleijers)
 # 2020-06-16    Corrected: USB_read() must always return array of bytes
@@ -668,6 +669,7 @@ class clsTacxTrainer():
         Pair  = 0.5 * p_cdA * (v+w) * (v+w) * d * v # Watt
 
         i     = self.TargetGrade                    # Percentage 0...100
+        if self.clv.uphill and i < 0: i = 0         # 2020-10-09 suppress downhill
         Pslope= i/100 * m * g * v                   # Watt
 
         self.TargetPower = int(Proll + Pair + Pslope)
@@ -693,6 +695,7 @@ class clsTacxTrainer():
         Pair  = 0.5 * p * cdA * (v+w)*(v+w)* v  # Watt
 
         i     = self.TargetGrade                # Percentage 0...100
+        if self.clv.uphill and i < 0: i = 0     # 2020-10-09 suppress downhill
         Pslope= i/100 * m * g * v               # Watt
 
         Pbike = 37
