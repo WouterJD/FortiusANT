@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-12"
+__version__ = "2020-10-09"
 # 2020-05-12    Default flags when no command-line arguments specified
 #               especially for the novice users.
 # 2020-04-30    Added: PedalStrokeAnalysis
@@ -16,6 +16,7 @@ __version__ = "2020-05-12"
 #               disabled (#scs) on command-line since not implemented
 # 2020-02-09    Added: -H hrm
 # 2020-01-23    Added: -m manualGrade
+# 2020-10-09    Added: -u uphill
 #-------------------------------------------------------------------------------
 import argparse
 import sys
@@ -53,6 +54,8 @@ class CommandLineVariables(object):
     TacxType        = False
     Tacx_iVortex    = False
 
+    uphill          = False      # introduced 2020-10-09; Negative grade is ignored
+
     #---------------------------------------------------------------------------
     # Deprecated
     #---------------------------------------------------------------------------
@@ -89,8 +92,8 @@ class CommandLineVariables(object):
         parser.add_argument('-d','--debug',     help='Show debugging data',                                 required=False, default=False)
         parser.add_argument('-g','--gui',       help='Run with graphical user interface',                   required=False, action='store_true')
         parser.add_argument('-H','--hrm',       help='Pair this Heart Rate Monitor (0: any, -1: none)',     required=False, default=False)
-        parser.add_argument('-m','--manual',    help='Run manual power (ignore target from ANT+ Dongle)',     required=False, action='store_true')
-        parser.add_argument('-M','--manualGrade',help='Run manual grade (ignore target from ANT+ Dongle)',    required=False, action='store_true')
+        parser.add_argument('-m','--manual',    help='Run manual power (ignore target from ANT+ Dongle)',   required=False, action='store_true')
+        parser.add_argument('-M','--manualGrade',help='Run manual grade (ignore target from ANT+ Dongle)',  required=False, action='store_true')
         parser.add_argument('-n','--calibrate', help='Do not calibrate before start',                       required=False, action='store_false')
         parser.add_argument('-p','--factor',    help='Adjust target Power by multiplying by this factor for static calibration',
                                                                                                             required=False, default=False)
@@ -99,6 +102,7 @@ class CommandLineVariables(object):
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
         parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
+        parser.add_argument('-u','--uphill',    help='Uphill only; negative grade is ignored',              required=False, action='store_true')
 
         #-----------------------------------------------------------------------
         # Deprecated
@@ -125,6 +129,7 @@ class CommandLineVariables(object):
         self.PowerMode              = args.PowerMode
         self.PedalStrokeAnalysis    = args.PedalStrokeAnalysis
         self.SimulateTrainer        = args.simulate
+        self.uphill                 = args.uphill
 
         if self.manual and self.manualGrade:
             logfile.Console("-m and -M are mutually exclusive; manual power selected")
@@ -329,6 +334,7 @@ class CommandLineVariables(object):
             if      self.args.simulate:      logfile.Console("-s")
 #scs        if      self.args.scs:           logfile.Console("-S %s" % self.scs )
             if      self.args.TacxType:      logfile.Console("-t %s" % self.TacxType)
+            if      self.uphill:             logfile.Console("-u")
 
             #-------------------------------------------------------------------
             # Deprecated
