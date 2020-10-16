@@ -1,1 +1,0 @@
-Please read https://github.com/WouterJD/FortiusANT/wiki
