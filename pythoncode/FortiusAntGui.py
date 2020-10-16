@@ -1,8 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v3.2.2"
-__version__ = "2020-10-01"
+WindowTitle = "Fortius Antifier v3.3"
+__version__ = "2020-10-16"
 # 2020-10-01    Version 3.2.2:
 #               - Enable manual mode withoout ANT dongle
 #               - Correct runoff procedure
