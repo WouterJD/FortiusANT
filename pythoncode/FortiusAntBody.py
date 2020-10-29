@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-09-30"
+__version__ = "2020-10-20"
+# 2020-10-20    Pedalling replaced by pedaling.
 # 2020-09-30    During Runoff, modeCalibrate was used instead of modeResistance
 #                   an error introduced with release 3.0 and now resolved.
 # 2020-09-29    If NO ANTdongle present; users want to be able to test
@@ -45,7 +46,7 @@ __version__ = "2020-09-30"
 # 2020-04-09    The PowercurveFactor is displayed as Digital Gearbox in number of
 #                   teeth. factor = 1 = 15 teeth.
 #               Not a bitmap but (new experience in Python) drawing rectangles.
-# 2020-04-07    Before Calibrating, "Start pedalling" is displayed
+# 2020-04-07    Before Calibrating, "Start pedaling" is displayed
 #               PowercurveFactor is limitted to 0.3 ... 3
 #               Runoff gives error "Calibrate not defined", resolved
 #                   Messaging improved, method is still as inherited from antifier
@@ -317,8 +318,8 @@ def Runoff(self):
     #CALIBRATION TIPS: 
     #1. Tyre pressure 100psi (unloaded and cold) aim for 7.2s rolloff
     #2. Warm up for 2 mins, then cycle 30kph-40kph for 30s 
-    #3. SpeedKmh up to above 40kph then stop pedalling and freewheel
-    #4. Rolldown timer will start automatically when you hit 40kph, so stop pedalling quickly!
+    #3. SpeedKmh up to above 40kph then stop pedaling and freewheel
+    #4. Rolldown timer will start automatically when you hit 40kph, so stop pedaling quickly!
     #''')
     if clv.PedalStrokeAnalysis:
         CycleTime = CycleTimeFast   # Quick poll to get more info
@@ -350,7 +351,7 @@ def Runoff(self):
                 self.SetMessages(Tacx=TacxTrainer.Message + " - Cycle to above 40kph (then stop)")
             else:
                 self.SetMessages(Tacx=TacxTrainer.Message + \
-                                    " - Rolldown timer %s - STOP pedalling!" % \
+                                    " - Rolldown timer %s - STOP pedaling!" % \
                                     ( round((time.time() - rolldown_time),1) ) \
                                 )
           
@@ -403,7 +404,7 @@ def Runoff(self):
             LastPedalEcho = TacxTrainer.PedalEcho
             
             if TacxTrainer.CurrentPower > 50 and TacxTrainer.Cadence > 30:
-                # Gather some statistics while really pedalling
+                # Gather some statistics while really pedaling
                 PowerCount += 1
                 if TacxTrainer.CurrentPower == LastPower: PowerEqual += 1
                 LastPower = TacxTrainer.CurrentPower
@@ -590,13 +591,13 @@ def Tacx2DongleSub(self, Restart):
     CountDown       = 120 * 4 # 8 minutes; 120 is the max on the cadence meter
     ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for running everage
     Calibrate       = 0
-    StartPedalling  = True
+    StartPedaling   = True
     Counter         = 0
 
     if TacxTrainer.CalibrateSupported():
         self.SetMessages(Tacx="* * * * S T A R T   P E D A L L I N G * * * *")
         if debug.on(debug.Function):
-            logfile.Write('Tacx2Dongle; start pedalling for calibration')
+            logfile.Write('Tacx2Dongle; start pedaling for calibration')
     try:
     # if True:
         while         self.RunningSwitch \
@@ -618,7 +619,7 @@ def Tacx2DongleSub(self, Restart):
             # First reading on 'my' Fortius shows a positive number, then goes negative
             # so ignore the first x readings before deciding it will not work.
             #-------------------------------------------------------------------
-            # print(StartPedalling, SpeedKmh, CurrentResistance)
+            # print(StartPedaling, SpeedKmh, CurrentResistance)
             if TacxTrainer.CurrentResistance > 0:
                 Counter += 1
                 if Counter == 10:
@@ -629,14 +630,14 @@ def Tacx2DongleSub(self, Restart):
                 # Calibration is started (with pedal kick)
                 #---------------------------------------------------------------
                 # Show progress (when calibrating is started)
-                # This changes the message from "Start Pedalling" to "Calibrating"
+                # This changes the message from "Start Pedaling" to "Calibrating"
                 # The message must be given once for the console-mode (no GUI)
                 #---------------------------------------------------------------
-                if StartPedalling:
+                if StartPedaling:
                     self.SetMessages(Tacx="* * * * C A L I B R A T I N G * * * *")
                     if debug.on(debug.Function):
                         logfile.Write('Tacx2Dongle; start calibration')
-                    StartPedalling = False
+                    StartPedaling = False
 
                 self.SetValues(TacxTrainer.SpeedKmh, int(CountDown/4), \
                         round(TacxTrainer.CurrentPower * -1,0), \

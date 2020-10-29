@@ -1,7 +1,12 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-10-09"
+__version__ = "2020-10-22"
+# 2020-10-22    Removed: superfluous logging in _ReceiveFromTrainer()
+# 2020-10-20    Changed: minimum resistance was limitted to the calibrate value
+#                   which complicated life for low-FTP athletes.
+#                   Therefore this lower limit is removed.
+# 2020-10-20    Added: self.DynamicAdjust
 # 2020-10-09    Added: -u uphill
 # 2020-09-29    Short buffer <40 error recovery improved
 #               Typo's corrected (thanks RogerPleijers)
@@ -220,6 +225,7 @@ class clsTacxTrainer():
     TargetGrade             = 0             # no grade
     TargetPower             = 100           # and 100Watts
     TargetResistance        = 0             # calculated and input to trainer
+    DynamicAdjust           = 1             # adjustment when CurrentPower <> TargetPower
 
     # Information provided by CTP
     BicycleWeight           = 10
@@ -555,6 +561,55 @@ class clsTacxTrainer():
             self.CurrentPower      /= self.clv.PowerFactor  # Was just received
 
         # ----------------------------------------------------------------------
+        # Dynamic Adjustment of Resistance
+        # ----------------------------------------------------------------------
+        # In PowerMode, first we calculate TargetResistance (based upon TargetPower and Speed)
+        # and as a consequence, the CurrentPower should be equal to TargetPower.
+        # If the Speed goes up, Resistance goes down (and vv).
+        #
+        # If CurrentPower does not match TargetPower (at a stable speed) the
+        # calculation may be off and we correct that here. This appeared to be
+        # usefull for very low target-powers (e.g. FTP=50Watt) because that's
+        # close to the power you need to ride without brake activated.
+        #
+        # Refer to SendToTrainerUSBData(); the minimum Resistance was limitted to
+        # avoid the motor-brake function, which seemed strange. But especially
+        # in these low-power situations, it is applicable. 
+        # So this entire section could be obsolete (realized with if True).
+        # ----------------------------------------------------------------------
+        # If the CurrentPower is higher than the TargetPower, we could correct
+        # with a factor (CurrentPower / TargetPower).
+        # To avoid too quick correct we adjust only partially every cycle.
+        #
+        # DynamicAdjust is limitted to range 0.1 ... 2
+        #
+        # Is disabled with "If False"
+        # ----------------------------------------------------------------------
+        if False:
+            if self.TargetMode != mode_Power or self.CurrentPower < 25:
+                self.DynamicAdjust = 1                  # and no further action
+            else:
+                da   = self.TargetPower / self.CurrentPower
+                Low  = 0.01     # Don't drop to 0, you would never get back again!
+                High = 2.0      # Just to have an upper limit
+                NrCycles = 10   # Adjust the full difference in X cycles
+
+                self.DynamicAdjust *= ( NrCycles + da ) / ( NrCycles + 1 )
+                self.DynamicAdjust = max(Low,  self.DynamicAdjust)
+                self.DynamicAdjust = min(High, self.DynamicAdjust)
+
+                # Write to logfile, but only when changing and not too many
+                if not (0.95 < da and da < 1.05) and (Low < self.DynamicAdjust and self.DynamicAdjust < High):
+                    logfile.Console ("CurrentPower %4.1f does not match TargetPower %3.0f ==> Correct = %3.2f" % \
+                                        (self.CurrentPower, self.TargetPower, self.DynamicAdjust)  \
+                                    )
+                # ------------------------------------------------------------------
+                # Dynamically adjust resistance
+                # Note: CurrentResistance and the CurrentPower remain unchanged!
+                # ------------------------------------------------------------------
+                self.TargetResistance *= self.DynamicAdjust    # Will be sent
+
+        # ----------------------------------------------------------------------
         # Round after all these calculations
         # ----------------------------------------------------------------------
         self.TargetPower         = int(self.TargetPower)
@@ -724,7 +779,7 @@ class clsSimulatedTrainer(clsTacxTrainer):
     #
     #               Just for fun, generate values based upon what the trainer
     #               program wants so that a live simulation can be generated.
-    #               For example to make a video without pedalling.
+    #               For example to make a video without pedaling.
     #
     #               The CurrentPower smoothly adjust to TargetPower
     #               The HeartRate follows the CurrentPower produced
@@ -1140,7 +1195,6 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     #---------------------------------------------------------------------------
     def USB_Read(self):
         data = array.array('B', [])             # Empty array of bytes
-        logfile.Print(data, type(data))
         try:
             data = self.UsbDevice.read(0x82, 64, 30)
         except TimeoutError:
@@ -1533,8 +1587,21 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
                                                             # TotalReverse, updated 2020-01-04
         fCalibrate          = sc.unsigned_short     # 10, 11    Depends on mode
 
-        if self.TargetMode == mode_Power and Target < Calibrate:
-            Target = Calibrate        # Avoid motor-function for low TargetPower
+        #-----------------------------------------------------------------------
+        # Avoid motor-function for low TargetPower
+        # The motor-function seemed odd when this piece of code was created.
+        # BUT: for people with a very low FTP (50 Watt), the resistance of the
+        #      bike without brake is already more than the required power and
+        #      hence motor-operation is usefull
+        # This became apparent when implementing DynamicAdjust, which aimed to
+        # reduce the resistance below the calculated value, but it was minimized
+        # here :-)
+        #
+        # Is disabled with "if False"
+        #-----------------------------------------------------------------------
+        if False and self.TargetMode == mode_Power and Target < Calibrate:
+            Target = Calibrate        
+
         #-----------------------------------------------------------------------
         # Build data buffer to be sent to trainer (legacy or new)
         #-----------------------------------------------------------------------
