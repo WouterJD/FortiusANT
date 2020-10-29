@@ -233,7 +233,8 @@ DeviceTypeID_HRM        = DeviceTypeID_heart_rate
 DeviceTypeID_PWR        = DeviceTypeID_bike_power
 DeviceTypeID_SCS        = DeviceTypeID_bike_speed_cadence
 DeviceTypeID_VTX        = 61            # Tacx i-Vortex
-                                        # 0x3d  according TotalReverse
+DeviceTypeID_GNS        = 83            # Tacx i-Genius
+# 0x3d  according TotalReverse
 DeviceTypeID_VHU        = 0x3e          # Thanks again to TotalReverse
 # https://github.com/WouterJD/FortiusANT/issues/46#issuecomment-616838329
 
@@ -242,7 +243,8 @@ TransmissionType_IC_GDP = 0x05          #           0x01 = Independant Channel
                                         #           0x04 = Global datapages used
 TransmitPower_0dBm      = 0x03          # 9.4.3     Output Power Level Settings
 RfFrequency_2457Mhz     =   57          # 9.5.2.6   Channel RF Frequency
-RfFrequency_2466Mhz     =   66          # used for Tacx i-Vortex only
+RfFrequency_2460Mhz     =   60          # used for Tacx i-Vortex only
+RfFrequency_2466Mhz     =   66          # used for Tacx i-Genius only
 RfFrequency_2478Mhz     = 0x4e          # used for Tacx i-Vortex Headunit
 #---------------------------------------------------------------------------
 # c l s A n t D o n g l e
@@ -767,6 +769,22 @@ class clsAntDongle():
             msg51_ChannelID             (channel_VTX_s, DeviceNumber, DeviceTypeID_VTX, TransmissionType_IC),
             msg45_ChannelRfFrequency    (channel_VTX_s, RfFrequency_2466Mhz),
             msg43_ChannelPeriod         (channel_VTX_s, ChannelPeriod=0x2000),
+            msg60_ChannelTransmitPower  (channel_VTX_s, TransmitPower_0dBm),
+            msg4B_OpenChannel           (channel_VTX_s),
+            msg4D_RequestMessage        (channel_VTX_s, msgID_ChannelID)
+        ]
+        self.Write(messages)
+
+    def SlaveGNS_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Genius
+        if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
+        else:                s = ", any device"
+        logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Genius (GNS Controller)' + s)
+        if debug.on(debug.Data1): logfile.Write ("SlaveGNS_ChannelConfig()")
+        messages=[
+            msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
+            msg51_ChannelID             (channel_VTX_s, DeviceNumber, DeviceTypeID_GNS, TransmissionType_IC),
+            msg45_ChannelRfFrequency    (channel_VTX_s, RfFrequency_2460Mhz),
+            msg43_ChannelPeriod         (channel_VTX_s, ChannelPeriod=0x1000),
             msg60_ChannelTransmitPower  (channel_VTX_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_VTX_s),
             msg4D_RequestMessage        (channel_VTX_s, msgID_ChannelID)
@@ -2108,6 +2126,84 @@ def msgPage82_BatteryStatus(Channel):
     info  = struct.pack (format, Channel, DataPageNumber, 0xff, 0x00, 0,0,0, 0, 0x0f | 0x10 | 0x00)
 
     return info
+
+# ------------------------------------------------------------------------------
+# P a g e D C   S e t S l o p e
+# ------------------------------------------------------------------------------
+# Refer:    https://github.com/fluxoid-org/CyclismoProject/wiki/Tacx-Bushido-Headunit-protocol
+# ------------------------------------------------------------------------------
+def msgPageDC_TacxGeniusSetSlope (Channel, Slope, Weight):
+    DataPageNumber      = 220
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fCommand            = sc.unsigned_char
+    fSubcommand         = sc.unsigned_char
+    fSlopeSign          = sc.unsigned_char
+    fSlope              = sc.unsigned_char
+    fWeight             = sc.unsigned_char
+    fPadding            = sc.pad * 2
+
+    Slope = Slope / 10
+    slopeSign = 0
+    if Slope < 0:
+        Slope += 256
+        slopeSign = 0xff
+
+    format = sc.big_endian +    fChannel + fDataPageNumber + fCommand + fSubcommand + fSlopeSign + fSlope + fWeight + fPadding
+    info   = struct.pack(format, Channel,   DataPageNumber,  1,         0,            slopeSign,   int(Slope), int(Weight))
+
+    return info
+
+# ------------------------------------------------------------------------------
+# P a g e D C   S e t P o w e r
+# ------------------------------------------------------------------------------
+# Refer:    https://github.com/fluxoid-org/CyclismoProject/wiki/Tacx-Bushido-Headunit-protocol
+# ------------------------------------------------------------------------------
+def msgPageDC_TacxGeniusSetPower (Channel, Power, Weight):
+    DataPageNumber      = 220
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fCommand            = sc.unsigned_char
+    fSubcommand         = sc.unsigned_char
+    fPower              = sc.unsigned_short
+    fWeight             = sc.unsigned_char
+    fPadding            = sc.pad * 2
+
+    Power = max(0, Power)                   # --> No simulation descent ==> power > 0
+
+    format = sc.big_endian +    fChannel + fDataPageNumber + fCommand + fSubcommand + fPower + fWeight + fPadding
+    info   = struct.pack(format, Channel,   DataPageNumber,  1,        1,             int(Power),   int(Weight))
+
+    return info
+
+# ------------------------------------------------------------------------------
+# P a g e D D   G e t S p e e d  P o w e r  a n d  C a d e n c e
+# ------------------------------------------------------------------------------
+# Refer:    https://github.com/fluxoid-org/CyclismoProject/wiki/Tacx-Bushido-Headunit-protocol
+# ------------------------------------------------------------------------------
+def msgUnpageDD_TacxGeniusData (info):
+    fChannel            = sc.unsigned_char  #0 First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # payload[0] First byte of the ANT+ datapage
+    fIndex              = sc.unsigned_char
+
+    fSpeed              = sc.unsigned_short # speed * 10
+    nSpeed              = 3
+    fPower              = sc.unsigned_short  # power
+    nPower              = 4
+    fCadence            = sc.unsigned_char  # cadence in rpm
+    nCadence            = 5
+    fUnknown            = sc.unsigned_char  # maybe L/R power distribution
+
+    format= sc.big_endian + fChannel + fDataPageNumber + fIndex + fSpeed + fPower + fCadence + fUnknown
+    tuple = struct.unpack (format, info)
+
+    Power = tuple[nPower]
+    Speed = tuple[nSpeed]
+    Cadence = tuple[nCadence]
+
+    return Power, Speed, Cadence
 
 # ------------------------------------------------------------------------------
 # P a g e 0, 1, 2   H e a r t R a t e I n f o

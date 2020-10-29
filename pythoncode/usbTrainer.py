@@ -286,6 +286,7 @@ class clsTacxTrainer():
         #-----------------------------------------------------------------------
         if clv.SimulateTrainer: return clsSimulatedTrainer(clv)
         if clv.Tacx_iVortex:    return clsTacxAntVortexTrainer(clv, AntDevice)
+        if clv.Tacx_iGenius:    return clsTacxAntGeniusTrainer(clv, AntDevice)
             
         #-----------------------------------------------------------------------
         # So we are going to initialize USB
@@ -1072,6 +1073,288 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                     #-----------------------------------------------------------
                     info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (\
                                              ant.channel_VHU_s, ant.VHU_PCmode)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    messages.append ( msg )
+
+            #-------------------------------------------------------------------
+            # Outer loop does not need to handle channel_VHU_s messages
+            #-------------------------------------------------------------------
+            dataHandled = True
+
+        #-----------------------------------------------------------------------
+        # Send messages, leave receiving to the outer loop
+        #-----------------------------------------------------------------------
+        if messages:
+            self.AntDevice.Write(messages, False, False)
+
+        return dataHandled
+
+#-------------------------------------------------------------------------------
+# c l s T a c x A n t G e n i u s T r a i n e r
+#-------------------------------------------------------------------------------
+# Tacx-trainer with ANT connection
+# Actually, only the data-storage and Refresh() with Grade2Power() is used!
+#-------------------------------------------------------------------------------
+class clsTacxAntGeniusTrainer(clsTacxTrainer):
+    def __init__(self, clv, AntDevice):
+        super().__init__(clv, "Pair with Tacx i-Genius and Headunit")
+        if debug.on(debug.Function):logfile.Write ("clsTacxAntGeniusTrainer.__init__()")
+        self.AntDevice         = AntDevice
+        self.OK                = True           # The AntDevice is there,
+        # the trainer not yet paired!
+
+        self.__ResetTrainer()
+
+    def __ResetTrainer(self):
+        self.__AntGNSpaired    = False
+        self.__AntVHUpaired    = False
+        self.__DeviceNumberGNS = 0              # provided by CHANNEL_ID msg
+        self.__DeviceNumberVHU = 0
+
+        self.__Cadence         = 0              # provided by datapage 0
+        self.__CurrentPower    = 0
+        self.__WheelSpeed      = 0
+        self.__SpeedKmh        = 0              #     (from WheelSpeed)
+
+        self.__iGeniusButtons  = 0              # provided by datapage 221
+
+        self.Message = 'Pair with Tacx i-Genius and Headunit'
+
+    #---------------------------------------------------------------------------
+    # R e c e i v e F r o m T r a i n e r
+    #---------------------------------------------------------------------------
+    # input     __data as collected by HandleANTmessage
+    #
+    # function  Now provide data to TacxTrainer
+    #
+    # returns   Buttons, Cadence, CurrentPower, SpeedKmh, Message
+    #
+    #           NOT: HeartRate, TargetResistance, CurrentResistance, PedalEcho
+    #                WheelSpeed
+    #---------------------------------------------------------------------------
+    def _ReceiveFromTrainer(self):
+        # ----------------------------------------------------------------------
+        # Data provided by data pages
+        # ----------------------------------------------------------------------
+        self.Cadence      = self.__Cadence
+        self.CurrentPower = self.__CurrentPower
+        self.WheelSpeed   = self.__WheelSpeed
+
+        self.SpeedKmh     = self.WheelSpeed / 10    # Speed = in 0.1 km/hr
+
+        # ----------------------------------------------------------------------
+        # Translate i-Genius buttons to TacxTrainer.Buttons.
+        # Mapping according copied from Tacx iVortex class:
+        # ----------------------------------------------------------------------
+        if   self.__iGeniusButtons == 0: self.Buttons = 0
+        elif self.__iGeniusButtons == 1: self.Buttons = CancelButton # Left
+        elif self.__iGeniusButtons == 2: self.Buttons = UpButton
+        elif self.__iGeniusButtons == 3: self.Buttons = OKButton
+        elif self.__iGeniusButtons == 4: self.Buttons = DownButton
+        elif self.__iGeniusButtons == 5: self.Buttons = EnterButton  # Right
+        self.__iGeniusButtons = 0
+
+        # ----------------------------------------------------------------------
+        # Compose displayable message
+        # ----------------------------------------------------------------------
+        if self.__DeviceNumberGNS:
+            self.Message = 'Tacx i-Genius paired: %s' % self.__DeviceNumberGNS
+        else:
+            self.Message = "Pair with Tacx i-Genius"
+
+        if self.__DeviceNumberVHU:
+            self.Message += ', Headunit: %s' % self.__DeviceNumberVHU
+        else:
+            self.Message += ', Headunit'
+
+        if not (self.__DeviceNumberGNS and self.__DeviceNumberVHU):
+            self.Message += ' (pairing can take a minute)'
+
+    #---------------------------------------------------------------------------
+    # SendToTrainer()
+    #---------------------------------------------------------------------------
+    def SendToTrainer(self, QuarterSecond, TacxMode):
+        if TacxMode == modeStop:
+            self.__ResetTrainer()                       # Must be paired again!
+
+        if QuarterSecond:
+            messages = []
+            if TacxMode ==  modeResistance:
+                #---------------------------------------------------------------
+                # Set target power
+                #---------------------------------------------------------------
+                if self.__AntGNSpaired and self.__GeniusID:
+                    info = ant.msgPageDC_TacxGeniusSetPower (ant.channel_VTX_s, \
+                                                             self.TargetPower, self.UserAndBikeWeight)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    messages.append ( msg )
+
+                #---------------------------------------------------------------
+                # Avoid power off on headunit
+                #---------------------------------------------------------------
+                if self.__AntVHUpaired:
+                    info = ant.msgPage000_TacxVortexHU_StayAlive (ant.channel_VHU_s)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    messages.append ( msg )
+
+            elif TacxMode ==  modeStop:
+                #---------------------------------------------------------------
+                # Switch headunit to trainer control mode
+                #---------------------------------------------------------------
+                if self.__AntVHUpaired:
+                    info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode ( \
+                        ant.channel_VHU_s, ant.VHU_Normal)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    messages.append ( msg )
+
+            #-------------------------------------------------------------------
+            # Send messages, leave receiving to the outer loop
+            #-------------------------------------------------------------------
+            if messages:
+                self.AntDevice.Write(messages, False, False)
+
+    #---------------------------------------------------------------------------
+    # TargetPower2Resistance
+    #
+    # TargetResistance is used for the i-Genius, even when expressed in Watt, so
+    # that PowerFactor and PowercurveFactor apply; see clsUsbTrainer.Refresh().
+    #---------------------------------------------------------------------------
+    def TargetPower2Resistance(self):
+        self.TargetResistance = self.TargetPower
+
+    #---------------------------------------------------------------------------
+    # Refresh()
+    # No special actions required
+    # Note that TargetResistance=0 for the i-Genius; TargetPower is sent!
+    #---------------------------------------------------------------------------
+    # def Refresh(self, QuarterSecond, TacxMode):
+    #     super().Refresh(QuarterSecond, TacxMode)
+    #     if debug.on(debug.Function):logfile.Write ("clsTacxAntGeniusTrainer.Refresh()")
+    #     pass
+
+    #---------------------------------------------------------------------------
+    # HandleANTmessage()
+    #---------------------------------------------------------------------------
+    def HandleANTmessage(self, msg):
+        _synch, _length, id, info, _checksum, _rest, Channel, DataPageNumber = \
+            ant.DecomposeMessage(msg)
+        dataHandled = False
+        messages    = []
+        #-----------------------------------------------------------------------
+        # VTX_s = Tacx i-Genius trainer
+        #-----------------------------------------------------------------------
+        if Channel == ant.channel_VTX_s:
+            if id == ant.msgID_AcknowledgedData:
+                dataHandled = True
+
+            #-------------------------------------------------------------------
+            # BroadcastData - info received from the master device
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_BroadcastData:
+                #---------------------------------------------------------------
+                # Ask what device is paired
+                #---------------------------------------------------------------
+                if not self.__AntGNSpaired:
+                    msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
+                    messages.append ( msg )
+
+                #---------------------------------------------------------------
+                # Data page DD msgUnpageDD_TacxGeniusDataSpeed
+                #---------------------------------------------------------------
+                if DataPageNumber == 0xdd and info[2] == 1:
+                    dataHandled = True
+                    self.__CurrentPower, self.__WheelSpeed, self.__Cadence = \
+                        ant.msgUnpageDD_TacxGeniusData(info)
+
+                    if debug.on(debug.Function):
+                        logfile.Write ('i-Genius Page=%s  Power=%s Speed=%s Cadence=%s' % \
+                                       (DataPageNumber, self.__CurrentPower, \
+                                        self.__SpeedKmh, self.__Cadence) )
+
+                #---------------------------------------------------------------
+                # Data page 01 msgUnpage01_TacxGeniusDataSerial
+                #---------------------------------------------------------------
+                elif DataPageNumber == 1:
+                    dataHandled = True
+                    VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm = ant.msgUnpage01_TacxVortexDataSerial(info)
+                    if debug.on(debug.Function):
+                        logfile.Write ('i-Genius Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % \
+                                       (DataPageNumber, VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm) )
+
+                #---------------------------------------------------------------
+                # Data page 02 msgUnpage02_TacxGeniusDataVersion
+                #---------------------------------------------------------------
+                elif DataPageNumber == 2:
+                    dataHandled = True
+                    VTX_Major, VTX_Minor, VTX_Build = ant.msgUnpage02_TacxVortexDataVersion(info)
+                    if debug.on(debug.Function):
+                        logfile.Write ('i-Genius Page=%s Major=%s Minor=%s Build=%s' % \
+                                       (DataPageNumber, VTX_Major, VTX_Minor, VTX_Build))
+
+            #-------------------------------------------------------------------
+            # ChannelID - the info that a master on the network is paired
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_ChannelID:
+                Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \
+                    ant.unmsg51_ChannelID(info)
+
+                if DeviceTypeID == ant.DeviceTypeID_VTX:
+                    dataHandled = True
+                    self.__AntGNSpaired    = True
+                    self.__DeviceNumberGNS = DeviceNumber
+
+            #-------------------------------------------------------------------
+            # Outer loop does not need to handle channel_VTX_s messages
+            #-------------------------------------------------------------------
+            dataHandled = True
+
+        #-----------------------------------------------------------------------
+        # VHU_s = Tacx i-Genius headunit
+        #-----------------------------------------------------------------------
+        elif Channel == ant.channel_VHU_s:
+            if id == ant.msgID_AcknowledgedData:
+                #---------------------------------------------------------------
+                # Data page 221 TacxGeniusHU_ButtonPressed
+                #---------------------------------------------------------------
+                if DataPageNumber == 221:
+                    dataHandled = True
+                    self.__iGeniusButtons = \
+                        ant.msgUnpage221_TacxGeniusHU_ButtonPressed (info)
+
+            #-------------------------------------------------------------------
+            # BroadcastData - info received from the master device
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_BroadcastData:
+                #---------------------------------------------------------------
+                # Ask what device is paired
+                #---------------------------------------------------------------
+                if not self.__AntVHUpaired:
+                    msg = ant.msg4D_RequestMessage(ant.channel_VHU_s, ant.msgID_ChannelID)
+                    messages.append ( msg )
+
+                #---------------------------------------------------------------
+                # Data page 173 frames containing the serial number of the device
+                #---------------------------------------------------------------
+                if DataPageNumber == 173: # 0xad:
+                    dataHandled = True
+
+            #-------------------------------------------------------------------
+            # ChannelID - the info that a master on the network is paired
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_ChannelID:
+                Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \
+                    ant.unmsg51_ChannelID(info)
+
+                if DeviceTypeID == ant.DeviceTypeID_VHU:
+                    dataHandled = True
+                    self.__AntVHUpaired    = True
+                    self.__DeviceNumberVHU = DeviceNumber
+
+                    #-----------------------------------------------------------
+                    # And tell to switch to PC-mode
+                    #-----------------------------------------------------------
+                    info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode ( \
+                        ant.channel_VHU_s, ant.VHU_PCmode)
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     messages.append ( msg )
 

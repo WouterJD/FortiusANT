@@ -249,7 +249,7 @@ def LocateHW(self):
         pass
     else:
         AntDongle = ant.clsAntDongle()
-        if AntDongle.OK or not clv.Tacx_iVortex:                    # 2020-09-29
+        if AntDongle.OK or not (clv.Tacx_iVortex or clv.Tacx_iGenius):                    # 2020-09-29
              if clv.manual:      AntDongle.Message += ' (manual power)'
              if clv.manualGrade: AntDongle.Message += ' (manual grade)'
         self.SetMessages(Dongle=AntDongle.Message)
@@ -277,7 +277,7 @@ def LocateHW(self):
     #---------------------------------------------------------------------------
     if debug.on(debug.Application): logfile.Write ("Scan for hardware - end")
                                                                     # 2020-09-29
-    return ((AntDongle.OK or (not clv.Tacx_iVortex and (clv.manual or clv.manualGrade))) \
+    return ((AntDongle.OK or (not (clv.Tacx_iVortex or clv.Tacx_iGenius) and (clv.manual or clv.manualGrade))) \
             and TacxTrainer.OK)
     
 # ------------------------------------------------------------------------------
@@ -295,7 +295,7 @@ def LocateHW(self):
 # ------------------------------------------------------------------------------
 def Runoff(self):
     global clv, AntDongle, TacxTrainer
-    if clv.SimulateTrainer or clv.Tacx_iVortex:
+    if clv.SimulateTrainer or clv.Tacx_iVortex or clv.Tacx_iGenius:
         logfile.Console('Runoff not implemented for Simulated trainer or Tacx i-Vortex')
         return False
 
@@ -546,6 +546,24 @@ def Tacx2DongleSub(self, Restart):
 
         # msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
         # AntDongle.Write([msg], False, False)
+
+        #-------------------------------------------------------------------
+        # Create ANT+ slave channel for VHU
+        #
+        # We create this channel right away. At some stage the VTX-channel
+        # sends the Page03_TacxVortexDataCalibration which provides the
+        # VortexID. This VortexID is the DeviceID that could be provided
+        # to SlaveVHU_ChannelConfig() to restrict pairing to that headunit
+        # only. Not relevant in private environments, so left as is here.
+        #-------------------------------------------------------------------
+        AntDongle.SlaveVHU_ChannelConfig(0)
+
+    if clv.Tacx_iGenius:
+        #-------------------------------------------------------------------
+        # Create ANT+ slave channel for GNS
+        # No pairing-loop: GNS perhaps not yet active and avoid delay
+        #-------------------------------------------------------------------
+        AntDongle.SlaveGNS_ChannelConfig(0)
 
         #-------------------------------------------------------------------
         # Create ANT+ slave channel for VHU
@@ -868,7 +886,7 @@ def Tacx2DongleSub(self, Restart):
                 synch, length, id, info, checksum, _rest, Channel, DataPageNumber = ant.DecomposeMessage(d)
                 error = False
 
-                if clv.Tacx_iVortex and TacxTrainer.HandleANTmessage(d):
+                if (clv.Tacx_iVortex or clv.Tacx_iGenius) and TacxTrainer.HandleANTmessage(d):
                     pass                    # Message is handled or ignored
 
                 #---------------------------------------------------------------

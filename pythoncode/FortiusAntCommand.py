@@ -51,8 +51,9 @@ class CommandLineVariables(object):
 
     PowerFactor     = 1.00
     SimulateTrainer = False
-    TacxType        = False
+    TacxType        = None
     Tacx_iVortex    = False
+    Tacx_iGenius    = False
 
     uphill          = False      # introduced 2020-10-09; Negative grade is ignored
 
@@ -101,7 +102,7 @@ class CommandLineVariables(object):
                                                                                                             required=False, action='store_true')
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
-        parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
+        parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex or i-Genius, default=autodetect',required=False, default=False)
         parser.add_argument('-u','--uphill',    help='Uphill only; negative grade is ignored',              required=False, action='store_true')
 
         #-----------------------------------------------------------------------
@@ -273,6 +274,8 @@ class CommandLineVariables(object):
             self.TacxType = args.TacxType
             if self.TacxType in ('i-Vortex'):
                 self.Tacx_iVortex = True
+            elif self.TacxType in ('i-Genius'):
+                self.Tacx_iGenius = True
             else:
                 logfile.Console('Command line error; -t incorrect value=%s' % args.TacxType)
                 args.TacxType = False
@@ -280,7 +283,7 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         # Check pedal stroke analysis
         #-----------------------------------------------------------------------
-        if args.PedalStrokeAnalysis and (not args.gui or self.Tacx_iVortex):
+        if args.PedalStrokeAnalysis and (not args.gui or self.Tacx_iVortex or self.Tacx_iGenius):
             logfile.Console("Pedal stroke analysis is not possible in console mode or this Tacx type")
             self.PedalStrokeAnalysis = False
 
