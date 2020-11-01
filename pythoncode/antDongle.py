@@ -2144,7 +2144,7 @@ def msgPageDC_TacxGeniusSetSlope (Channel, Slope, Weight):
     fWeight             = sc.unsigned_char
     fPadding            = sc.pad * 2
 
-    Slope = Slope / 10
+    Slope = Slope * 10
     slopeSign = 0
     if Slope < 0:
         Slope += 256
