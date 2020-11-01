@@ -1181,13 +1181,12 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
             messages = []
             if TacxMode ==  modeResistance:
                 #---------------------------------------------------------------
-                # Set target power
+                # Set target slope
                 #---------------------------------------------------------------
-                if self.__AntGNSpaired and self.__GeniusID:
-                    info = ant.msgPageDC_TacxGeniusSetPower (ant.channel_VTX_s, \
-                                                             self.TargetPower, self.UserAndBikeWeight)
-                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
-                    messages.append ( msg )
+                info = ant.msgPageDC_TacxGeniusSetSlope (ant.channel_VTX_s, \
+                                                         self.TargetGrade, self.UserAndBikeWeight)
+                msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                messages.append ( msg )
 
                 #---------------------------------------------------------------
                 # Avoid power off on headunit
