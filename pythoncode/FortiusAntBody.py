@@ -197,6 +197,7 @@ from   FortiusAntGui                import mode_Power, mode_Grade
 import logfile
 import TCXexport
 import usbTrainer
+from bleDongle import BleDongle
 
 PrintWarnings = False   # Print warnings even when logging = off
 CycleTimeFast = 0.02    # TRAINER- SHOULD WRITE THEN READ 70MS LATER REALLY
@@ -263,7 +264,10 @@ def LocateHW(self):
     if AntDongle and AntDongle.OK:
         pass
     else:
-        AntDongle = ant.clsAntDongle()
+        if clv.ble:
+            AntDongle = BleDongle()
+        else:
+            AntDongle = ant.clsAntDongle()
         if AntDongle.OK or not clv.Tacx_iVortex:                    # 2020-09-29
              if clv.manual:      AntDongle.Message += ' (manual power)'
              if clv.manualGrade: AntDongle.Message += ' (manual grade)'
@@ -846,6 +850,7 @@ def Tacx2DongleSub(self, Restart):
             #-------------------------------------------------------------------
             messages = []       # messages to be sent to ANT
             data = []           # responses received from ANT
+            ble_data = {}       # data sent to BLE
             if QuarterSecond:
                 # LastANTtime = time.time()         # 2020-11-13 removed since duplicate
                 #---------------------------------------------------------------
@@ -857,6 +862,7 @@ def Tacx2DongleSub(self, Restart):
                 #---------------------------------------------------------------
                 if clv.hrm == None and TacxTrainer.HeartRate > 0:
                     messages.append(hrm.BroadcastHeartrateMessage(HeartRate))
+                    ble_data['heart_rate'] = HeartRate
 
                 #---------------------------------------------------------------
                 # Broadcast Bike Power message
@@ -864,6 +870,8 @@ def Tacx2DongleSub(self, Restart):
                 if True:
                     messages.append(pwr.BroadcastMessage( \
                         TacxTrainer.CurrentPower, TacxTrainer.Cadence))
+                    ble_data['power'] = TacxTrainer.CurrentPower
+                    ble_data['cadence'] = TacxTrainer.Cadence
 
                 #---------------------------------------------------------------
                 # Broadcast Speed and Cadence Sensor message
@@ -884,7 +892,10 @@ def Tacx2DongleSub(self, Restart):
             # Broadcast and receive ANT+ responses
             #-------------------------------------------------------------------
             if len(messages) > 0:
-                data = AntDongle.Write(messages, True, False)
+                if clv.ble:
+                    data = AntDongle.Write(ble_data)
+                else:
+                    data = AntDongle.Write(messages, True, False)
 
             #-------------------------------------------------------------------
             # Here all response from the ANT dongle are processed (receive=True)
