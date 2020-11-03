@@ -41,6 +41,7 @@ class CommandLineVariables(object):
     args            = None
 
     autostart       = False
+    ble             = False
     calibrate       = True
     debug           = 0
 
@@ -94,6 +95,7 @@ class CommandLineVariables(object):
         parser = argparse.ArgumentParser(description='Program to broadcast data from USB Tacx Fortius trainer, and to receive resistance data for the trainer')
         parser.add_argument('-a','--autostart', help='Automatically start',                                 required=False, action='store_true')
         parser.add_argument('-A','--PedalStrokeAnalysis', help='Pedal Stroke Analysis',                     required=False, action='store_true')
+        parser.add_argument('-b','--ble',       help='(EXPERIMENTAL) Use Bluetooth LE instead of ANT+',     required=False, action='store_true')
         parser.add_argument('-d','--debug',     help='Show debugging data',                                 required=False, default=False)
         parser.add_argument('-g','--gui',       help='Run with graphical user interface',                   required=False, action='store_true')
         parser.add_argument('-H','--hrm',       help='Pair this Heart Rate Monitor (0: any, -1: none)',     required=False, default=False)
@@ -128,6 +130,7 @@ class CommandLineVariables(object):
         # Booleans; either True or False
         #-----------------------------------------------------------------------
         self.autostart              = args.autostart
+        self.ble                    = args.ble
         self.gui                    = args.gui
         self.manual                 = args.manual
         self.manualGrade            = args.manualGrade
@@ -329,6 +332,7 @@ class CommandLineVariables(object):
         try:
             v = debug.on(debug.Any)     # Verbose: print all command-line variables with values
             if      self.autostart:          logfile.Console("-a")
+            if      self.ble:                logfile.Console("-b")
             if      self.PedalStrokeAnalysis:logfile.Console("-A")
             if v or self.args.debug:         logfile.Console("-d %s (%s)" % (self.debug, bin(self.debug) ) )
             if      self.gui:                logfile.Console("-g")
