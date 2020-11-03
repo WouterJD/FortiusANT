@@ -5,3 +5,4 @@ pygame
 pynput
 wxPython
 wheel
+requests
