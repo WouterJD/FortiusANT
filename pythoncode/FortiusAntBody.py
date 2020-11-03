@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-10-20"
+__version__ = "2020-11-03"
+# 2020-11-03    If there is no dongle, AntDongle becomes completely dummy, 
+#               so that we can run without ANTdongle.
+#               As extension to 2020-09-29, which was not complete.
 # 2020-10-20    Pedalling replaced by pedaling.
 # 2020-09-30    During Runoff, modeCalibrate was used instead of modeResistance
 #                   an error introduced with release 3.0 and now resolved.
@@ -477,8 +480,8 @@ def Tacx2Dongle(self):
 def Tacx2DongleSub(self, Restart):
     global clv, AntDongle, TacxTrainer
 
-    assert(AntDongle   and AntDongle.OK)
-    assert(TacxTrainer and TacxTrainer.OK)
+    assert(AntDongle)                       # The class must be created
+    assert(TacxTrainer)                     # The class must be created
 
     AntHRMpaired = False
 
