@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-10-22"
+__version__ = "2020-11-03"
+# 2020-11-03    Issue 118: Adjust virtual flywheel according to virtual gearbox
 # 2020-10-22    Removed: superfluous logging in _ReceiveFromTrainer()
 # 2020-10-20    Changed: minimum resistance was limitted to the calibrate value
 #                   which complicated life for low-FTP athletes.
@@ -1262,7 +1263,9 @@ class clsTacxUsbTrainer(clsTacxTrainer):
                 Weight = 0x0a                                   # Small flywheel in ERGmode
             elif self.TargetMode == mode_Grade:
                 Target = self.TargetResistance
-                Weight = self.UserAndBikeWeight
+                # Weight = self.UserAndBikeWeight               # Original
+                # Issue 118: Adjust virtual flywheel according to virtual gearbox
+                Weight = max(0x0a, int(self.PowercurveFactor * self.UserAndBikeWeight))
             else:
                 error = "SendToTrainer; Unsupported TargetMode %s" % self.TargetMode
 
