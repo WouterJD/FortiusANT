@@ -527,6 +527,12 @@ def Tacx2DongleSub(self, Restart):
     LastPedalEcho = 0           # Flag that cadence sensor was seen
 
     #---------------------------------------------------------------------------
+    # Previous Pedal counter, needed to count number of pedal strokes between
+    # BLE messages. The increment should only be sent on a new pedal stroke.
+    #---------------------------------------------------------------------------
+    PreviousPedalCount = 0
+
+    #---------------------------------------------------------------------------
     # Initialize Dongle
     # Open channels:
     #    one to transmit the trainer info (Fitness Equipment)
@@ -870,8 +876,16 @@ def Tacx2DongleSub(self, Restart):
                 if True:
                     messages.append(pwr.BroadcastMessage( \
                         TacxTrainer.CurrentPower, TacxTrainer.Cadence))
-                    ble_data['power'] = TacxTrainer.CurrentPower
-                    ble_data['cadence'] = TacxTrainer.Cadence
+                    ble_data['watts'] = TacxTrainer.CurrentPower
+                    
+                    if TacxTrainer.PedalEchoCount != PreviousPedalCount:
+                        PreviousPedalCount = TacxTrainer.PedalEchoCount
+                        ble_data['revolutions'] = TacxTrainer.PedalEchoCount
+                        # Resolution of timestamp is not good enough.
+                        # Looks like the BLE messages are sent every .5 second,
+                        # causing Zwift to not recognize the cadence correctly
+                        # Somehow the BLE server reports messages every .5 seconds,
+                        # while I (MV) was expecting a message every .25 seconds
 
                 #---------------------------------------------------------------
                 # Broadcast Speed and Cadence Sensor message
