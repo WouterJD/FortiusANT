@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-03"
+__version__ = "2020-11-04"
+# 2020-11-04    Basic Resistance implemented as a grade as requested by #119
 # 2020-11-03    If there is no dongle, AntDongle becomes completely dummy, 
 #               so that we can run without ANTdongle.
 #               As extension to 2020-09-29, which was not complete.
@@ -188,6 +189,7 @@ import antSCS            as scs
 import debug
 from   FortiusAntGui                import mode_Power, mode_Grade
 import logfile
+import TCXexport         as tcx
 import usbTrainer
 
 PrintWarnings = False   # Print warnings even when logging = off
@@ -684,6 +686,8 @@ def Tacx2DongleSub(self, Restart):
     # Initialize variables
     #---------------------------------------------------------------------------
     if not Restart:
+        if clv.manual or clv.manualGrade:
+            self.tcx = tcx.TcxExport()      # Initiate TCX export class instance
         if clv.manualGrade:
             TacxTrainer.SetGrade(0)
         else:
@@ -736,6 +740,13 @@ def Tacx2DongleSub(self, Restart):
             else:
                 QuarterSecond = False 
 
+            #-------------------------------------------------------------------
+            # Add trackpoint
+            #-------------------------------------------------------------------
+            if QuarterSecond and (clv.manual or clv.manualGrade):
+                self.tcx.Trackpoint(HeartRate = HeartRate, \
+                                    Cadence   = TacxTrainer.Cadence, \
+                                    Watts     = TacxTrainer.CurrentPower)
             #-------------------------------------------------------------------
             # Get data from trainer (Receive + Calc + Send)
             #-------------------------------------------------------------------
@@ -888,11 +899,18 @@ def Tacx2DongleSub(self, Restart):
                         # Data page 48 (0x30) Basic resistance
                         #-------------------------------------------------------
                         if   DataPageNumber == 48:
-                            logfile.Console('Data page 48 Basic mode not implemented')
+                            # logfile.Console('Data page 48 Basic mode not implemented')
                             # I never saw this appear anywhere (2020-05-08)
                             # TargetMode            = mode_Basic
                             # TargetGradeFromDongle = 0
                             # TargetPowerFromDongle = ant.msgUnpage48_BasicResistance(info) * 1000  # n % of maximum of 1000Watt
+
+                            # 2020-11-04 as requested in issue 119
+                            # The percentage is used to calculate grade 0...20%
+                            TacxTrainer.SetGrade(ant.msgUnpage48_BasicResistance(info) * 20)
+                            TacxTrainer.SetRollingResistance(0.004)
+                            TacxTrainer.SetWind(0.51, 0.0, 1.0)
+
                             p71_LastReceivedCommandID   = DataPageNumber
                             p71_SequenceNr              = int(p71_SequenceNr + 1) & 0xff
                             p71_CommandStatus           = 0xff
@@ -1162,7 +1180,11 @@ def Tacx2DongleSub(self, Restart):
             
     except KeyboardInterrupt:
         logfile.Console ("Stopped")
-        
+    #---------------------------------------------------------------------------
+    # Create TCXexport
+    #---------------------------------------------------------------------------
+    if not AntDongle.DongleReconnected and (clv.manual or clv.manualGrade):
+        self.tcx.Stop()
     #---------------------------------------------------------------------------
     # Stop devices
     #---------------------------------------------------------------------------
