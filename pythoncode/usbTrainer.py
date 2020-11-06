@@ -1179,14 +1179,24 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
 
         if QuarterSecond:
             messages = []
-            if TacxMode ==  modeResistance:
-                #---------------------------------------------------------------
-                # Set target slope
-                #---------------------------------------------------------------
-                info = ant.msgPageDC_TacxGeniusSetSlope (ant.channel_VTX_s, \
-                                                         self.TargetGrade, self.UserAndBikeWeight)
-                msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
-                messages.append ( msg )
+            if TacxMode == modeResistance:
+                if self.TargetMode == mode_Grade:
+                    #---------------------------------------------------------------
+                    # Set target slope
+                    #---------------------------------------------------------------
+                    info = ant.msgPageDC_TacxGeniusSetSlope (ant.channel_VTX_s, \
+                                                             self.TargetGrade, self.UserAndBikeWeight)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    messages.append ( msg )
+                else:
+                    #---------------------------------------------------------------
+                    # Set target power
+                    #---------------------------------------------------------------
+                    info = ant.msgPageDC_TacxGeniusSetPower (ant.channel_VTX_s, \
+                                                             self.TargetPower, self.UserAndBikeWeight)
+                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                    messages.append ( msg )
+
 
                 #---------------------------------------------------------------
                 # Avoid power off on headunit
