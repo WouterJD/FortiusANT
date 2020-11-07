@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 const debug = require('debug');
 const trace = debug('fortiusant:server');
 
-let Trainer = new VirtualTrainer();
+let trainer = new VirtualTrainer();
 let server = express();
 
 server.use(bodyParser.urlencoded({extended: true}));
@@ -17,5 +17,11 @@ server.post('/ant', function(req, res) {
   res.send();
   data = req.body
   trace(`[Server] post: /ant : ${JSON.stringify(data)}`);
-  Trainer.update(data);
+  trainer.update(data);
+});
+
+server.get('/ant', function(req, res) {
+  data = trainer.get();
+  trace(`[Server] get: /ant : ${JSON.stringify(data)}`);
+  res.send(data)
 });

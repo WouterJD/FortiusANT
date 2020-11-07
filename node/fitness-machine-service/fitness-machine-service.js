@@ -4,26 +4,28 @@ const trace = debug('fortiusant:fms');
 
 const FitnessMachineFeatureCharacteristic = require('./fitness-machine-feature-characteristic');
 const IndoorBikeDataCharacteristic = require('./indoor-bike-data-characteristic');
+const FitnessMachineControlPointCharacteristic = require('./fitness-machine-control-point-characteristic');
 
 const FitnessMachine = '1826'
 
-// TODO: do we need to advertise using Service Advertising Data??, or is this optional
-
 class FitnessMachineService extends bleno.PrimaryService {
-  constructor() {
+  constructor(messages) {
     trace('[FitnessMachineService] constructor');
     let fmfc = new FitnessMachineFeatureCharacteristic();
     let ibdc = new IndoorBikeDataCharacteristic();
+    let fmcpc = new FitnessMachineControlPointCharacteristic(messages);
     super({
       uuid: FitnessMachine,
       characteristics: [
         fmfc,
-        ibdc
+        ibdc,
+        fmcpc
       ]
     });
 
     this.fmfc = fmfc;
     this.ibdc = ibdc;
+    this.fmcpc = fmcpc;
   }
 
   notify(event) {

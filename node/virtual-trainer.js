@@ -13,12 +13,12 @@ class VirtualTrainer extends events {
 
     this.name = 'VirtualTrainer';
     process.env['BLENO_DEVICE_NAME'] = this.name;
-
-    this.ftms = new FitnessMachineService();
+    
+    this.messages = [];
+    this.ftms = new FitnessMachineService(this.messages);
     this.hrs = new HeartRateService();
-
     this.stopTimer = null;
-
+    
     bleno.on('stateChange', (state) => {
       trace(`[${this.name}] stateChange: ${state}`);
       
@@ -68,6 +68,16 @@ class VirtualTrainer extends events {
     bleno.on('rssiUpdate', (rssi) => {
       trace(`[${this.name}] rssiUpdate: ${rssi}')}`);
     });
+  }
+
+  get() {
+    trace(`[${this.name}] get')}`);
+    data = this.messages.shift();
+    if (data === 'undefined') {
+      trace(`[${this.name}] get: no messages in queue')}`);
+      data = {};
+    }
+    return data;
   }
 
   update(event) {
