@@ -4,9 +4,8 @@ const bodyParser = require('body-parser');
 const debug = require('debug');
 const trace = debug('fortiusant:server');
 
-var Trainer = new VirtualTrainer();
-
-var server = express();
+let Trainer = new VirtualTrainer();
+let server = express();
 
 server.use(bodyParser.urlencoded({extended: true}));
 
@@ -18,5 +17,5 @@ server.post('/ant', function(req, res) {
   res.send();
   data = req.body
   trace(`[Server] post: /ant : ${JSON.stringify(data)}`);
-  Trainer.updateCSP(data);
+  Trainer.update(data);
 });

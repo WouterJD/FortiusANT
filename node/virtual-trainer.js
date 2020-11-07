@@ -3,7 +3,8 @@ const events = require('events');
 const debug = require('debug');
 const trace = debug('fortiusant:vt');
 
-const CyclingPowerService = require('./cycling-power-service/cycling-power-service');
+const FitnessMachineService = require('./fitness-machine-service/fitness-machine-service');
+const HeartRateService = require('./heart-rate-service/heart-rate-service');
 
 class VirtualTrainer extends events {
   constructor() {
@@ -13,20 +14,18 @@ class VirtualTrainer extends events {
     this.name = 'VirtualTrainer';
     process.env['BLENO_DEVICE_NAME'] = this.name;
 
-    this.csp = new CyclingPowerService();
-    // this.dis = TODO
+    this.ftms = new FitnessMachineService();
+    this.hrs = new HeartRateService();
 
-    this.last_revolutions = 0;
-    this.last_csp_time = 0;
-    this.timer = null;
+    this.stopTimer = null;
 
     bleno.on('stateChange', (state) => {
       trace(`[${this.name}] stateChange: ${state}`);
       
       if (state === 'poweredOn') {
         bleno.startAdvertising(this.name, [
-          // this.dis.uuid,
-          this.csp.uuid
+          this.ftms.uuid,
+          this.hrs.uuid
         ]);
       }
       else {
@@ -40,8 +39,8 @@ class VirtualTrainer extends events {
 
       if (!error) {
         bleno.setServices([
-          // this.dis,
-          this.csp
+          this.ftms,
+          this.hrs
         ],
         (error) => {
           trace(`[${this.name}] setServices: ${(error ? 'error ' + error : 'success')}`);
@@ -71,33 +70,27 @@ class VirtualTrainer extends events {
     });
   }
 
-  updateCSP(event) {
-    trace(`[${this.name}] updateCSP: ${JSON.stringify(event)}`);
+  update(event) {
+    trace(`[${this.name}] update: ${JSON.stringify(event)}`);
     
-    // Clear the timer since we received a new update
-    if (this.timer) {
-      clearTimeout(this.timer);
+    if (this.stopTimer) {
+      clearTimeout(this.stopTimer);
     }
 
-    this.csp.notify(event);
+    this.ftms.notify(event);
+    this.hrs.notify(event);
 
-    if ('watts' in event) {
-      if ('revolutions' in event) {
-        this.last_revolutions = event.revolutions
-      }
-      this.last_csp_time = Date.now();
+    if (!('stop' in event)) {
+      this.stopTimer = setTimeout(() => {
+        trace(`[${this.name}] send stop`);
+        this.updateCSP({
+          'watts': 0,
+          'cadence': 0,
+          'heart_rate': 0,
+          'stop': true
+        })
+      }, 1500);
     }
-    else {
-      trace(`[${this.name}] updateCSP: watt value missing in event`)
-    }
-
-    // Set a timer to send a message when no more updates are received
-    this.timer = setTimeout(() => {
-      this.updateCSP({
-        'watts': 0,
-        'revolutions': this.revolutions
-      })
-    }, 1500);
   }
 }
 
