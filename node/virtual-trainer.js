@@ -83,7 +83,7 @@ class VirtualTrainer extends events {
     if (!('stop' in event)) {
       this.stopTimer = setTimeout(() => {
         trace(`[${this.name}] send stop`);
-        this.updateCSP({
+        this.update({
           'watts': 0,
           'cadence': 0,
           'heart_rate': 0,
