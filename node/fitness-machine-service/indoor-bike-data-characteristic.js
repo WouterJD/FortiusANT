@@ -58,8 +58,8 @@ class IndoorBikeDataCharacteristic extends  bleno.Characteristic {
     let offset = 0;
     let buffer = new Buffer.alloc(30);
 
-    let flagField = buffer.slice(0, offset);
     offset += 2;
+    let flagField = buffer.slice(0, offset);
 
     // Instantaneous speed, always 0 ATM
     offset += 2;
