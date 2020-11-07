@@ -206,14 +206,13 @@ CycleTimeANT  = 0.25
 # Initialize globals
 # ------------------------------------------------------------------------------
 def Initialize(pclv):
-    global clv, AntDongle, TacxTrainer, tcx
+    global clv, AntDongle, TacxTrainer, tcx, BleInterface
     clv         = pclv
     AntDongle   = None
     TacxTrainer = None
     tcx         = None
     if clv.exportTCX: tcx = TCXexport.clsTcxExport()
 
-    
 # ==============================================================================
 # Here we go, this is the real work what's all about!
 # ==============================================================================
@@ -254,7 +253,7 @@ def IdleFunction(self):
 # Returns:      True if TRAINER and DONGLE found
 # ------------------------------------------------------------------------------
 def LocateHW(self):
-    global clv, AntDongle, TacxTrainer
+    global clv, AntDongle, TacxTrainer, BleInterface
     if debug.on(debug.Application): logfile.Write ("Scan for hardware")
 
     #---------------------------------------------------------------------------
@@ -265,9 +264,9 @@ def LocateHW(self):
         pass
     else:
         if clv.ble:
-            AntDongle = BleDongle()
-        else:
-            AntDongle = ant.clsAntDongle()
+            BleInterface = BleDongle()
+
+        AntDongle = ant.clsAntDongle()
         if AntDongle.OK or not clv.Tacx_iVortex:                    # 2020-09-29
              if clv.manual:      AntDongle.Message += ' (manual power)'
              if clv.manualGrade: AntDongle.Message += ' (manual grade)'
@@ -902,26 +901,25 @@ def Tacx2DongleSub(self, Restart):
             # Broadcast and receive BLE responses
             #-------------------------------------------------------------------
             if clv.ble:
-                ble_response = AntDongle.Write(ble_data)
+                ble_response = BleInterface.Write(ble_data)
                 print(f"Read {len(ble_response)} BLE messages")
             
-            for m in ble_response:
-                print(f"message: {m}")
-                if "wind_speed" in m and "wind_resistance_coefficient" in m:
-                    TacxTrainer.SetWind(m["wind_resistance_coefficient"], m["wind_speed"], 1) # draftingfactor set to 1
-            
-                if "grade" in m:
-                    TacxTrainer.SetGrade(m["grade"])
+                for m in ble_response:
+                    print(f"message: {m}")
+                    if "wind_speed" in m and "wind_resistance_coefficient" in m:
+                        TacxTrainer.SetWind(m["wind_resistance_coefficient"], m["wind_speed"], 1) # draftingfactor set to 1
+                
+                    if "grade" in m:
+                        TacxTrainer.SetGrade(m["grade"])
 
-                if "rolling_resistance_coefficient" in m:
-                    TacxTrainer.SetRollingResistance(m["rolling_resistance_coefficient"])
+                    if "rolling_resistance_coefficient" in m:
+                        TacxTrainer.SetRollingResistance(m["rolling_resistance_coefficient"])
             
             #-------------------------------------------------------------------
             # Broadcast and receive ANT+ responses
             #-------------------------------------------------------------------
             if len(messages) > 0:
-                if not clv.ble:
-                    data = AntDongle.Write(messages, True, False)
+                data = AntDongle.Write(messages, True, False)
 
             #-------------------------------------------------------------------
             # Here all response from the ANT dongle are processed (receive=True)

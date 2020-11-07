@@ -148,10 +148,6 @@ class CommandLineVariables(object):
         if (self.manual or self.manualGrade) and self.SimulateTrainer:
             logfile.Console("-m/-M and -s both specified, most likely for program test purpose")
 
-        if self.ble and not self.manual:
-            logfile.Console("-b is experimental and requires -m. Forcing -m")
-            self.manual = True
-
         #-----------------------------------------------------------------------
         # Bicycle definition to be parsed; three parameters
         # format=tyre,chainring,cassette, e.g. "2.096,50/34,15/25"
