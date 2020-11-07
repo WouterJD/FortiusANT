@@ -1,7 +1,7 @@
 
 import requests
 import logfile
-
+import json
 
 class BleInterface:
   def __init__(self, host, port):
@@ -12,9 +12,10 @@ class BleInterface:
     r = requests.post(f'http://{self.host}:{self.port}/ant', data=data)
     print(r.text)
 
-  def read(self, data):
+  def read(self):
     r = requests.get(f'http://{self.host}:{self.port}/ant')
-    print(r.text)
+    # print(r.text)
+    return r.text
 
 
 class BleDongle:
@@ -30,7 +31,7 @@ class BleDongle:
 
   def Write(self, data, receive=True, drop=True):
     self.interface.write(data)
-    return []
+    return self.Read(drop=False)
 
   def ApplicationRestart(self):
     pass
@@ -39,7 +40,15 @@ class BleDongle:
     pass
 
   def Read(self, drop):
-    return []
+    messages = []
+    while True:
+      message = self.interface.read()
+      if message:
+        messages.append(json.loads(message))
+      else:
+        break
+  
+    return messages
 
   def Calibrate(self):
     pass

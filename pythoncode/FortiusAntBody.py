@@ -851,6 +851,7 @@ def Tacx2DongleSub(self, Restart):
             messages = []       # messages to be sent to ANT
             data = []           # responses received from ANT
             ble_data = {}       # data sent to BLE
+            ble_response = []
             if QuarterSecond:
                 # LastANTtime = time.time()         # 2020-11-13 removed since duplicate
                 #---------------------------------------------------------------
@@ -862,7 +863,6 @@ def Tacx2DongleSub(self, Restart):
                 #---------------------------------------------------------------
                 if clv.hrm == None and TacxTrainer.HeartRate > 0:
                     messages.append(hrm.BroadcastHeartrateMessage(HeartRate))
-                    ble_data['heart_rate'] = HeartRate
 
                 #---------------------------------------------------------------
                 # Broadcast Bike Power message
@@ -887,14 +887,40 @@ def Tacx2DongleSub(self, Restart):
                 # print('fe.BroadcastTrainerDataMessage', Cadence, CurrentPower, SpeedKmh, HeartRate)
                 messages.append(fe.BroadcastTrainerDataMessage (TacxTrainer.Cadence, \
                     TacxTrainer.CurrentPower, TacxTrainer.SpeedKmh, TacxTrainer.HeartRate))
-                    
+            
+            #-------------------------------------------------------------------
+            # Fill BLE data
+            #-------------------------------------------------------------------
+
+            if clv.hrm == None and TacxTrainer.HeartRate > 0:
+                ble_data['heart_rate'] = HeartRate
+
+            ble_data['watts'] = TacxTrainer.CurrentPower
+            ble_data['cadence'] = TacxTrainer.Cadence
+
+            #-------------------------------------------------------------------
+            # Broadcast and receive BLE responses
+            #-------------------------------------------------------------------
+            if clv.ble:
+                ble_response = AntDongle.Write(ble_data)
+                print(f"Read {len(ble_response)} BLE messages")
+            
+            for m in ble_response:
+                print(f"message: {m}")
+                if "wind_speed" in m and "wind_resistance_coefficient" in m:
+                    TacxTrainer.SetWind(m["wind_resistance_coefficient"], m["wind_speed"], 1) # draftingfactor set to 1
+            
+                if "grade" in m:
+                    TacxTrainer.SetGrade(m["grade"])
+
+                if "rolling_resistance_coefficient" in m:
+                    TacxTrainer.SetRollingResistance(m["rolling_resistance_coefficient"])
+            
             #-------------------------------------------------------------------
             # Broadcast and receive ANT+ responses
             #-------------------------------------------------------------------
             if len(messages) > 0:
-                if clv.ble:
-                    data = AntDongle.Write(ble_data)
-                else:
+                if not clv.ble:
                     data = AntDongle.Write(messages, True, False)
 
             #-------------------------------------------------------------------
