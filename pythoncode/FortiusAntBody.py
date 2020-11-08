@@ -295,7 +295,7 @@ def LocateHW(self):
     #---------------------------------------------------------------------------
     if debug.on(debug.Application): logfile.Write ("Scan for hardware - end")
                                                                     # 2020-09-29
-    return ((AntDongle.OK or (not clv.Tacx_iVortex and (clv.manual or clv.manualGrade))) \
+    return (((AntDongle.OK or (BleInterface and BleInterface.OK)) or (not clv.Tacx_iVortex and (clv.manual or clv.manualGrade))) \
             and TacxTrainer.OK)
     
 # ------------------------------------------------------------------------------
