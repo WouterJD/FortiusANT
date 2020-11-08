@@ -2,20 +2,66 @@
 import requests
 import logfile
 import json
+import subprocess
+from pathlib import Path
+import atexit
 
-class BleInterface:
+class Singleton(type):
+  instances = {}
+  def __call__(cls, *args, **kwargs):
+    if cls not in cls.instances:
+      cls.instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+    
+    return cls.instances[cls]
+
+class BleInterface(metaclass=Singleton):
   def __init__(self, host, port):
     self.host = host
     self.port = port
+    self.interface = None
+    self.logfile = None
 
   def write(self, data):
-    r = requests.post(f'http://{self.host}:{self.port}/ant', data=data)
-    print(r.text)
+    if self.interface:
+      requests.post(f'http://{self.host}:{self.port}/ant', data=data)
 
   def read(self):
-    r = requests.get(f'http://{self.host}:{self.port}/ant')
-    # print(r.text)
-    return r.text
+    response = ""
+    if self.interface:
+      r = requests.get(f'http://{self.host}:{self.port}/ant')
+      response = r.text
+
+    return response
+
+  def open(self):
+    if self.interface:
+      logfile.Console('BLE Interface already open')
+    else:
+      logfile.Console('Opening BLE interface')
+      command = [
+        "node",
+        "server.js"
+      ]
+      self.logfile = open('ble.log', 'w')
+      directory = Path.cwd().parent / "node"
+      self.interface = subprocess.Popen(command, cwd=directory, stdout=self.logfile, stderr=self.logfile)
+
+      def cleanup():
+        if self.interface:
+          logfile.Console('Stop BLE server')
+          self.close()
+          logfile.Console('Stopped BLE server')
+
+      # Make sure the BLE server is stopped on program termination
+      atexit.register(cleanup)
+
+  def close(self):
+    if self.interface:
+      self.interface.terminate()
+      self.interface.wait()
+      self.interface = None
+    else:
+      logfile.Console('BLE server already stopped')
 
 
 class BleDongle:
@@ -25,6 +71,7 @@ class BleDongle:
 
   def __init__(self):
     self.interface = BleInterface('localhost', 9999)
+    self.interface.open()
 
   def __GetDongle(self):
     pass
