@@ -902,10 +902,11 @@ def Tacx2DongleSub(self, Restart):
             #-------------------------------------------------------------------
             if clv.ble:
                 ble_response = BleInterface.Write(ble_data)
-                print(f"Read {len(ble_response)} BLE messages")
+                if len(ble_response):
+                    logfile.Write(f"Read {len(ble_response)} BLE messages")
             
                 for m in ble_response:
-                    print(f"message: {m}")
+                    logfile.Write(f"message: {m}")
                     if "wind_speed" in m and "wind_resistance_coefficient" in m:
                         TacxTrainer.SetWind(m["wind_resistance_coefficient"], m["wind_speed"], 1) # draftingfactor set to 1
                 
