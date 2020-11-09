@@ -286,7 +286,7 @@ class clsTacxTrainer():
         #-----------------------------------------------------------------------
         if clv.SimulateTrainer: return clsSimulatedTrainer(clv)
         if clv.Tacx_iVortex:    return clsTacxAntVortexTrainer(clv, AntDevice)
-        if clv.Tacx_iGenius:    return clsTacxAntGeniusTrainer(clv, AntDevice)
+        if clv.Tacx_iGenius:    return clsTacxAntGeniusTrainer(clv, AntDevice, not clv.NoHeadunit)
             
         #-----------------------------------------------------------------------
         # So we are going to initialize USB
@@ -1096,11 +1096,13 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
 # Actually, only the data-storage and Refresh() with Grade2Power() is used!
 #-------------------------------------------------------------------------------
 class clsTacxAntGeniusTrainer(clsTacxTrainer):
-    def __init__(self, clv, AntDevice):
-        super().__init__(clv, "Pair with Tacx i-Genius and Headunit")
+    def __init__(self, clv, AntDevice, useHeadUnit=False):
+        msg = "Pair with Tacx i-Genius%s" % (" and Headunit" if useHeadUnit else "")
+        super().__init__(clv, msg)
         if debug.on(debug.Function):logfile.Write ("clsTacxAntGeniusTrainer.__init__()")
         self.AntDevice         = AntDevice
         self.OK                = True           # The AntDevice is there,
+        self.UseHeadUnit       = useHeadUnit
         # the trainer not yet paired!
 
         self.__ResetTrainer()
@@ -1118,7 +1120,7 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
 
         self.__iGeniusButtons  = 0              # provided by datapage 221
 
-        self.Message = 'Pair with Tacx i-Genius and Headunit'
+        msg = "Pair with Tacx i-Genius%s" % (" and Headunit" if self.UseHeadUnit else "")
 
     #---------------------------------------------------------------------------
     # R e c e i v e F r o m T r a i n e r
@@ -1164,10 +1166,10 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
 
         if self.__DeviceNumberVHU:
             self.Message += ', Headunit: %s' % self.__DeviceNumberVHU
-        else:
+        elif self.UseHeadUnit:
             self.Message += ', Headunit'
 
-        if not (self.__DeviceNumberGNS and self.__DeviceNumberVHU):
+        if not self.__DeviceNumberGNS or (self.UseHeadUnit and not self.__DeviceNumberVHU):
             self.Message += ' (pairing can take a minute)'
 
     #---------------------------------------------------------------------------
