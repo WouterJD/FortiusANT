@@ -243,8 +243,8 @@ TransmissionType_IC_GDP = 0x05          #           0x01 = Independant Channel
                                         #           0x04 = Global datapages used
 TransmitPower_0dBm      = 0x03          # 9.4.3     Output Power Level Settings
 RfFrequency_2457Mhz     =   57          # 9.5.2.6   Channel RF Frequency
-RfFrequency_2460Mhz     =   60          # used for Tacx i-Vortex only
-RfFrequency_2466Mhz     =   66          # used for Tacx i-Genius only
+RfFrequency_2460Mhz     =   60          # used for Tacx i-Genius only
+RfFrequency_2466Mhz     =   66          # used for Tacx i-Vortex only
 RfFrequency_2478Mhz     = 0x4e          # used for Tacx i-Vortex Headunit
 #---------------------------------------------------------------------------
 # c l s A n t D o n g l e
