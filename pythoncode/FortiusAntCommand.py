@@ -104,6 +104,7 @@ class CommandLineVariables(object):
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
         parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex or i-Genius, default=autodetect',required=False, default=False)
         parser.add_argument('-u','--uphill',    help='Uphill only; negative grade is ignored',              required=False, action='store_true')
+        parser.add_argument('--no-headunit',    help='Do not use Tacx Genius headunit', required=False, action='store_true')
 
         #-----------------------------------------------------------------------
         # Deprecated
@@ -131,6 +132,9 @@ class CommandLineVariables(object):
         self.PedalStrokeAnalysis    = args.PedalStrokeAnalysis
         self.SimulateTrainer        = args.simulate
         self.uphill                 = args.uphill
+        self.NoHeadunit             = args.no_headunit or False
+
+        print(self.NoHeadunit)
 
         if self.manual and self.manualGrade:
             logfile.Console("-m and -M are mutually exclusive; manual power selected")
