@@ -1178,13 +1178,16 @@ class clsTacxUsbTrainer(clsTacxTrainer):
         # Therefore we poll the trainer untill "no button" received, only if
         # the last receive provided Buttons.
         # ----------------------------------------------------------------------
-        Buttons = self.Buttons                  # Remember the buttons pressed
+        if (self.ButtonState == 0):
+            self.Buttons = 0
+            self.ButtonAcknowledged = False
+        else:
+            if (self.ButtonAcknowledged == False):
+                self.Buttons = self.ButtonState
+                self.ButtonAcknowledged = True
+            else:
+                self.Buttons = 0
 
-        while self.Buttons:                     # Loop untill no button pressed
-            time.sleep(0.1)
-            self._ReceiveFromTrainer()
-
-        self.Buttons = Buttons                  # Restore buttons
     #---------------------------------------------------------------------------
     # U S B _ R e a d
     #---------------------------------------------------------------------------
@@ -1469,7 +1472,7 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
         tuple = struct.unpack (format, data)
 
         self.Axis                = tuple[nAxis1]
-        self.Buttons             = ((tuple[nStatusAndCursors] & 0xf0) >> 4) ^ 0x0f
+        self.ButtonState         = ((tuple[nStatusAndCursors] & 0xf0) >> 4) ^ 0x0f
         self.Cadence             = tuple[nCadence]
         self.CurrentResistance   = tuple[nCurrentResistance]
         self.HeartRate           = tuple[nHeartRate]
@@ -1481,7 +1484,7 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
 
         if debug.on(debug.Function):
             logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s, Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
-                (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
+                (  self.HeartRate, self.ButtonState, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
                           )
 
 #-------------------------------------------------------------------------------
@@ -1755,7 +1758,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             #-----------------------------------------------------------------------
             tuple = struct.unpack (format, data)
             self.Axis               = tuple[nAxis1]
-            self.Buttons            = tuple[nButtons]
+            self.ButtonState        = tuple[nButtons]
             self.Cadence            = tuple[nCadence]
             self.CurrentResistance  = tuple[nCurrentResistance]
             self.HeartRate          = tuple[nHeartRate]
@@ -1768,5 +1771,5 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
 
             if debug.on(debug.Function):
                 logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
-                            (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
+                            (  self.HeartRate, self.ButtonState, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
                             )
