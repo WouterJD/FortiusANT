@@ -652,7 +652,7 @@ def Tacx2DongleSub(self, Restart):
 
                 # --------------------------------------------------------------
                 # Average power over the last 20 readings
-                # Stop if difference between min/max is below threshold (30)
+                # Stop if difference between min/max running average is below threshold (2)
                 # At least 30 seconds but not longer than the countdown time (8 minutes)
                 # Note that the limits are empiracally established.
                 # --------------------------------------------------------------
