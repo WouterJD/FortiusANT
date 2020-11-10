@@ -519,12 +519,12 @@ class clsTacxTrainer():
         # Avoid multiple button press when polling faster than button released
         #-----------------------------------------------------------------------
         if self.PreviousButtons == 0:
-            if self.Buttons: print('Button press %s' % self.Buttons)
+            # if self.Buttons: print('Button press %s' % self.Buttons)
             # The button was NOT pressed the previous cycle
             # Therefore the button is accepted (rising edge)
             self.PreviousButtons = self.Buttons
         else:
-            if self.Buttons: print('Button press %s ignored' % self.Buttons)
+            # if self.Buttons: print('Button press %s ignored' % self.Buttons)
             # Remember the current state of Buttons, must become zero before
             # a button press is accepted
             self.PreviousButtons = self.Buttons
