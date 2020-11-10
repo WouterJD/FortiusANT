@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-03"
+__version__ = "2020-11-10"
+# 2020-11-10    Issue 129: Trigger USB trainer head unit buttons on rising edge
 # 2020-11-03    Issue 118: Adjust virtual flywheel according to virtual gearbox
 # 2020-10-22    Removed: superfluous logging in _ReceiveFromTrainer()
 # 2020-10-20    Changed: minimum resistance was limitted to the calibrate value
