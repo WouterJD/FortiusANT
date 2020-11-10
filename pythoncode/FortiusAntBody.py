@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-04"
+__version__ = "2020-11-10"
+# 2020-11-10    Calibration employs moving average
 # 2020-11-04    Basic Resistance implemented as a grade as requested by #119
 # 2020-11-03    If there is no dongle, AntDongle becomes completely dummy, 
 #               so that we can run without ANTdongle.
@@ -594,7 +595,8 @@ def Tacx2DongleSub(self, Restart):
     # Calibrate trainer
     #---------------------------------------------------------------------------
     CountDown       = 120 * 4 # 8 minutes; 120 is the max on the cadence meter
-    ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for running everage
+    ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for calculating running average
+    AvgResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for collating running averages
     Calibrate       = 0
     StartPedaling   = True
     Counter         = 0
@@ -650,16 +652,19 @@ def Tacx2DongleSub(self, Restart):
 
                 # --------------------------------------------------------------
                 # Average power over the last 20 readings
-                # Stop if difference between min/max is below threshold (30)
+                # Stop if difference between min/max running average is below threshold (2)
                 # At least 30 seconds but not longer than the countdown time (8 minutes)
                 # Note that the limits are empiracally established.
                 # --------------------------------------------------------------
-                ResistanceArray = numpy.append(ResistanceArray, TacxTrainer.CurrentResistance * -1) # Add new value to array
+                ResistanceArray = numpy.append(ResistanceArray, TacxTrainer.CurrentResistance * -1) # Add new instantaneous value to array
                 ResistanceArray = numpy.delete(ResistanceArray, 0)                      # Remove oldest from array
+
+                AvgResistanceArray = numpy.append(AvgResistanceArray, numpy.average(ResistanceArray)) # Add new running average value to array
+                AvgResistanceArray = numpy.delete(AvgResistanceArray, 0) # Remove oldest from array
                 
                 if CountDown < (120 * 4 - 30) and numpy.min(ResistanceArray) > 0:
-                    if (numpy.max(ResistanceArray) - numpy.min(ResistanceArray) ) < 30 or CountDown <= 0:
-                        Calibrate = TacxTrainer.CurrentResistance * -1
+                    if (numpy.max(AvgResistanceArray) - numpy.min(AvgResistanceArray) ) < 2 or CountDown <= 0:
+                        Calibrate = numpy.average(AvgResistanceArray)
                         if debug.on(debug.Function):
                             logfile.Write('Tacx2Dongle; calibration ended %s' % Calibrate)
 
