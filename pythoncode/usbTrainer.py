@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-03"
+__version__ = "2020-11-10"
+# 2020-11-10    Issue 135: React on button press only once corrected
+#               Function Power2Speed() added
 # 2020-11-03    Issue 118: Adjust virtual flywheel according to virtual gearbox
 # 2020-10-22    Removed: superfluous logging in _ReceiveFromTrainer()
 # 2020-10-20    Changed: minimum resistance was limitted to the calibrate value
@@ -243,6 +245,7 @@ class clsTacxTrainer():
     # Information provided by _ReceiveFromTrainer()
     Axis                    = 0             # int
     Buttons                 = 0             # int
+    PreviousButtons         = 0             # int       Issue 135
     Cadence                 = 0             # int
     CurrentPower            = 0             # int
     CurrentResistance       = 0             # int
@@ -253,6 +256,7 @@ class clsTacxTrainer():
     PedalEchoTime           = time.time()   # the time of the last PedalEcho event
     SpeedKmh                = 0             # round(,1)
     VirtualSpeedKmh         = 0             #           see Grade_mode
+    CalculatedSpeedKmh      = 0             # see #Power2Speed#
     TargetResistanceFT      = 0             # int       Returned from trainer
     WheelSpeed              = 0             # int
 
@@ -511,6 +515,23 @@ class clsTacxTrainer():
         #-----------------------------------------------------------------------
 
         #-----------------------------------------------------------------------
+        # Issue 135
+        # Avoid multiple button press when polling faster than button released
+        #-----------------------------------------------------------------------
+        if self.PreviousButtons == 0:
+            if self.Buttons: print('Button press %s' % self.Buttons)
+            # The button was NOT pressed the previous cycle
+            # Therefore the button is accepted (rising edge)
+            self.PreviousButtons = self.Buttons
+        else:
+            if self.Buttons: print('Button press %s ignored' % self.Buttons)
+            # Remember the current state of Buttons, must become zero before
+            # a button press is accepted
+            self.PreviousButtons = self.Buttons
+            # Button was pressed previous cycle, so ignore now
+            self.Buttons = 0
+
+        #-----------------------------------------------------------------------
         # PedalEcho for Speed and Cadence Sensor
         #-----------------------------------------------------------------------
         if self.PedalEcho == 1 and self.PreviousPedalEcho == 0:
@@ -686,7 +707,7 @@ class clsTacxTrainer():
     # Refer to ANT msgUnpage51_TrackResistance()
     #          where zwift grade does not seem to match the definition
     #---------------------------------------------------------------------------
-    # Input         TargetGrade, UserAndBikeWeight, SpeedKmh
+    # Input         TargetGrade, UserAndBikeWeight, VirtualSpeedKmh
     #
     # Function      Calculate what power must be produced, given the current
     #               grade, speed and weigth
@@ -757,6 +778,112 @@ class clsTacxTrainer():
         Pbike = 37
 
         self.TargetPower = int(Proll + Pair + Pslope + Pbike)
+
+    #---------------------------------------------------------------------------
+    # Convert Power to Speed
+    #---------------------------------------------------------------------------
+    # When Power is known, Zwift shows the speed - based upon the known slope
+    # This function should be similar
+    #---------------------------------------------------------------------------
+    # input:        self.CurrentPower, self.UserAndBikeWeight, self.TargetGrade
+    #
+    # description   Based upon inputs, estimate Speed
+    #
+    #               Note: the Grade2Power() functions operate on self, and 
+    #                     therefore do not require input/return variables.
+    #
+    #               The reason we do NOT modify self.VirtualSpeedKmh here is
+    #               that that speed is directly related to the physical wheel-
+    #               speed. So CalculatedSpeed is added and the consumer of the
+    #               data can choose which of the two to use. 
+    #
+    #               _Grade2Power() uses self.VirtualSpeedKmh as input to
+    #               calculate power. Therefore the value is saved and restored.
+    #               The field is used here to find the correct speed resulting
+    #               in the searched power.
+    #               *** appologies for this construction ***
+    #
+    # output:       self.CalculatedSpeed
+    #
+    # returns:      None
+    #---------------------------------------------------------------------------
+    def Power2Speed(self, Grade=0):                             #Power2Speed#
+        SpeedLo     = 1         # The low  speed in the range where we estimate
+        SpeedHi     = 100       # The high ...
+        Speed       = 0         # The estimated speed
+        PrevPower   = 0         # The previous power
+
+        # ----------------------------------------------------------------------
+        # We are going to SEARCH a VirtualSpeedKmh, resulting in TargetPower
+        # that equals CurrentPower. Save these two fields and restore afterwards
+        # ----------------------------------------------------------------------
+        SaveVirtualSpeedKmh = self.VirtualSpeedKmh
+        SaveTargetPower     = self.TargetPower
+        SaveTargetGrade     = self.TargetGrade
+
+        # ----------------------------------------------------------------------
+        # In powermode, by default we use TargetGrade=0 to calculate the speed
+        # if we ride a virtual route, the TargetGrade is taken from the GPX and
+        # provided as a parameter.
+        # We COULD leave TargetGrade modified, but restore it just to be neat.
+        #
+        # In GradeMode, the TargetGrade is already set.
+        # ----------------------------------------------------------------------
+        if self.TargetMode == mode_Power:
+            self.TargetGrade = Grade
+
+        if self.CurrentPower == 0:
+            Speed = 0           # No power, no speed
+        else:
+            SpeedLo = 1         # We do not cycle backwards
+            SpeedHi = 100       # Smart guy going faster :-)
+            
+            # ------------------------------------------------------------------
+            # If power is negative, find point where curve goes up
+            # The powercurve with a big negative slope has two solutions for the
+            # speed when the (negative) power is given; herewith we chose to get
+            # the highest speed of the two.
+            # ------------------------------------------------------------------
+            if self.CurrentPower < 0:
+                self.VirtualSpeedKmh = SpeedLo
+                self._Grade2Power()
+                PrevPower = 10000
+                while self.TargetPower < PrevPower:
+                    SpeedLo = SpeedLo + 5
+                    PrevPower = self.TargetPower
+                    self.VirtualSpeedKmh = SpeedLo
+                    self._Grade2Power()
+            
+            # ------------------------------------------------------------------
+            # Find the power that matches the searched speed
+            #
+            #    +----------+----------+
+            # SpeedLo ... Speed ... SpeedHi
+            #          TargetPower
+            # Move SpeedLo/SpeedHi based upon power, untill close enough.
+            # ------------------------------------------------------------------
+            while (SpeedHi / SpeedLo) > 1.05:
+            
+                Speed = (SpeedLo + SpeedHi) / 2         # The estimated speed
+                self.VirtualSpeedKmh = Speed            # results in
+                self._Grade2Power()                     # TargetPower
+                
+                if self.TargetPower < self.CurrentPower:
+                    SpeedLo = Speed                     # New boundary
+                else:
+                    SpeedHi = Speed                     # New boundary
+
+        # ----------------------------------------------------------------------
+        # Restore fields
+        # ----------------------------------------------------------------------
+        self.VirtualSpeedKmh = SaveVirtualSpeedKmh
+        self.TargetPower     = SaveTargetPower
+        self.TargetGrade     = SaveTargetGrade
+
+        # ----------------------------------------------------------------------
+        # Our output
+        # ----------------------------------------------------------------------
+        self.CalculatedSpeedKmh = Speed
 
 #-------------------------------------------------------------------------------
 # c l s S i m u l a t e d T r a i n e r
@@ -1164,27 +1291,27 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     def Speed2Wheel(self, SpeedKmh):
         return int(SpeedKmh * self.SpeedScale)
     
-    #---------------------------------------------------------------------------
-    # Refresh()
-    #---------------------------------------------------------------------------
-    def Refresh(self, QuarterSecond, TacxMode):
-        super().Refresh(QuarterSecond, TacxMode)
-        if debug.on(debug.Function):logfile.Write ("clsTacxUsbTrainer.Refresh()")
+    # #---------------------------------------------------------------------------
+    # # Refresh(); removed due to Issue 135
+    # #---------------------------------------------------------------------------
+    # def Refresh(self, QuarterSecond, TacxMode):
+    #     super().Refresh(QuarterSecond, TacxMode)
+    #     if debug.on(debug.Function):logfile.Write ("clsTacxUsbTrainer.Refresh()")
 
-        # ----------------------------------------------------------------------
-        # When a button is pressed, the button is returned a number of times,
-        # depending on the polling-frequency. The caller would receive the same
-        # button multiple times.
-        # Therefore we poll the trainer untill "no button" received, only if
-        # the last receive provided Buttons.
-        # ----------------------------------------------------------------------
-        Buttons = self.Buttons                  # Remember the buttons pressed
+    #     # ----------------------------------------------------------------------
+    #     # When a button is pressed, the button is returned a number of times,
+    #     # depending on the polling-frequency. The caller would receive the same
+    #     # button multiple times.
+    #     # Therefore we poll the trainer untill "no button" received, only if
+    #     # the last receive provided Buttons.
+    #     # ----------------------------------------------------------------------
+    #     Buttons = self.Buttons                  # Remember the buttons pressed
 
-        while self.Buttons:                     # Loop untill no button pressed
-            time.sleep(0.1)
-            self._ReceiveFromTrainer()
+    #     while self.Buttons:                     # Loop untill no button pressed
+    #         time.sleep(0.1)
+    #         self._ReceiveFromTrainer()
 
-        self.Buttons = Buttons                  # Restore buttons
+    #     self.Buttons = Buttons                  # Restore buttons
     #---------------------------------------------------------------------------
     # U S B _ R e a d
     #---------------------------------------------------------------------------
