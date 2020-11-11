@@ -355,29 +355,31 @@ class clsAntDongle():
                         if debug.on(debug.Function): logfile.Write ("GetDongle - Set configuration")
                         self.devAntDongle.set_configuration()
 
+                        def _resetDongle():
+                            reset_string = msg4A_ResetSystem()  # reset string probe
+                                                                # same as ResetDongle()
+                                                                # done here to have explicit error-handling.
+                            if debug.on(debug.Function): logfile.Write ("GetDongle - Send reset string to dongle")
+                            self.devAntDongle.write(0x01, reset_string)
+                            time.sleep(0.500)                           # after reset, 500ms before next action
 
-                        reset_string = msg4A_ResetSystem()  # reset string probe
-                                                            # same as ResetDongle()
-                                                            # done here to have explicit error-handling.
-                        if debug.on(debug.Function): logfile.Write ("GetDongle - Send reset string to dongle")
-                        self.devAntDongle.write(0x01, reset_string)
-                        time.sleep(0.500)                           # after reset, 500ms before next action
+                            if debug.on(debug.Function): logfile.Write ("GetDongle - Read answer")
+                            return self.Read(False)
 
-
-                        if debug.on(debug.Function): logfile.Write ("GetDongle - Read answer")
-                        reply = self.Read(False)
-
-
-                        if debug.on(debug.Function): logfile.Write ("GetDongle - Check for an ANT+ reply")
-                        self.Message = "No expected reply from dongle"
-                        for s in reply:
-                            synch, length, id, _info, _checksum, _rest, _c, _d = DecomposeMessage(s)
-                            if synch==0xa4 and length==0x01 and id==0x6f:
-                                found_available_ant_stick = True
-                                self.Message = "Using %s dongle" %  self.devAntDongle.manufacturer # dongle[1]
-                                self.Message = self.Message.replace('\0','')          # .manufacturer is NULL-terminated
-                                if 'CYCPLUS' in self.Message:
-                                    self.Cycplus = True
+                        for retry_count in range(3):
+                            reply = _resetDongle()
+                            if debug.on(debug.Function): logfile.Write ("GetDongle - Check for an ANT+ reply")
+                            self.Message = "No expected reply from dongle"
+                            for s in reply:
+                                synch, length, id, _info, _checksum, _rest, _c, _d = DecomposeMessage(s)
+                                if synch==0xa4 and length==0x01 and id==0x6f:
+                                    found_available_ant_stick = True
+                                    self.Message = "Using %s dongle" %  self.devAntDongle.manufacturer # dongle[1]
+                                    self.Message = self.Message.replace('\0','')          # .manufacturer is NULL-terminated
+                                    if 'CYCPLUS' in self.Message:
+                                        self.Cycplus = True
+                            if found_available_ant_stick: break
+                            elif retry_count and debug.on(debug.Function): logfile.Write ("Retry reset dongle")
 
                     except usb.core.USBError as e:                  # cannot write to ANT dongle
                         if debug.on(debug.Data1 | debug.Function):
