@@ -366,7 +366,7 @@ class clsAntDongle():
                             if debug.on(debug.Function): logfile.Write ("GetDongle - Read answer")
                             return self.Read(False)
 
-                        for retry_count in range(3):
+                        for _ in range(2):
                             reply = _resetDongle()
                             if debug.on(debug.Function): logfile.Write ("GetDongle - Check for an ANT+ reply")
                             self.Message = "No expected reply from dongle"
@@ -379,7 +379,7 @@ class clsAntDongle():
                                     if 'CYCPLUS' in self.Message:
                                         self.Cycplus = True
                             if found_available_ant_stick: break
-                            elif retry_count and debug.on(debug.Function): logfile.Write ("Retry reset dongle")
+                            elif debug.on(debug.Function): logfile.Write ("GetDongle - Retry reset dongle")
 
                     except usb.core.USBError as e:                  # cannot write to ANT dongle
                         if debug.on(debug.Data1 | debug.Function):
