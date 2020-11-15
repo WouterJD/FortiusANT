@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-05"
+__version__ = "2020-11-13"
+# 2020-11-13    Logfile was not closed on end
 # 2020-11-05    New files added, githubWindowTitle() used
 # 2020-05-24    WindowTitle in logfile
 # 2020-04-23    First version; core functions separated into FortiusAntBody.py
@@ -568,3 +569,4 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------
     if debug.on(debug.Any):
         logfile.Console('FortiusAnt ended')
+        logfile.Close()

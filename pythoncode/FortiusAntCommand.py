@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-10-09"
+__version__ = "2020-11-11"
+# 2020-11-11    Added: -x exportTCX
 # 2020-10-09    Added: -u uphill
 # 2020-05-12    Default flags when no command-line arguments specified
 #               especially for the novice users.
@@ -41,6 +42,9 @@ class CommandLineVariables(object):
     autostart       = False
     calibrate       = True
     debug           = 0
+
+    exportTCX       = False      # introduced 2020-11-11;
+
     gui             = False
     hrm             = None       # introduced 2020-02-09; None=not specified, numeric=HRM device, -1=no HRM
     manual          = False
@@ -103,6 +107,7 @@ class CommandLineVariables(object):
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
         parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
         parser.add_argument('-u','--uphill',    help='Uphill only; negative grade is ignored',              required=False, action='store_true')
+        parser.add_argument('-x','--exportTCX', help='Export TCX file',                                     required=False, action='store_true')
 
         #-----------------------------------------------------------------------
         # Deprecated
@@ -130,6 +135,7 @@ class CommandLineVariables(object):
         self.PedalStrokeAnalysis    = args.PedalStrokeAnalysis
         self.SimulateTrainer        = args.simulate
         self.uphill                 = args.uphill
+        self.exportTCX              = args.exportTCX
 
         if self.manual and self.manualGrade:
             logfile.Console("-m and -M are mutually exclusive; manual power selected")
@@ -335,6 +341,8 @@ class CommandLineVariables(object):
 #scs        if      self.args.scs:           logfile.Console("-S %s" % self.scs )
             if      self.args.TacxType:      logfile.Console("-t %s" % self.TacxType)
             if      self.uphill:             logfile.Console("-u")
+            if      self.exportTCX or self.manual or self.manualGrade:          
+                                             logfile.Console("-x")
 
             #-------------------------------------------------------------------
             # Deprecated

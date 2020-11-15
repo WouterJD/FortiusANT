@@ -1,3 +1,4 @@
+json
 keyboard
 numpy
 pyusb

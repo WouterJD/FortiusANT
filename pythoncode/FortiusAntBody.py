@@ -1,8 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-10"
-# 2020-11-10    Calibration employs moving average
+__version__ = "2020-11-13"
+# 2020-11-13    QuarterSecond calculation improved
+# 2020-11-12    tcxExport class definitions changed
+# 2020-11-10    Calibration employs moving average as requested by #132
 # 2020-11-04    Basic Resistance implemented as a grade as requested by #119
 # 2020-11-03    If there is no dongle, AntDongle becomes completely dummy, 
 #               so that we can run without ANTdongle.
@@ -190,7 +192,7 @@ import antSCS            as scs
 import debug
 from   FortiusAntGui                import mode_Power, mode_Grade
 import logfile
-import TCXexport         as tcx
+import TCXexport
 import usbTrainer
 
 PrintWarnings = False   # Print warnings even when logging = off
@@ -200,10 +202,13 @@ CycleTimeANT  = 0.25
 # Initialize globals
 # ------------------------------------------------------------------------------
 def Initialize(pclv):
-    global clv, AntDongle, TacxTrainer
+    global clv, AntDongle, TacxTrainer, tcx
     clv         = pclv
     AntDongle   = None
     TacxTrainer = None
+    tcx         = None
+    if clv.exportTCX: tcx = TCXexport.clsTcxExport()
+
     
 # ==============================================================================
 # Here we go, this is the real work what's all about!
@@ -481,7 +486,7 @@ def Tacx2Dongle(self):
     return rtn
 
 def Tacx2DongleSub(self, Restart):
-    global clv, AntDongle, TacxTrainer
+    global clv, AntDongle, TacxTrainer, tcx
 
     assert(AntDongle)                       # The class must be created
     assert(TacxTrainer)                     # The class must be created
@@ -691,8 +696,8 @@ def Tacx2DongleSub(self, Restart):
     # Initialize variables
     #---------------------------------------------------------------------------
     if not Restart:
-        if clv.manual or clv.manualGrade:
-            self.tcx = tcx.TcxExport()      # Initiate TCX export class instance
+        if clv.exportTCX:
+            tcx.Start()                     # Start TCX export
         if clv.manualGrade:
             TacxTrainer.SetGrade(0)
         else:
@@ -738,20 +743,14 @@ def Tacx2DongleSub(self, Restart):
             StartTime = time.time()
             #-------------------------------------------------------------------
             # ANT process is done once every 250ms
+            # In case of PedalStrokeAnalysis, check whether it's time for ANT
             #-------------------------------------------------------------------
-            if (time.time() - LastANTtime) > 0.25:
+            if (time.time() - LastANTtime) > 0.25 or not clv.PedalStrokeAnalysis:
                 LastANTtime = time.time()
                 QuarterSecond = True
             else:
                 QuarterSecond = False 
 
-            #-------------------------------------------------------------------
-            # Add trackpoint
-            #-------------------------------------------------------------------
-            if QuarterSecond and (clv.manual or clv.manualGrade):
-                self.tcx.Trackpoint(HeartRate = HeartRate, \
-                                    Cadence   = TacxTrainer.Cadence, \
-                                    Watts     = TacxTrainer.CurrentPower)
             #-------------------------------------------------------------------
             # Get data from trainer (Receive + Calc + Send)
             #-------------------------------------------------------------------
@@ -785,6 +784,17 @@ def Tacx2DongleSub(self, Restart):
                             TacxTrainer.TargetResistance, \
                             HeartRate, \
                             TacxTrainer.Teeth)
+
+            #-------------------------------------------------------------------
+            # Add trackpoint
+            #-------------------------------------------------------------------
+            if QuarterSecond and clv.exportTCX:
+                tcx.TrackpointX(TacxTrainer, HeartRate)
+
+            #-------------------------------------------------------------------
+            # Store in JSON format
+            #-------------------------------------------------------------------
+            logfile.WriteJson(QuarterSecond, TacxTrainer, tcx, HeartRate)
 
             #-------------------------------------------------------------------
             # Pedal Stroke Analysis
@@ -833,7 +843,7 @@ def Tacx2DongleSub(self, Restart):
             messages = []       # messages to be sent to ANT
             data = []           # responses received from ANT
             if QuarterSecond:
-                LastANTtime = time.time()
+                # LastANTtime = time.time()         # 2020-11-13 removed since duplicate
                 #---------------------------------------------------------------
                 # Sending i-Vortex messages is done by Refesh() not here
                 #---------------------------------------------------------------
@@ -1188,8 +1198,8 @@ def Tacx2DongleSub(self, Restart):
     #---------------------------------------------------------------------------
     # Create TCXexport
     #---------------------------------------------------------------------------
-    if not AntDongle.DongleReconnected and (clv.manual or clv.manualGrade):
-        self.tcx.Stop()
+    if not AntDongle.DongleReconnected and clv.exportTCX:
+        tcx.Stop()
     #---------------------------------------------------------------------------
     # Stop devices
     #---------------------------------------------------------------------------

@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-28"
+__version__ = "2020-11-13"
+# 2020-11-13    json logfile added
 # 2020-04-28    Logfile flushed as well
 # 2020-04-17    Open() provides suffix option
 # 2020-04-16    Console() introduced
@@ -13,12 +14,72 @@ __version__ = "2020-04-28"
 # 2020-02-02    Open() has optional parameter for logfile-prefix
 #-------------------------------------------------------------------------------
 import binascii
+import json
 import os
 import sys
 import time
-from datetime import datetime
+from   datetime     import datetime
 
 import debug
+
+#-------------------------------------------------------------------------------
+# c l s L o g f i l e J s o n
+#-------------------------------------------------------------------------------
+# Create()  create JSON logfile, with same filename as logfile
+# Write()   add info
+# Close()   close JSON logfile
+#-------------------------------------------------------------------------------
+class clsLogfileJson():
+    def __init__(self, filename):
+        self.first          = True  # Comma preceeds next record (not the 1st)
+        self.jsonFile       = None  # Not opened yet
+        self.NrTrackpoints  = None  # To detect new trackpoint
+        # Create JSON file
+        self.jsonFile = open(filename,"w+")
+        self.jsonFile.write('[\n')
+
+    def Write(self, QuarterSecond, TacxTrainer, tcx, HeartRate):
+        if self.first:  self.first = False
+        else:           self.jsonFile.write(',')	
+        s = '{"time"                :  %s ,' % (time.time() / (24 * 3600))          + \
+            ' "QuarterSecond"       : "%s",' % QuarterSecond                        + \
+            ' "HeartRate"           :  %s ,' % HeartRate                            + \
+            ' "Target"              : "|" ,'                                        + \
+            ' "TargetMode"          :  %s ,' % TacxTrainer.TargetMode               + \
+            ' "TargetGrade"         :  %s ,' % TacxTrainer.TargetGrade              + \
+            ' "TargetPower"         :  %s ,' % TacxTrainer.TargetPower              + \
+            ' "TargetResistance"    :  %s ,' % TacxTrainer.TargetResistance         + \
+            ' "TacxTrainer"         : "|" ,'                                        + \
+            ' "Cadence"             :  %s ,' % TacxTrainer.Cadence                  + \
+            ' "CurrentPower"        :  %s ,' % TacxTrainer.CurrentPower             + \
+            ' "CurrentResistance"   :  %s ,' % TacxTrainer.CurrentResistance        + \
+            ' "SpeedKmh"            :  %s ,' % TacxTrainer.SpeedKmh                 + \
+            ' "VirtualSpeedKmh"     :  %s ,' % TacxTrainer.VirtualSpeedKmh          + \
+            ' "CalculatedSpeedKmh"  :  %s ,' % TacxTrainer.CalculatedSpeedKmh
+
+        if tcx != None and tcx.NrTrackpoints != self.NrTrackpoints:
+            self.NrTrackpoints = tcx.NrTrackpoints
+            s += \
+            ' "TCX"                 : "|" ,'                                        + \
+            ' "NrTrackpoints"       :  %s ,' % tcx.NrTrackpoints                    + \
+            ' "TotalDistance"       :  %s ,' % tcx.TotalDistance                    + \
+            ' "TrackpointTime"      : "%s",' % tcx.TrackpointTime                   + \
+            ' "ElapsedTime"         :  %s ,' % tcx.ElapsedTime                      + \
+            ' "Distance"            :  %s ,' % tcx.Distance                         + \
+            ' "TrackpointDistance"  :  %s ,' % tcx.TrackpointDistance               + \
+            ' "TrackpointAltitude"  :  %s ,' % tcx.TrackpointAltitude               + \
+            ' "TrackpointHeartRate" :  %s ,' % tcx.TrackpointHeartRate              + \
+            ' "TrackpointCadence"   :  %s ,' % tcx.TrackpointCadence                + \
+            ' "TrackpointCurrentPower":%s ,' % tcx.TrackpointCurrentPower           + \
+            ' "TrackpointSpeedKmh"  :  %s ,' % tcx.TrackpointSpeedKmh
+
+        s +=' "End"                 : "|" '                                         + \
+            '}\n'
+        self.jsonFile.write(s.replace(' ', ''))
+
+    def Close(self):
+        self.jsonFile.write(']\n')
+        self.jsonFile.close
 
 #-------------------------------------------------------------------------------
 # module l o g f i l e
@@ -32,13 +93,16 @@ import debug
 # O p e n
 #-------------------------------------------------------------------------------
 def Open(prefix='FortiusANT', suffix=''):
-    global fLogfile
+    global fLogfile, LogfileJson
 
     if debug.on():
         if len(suffix) > 0 and suffix[0] != '.':
             suffix = '.' + suffix
         filename = prefix + '.' + datetime.utcnow().strftime('%Y-%m-%d %H-%M-%S') + suffix + ".log"
         fLogfile = open(filename,"w+")
+
+        if debug.on(debug.LogfileJson) and prefix == 'FortiusANT':
+            LogfileJson = clsLogfileJson(filename.replace('.log', '.json'))
 
 def IsOpen():
     try:
@@ -98,12 +162,18 @@ def Write (logText, console=False):
 #       print ("logfile.Write (" + logText + ") called, but logfile is not opened.")
         pass
 
+def WriteJson(QuarterSecond, TacxTrainer, tcx, HeartRate):
+    if debug.on(debug.LogfileJson): LogfileJson.Write(QuarterSecond, TacxTrainer, tcx, HeartRate)
 #-------------------------------------------------------------------------------
 # C l o s e
 #-------------------------------------------------------------------------------
 def Close():
     try:
-        if debug.on(): fLogfile.close
+        if debug.on():
+            fLogfile.close
+            if debug.on(debug.LogfileJson):
+                LogfileJson.Close()
+
     except:
         pass
 
@@ -142,14 +212,22 @@ def HexSpaceL(list):
 # Main program to test the previous functions
 #-------------------------------------------------------------------------------
 if __name__ == "__main__":
+    global LogfileJson
     print ("Test of wdLogfile")
     Write("This logrecord cannot be written")                 # Not open yet
+    debug.activate()
     Open()                                                    # This is normal
     Write("This is a logrecord")                              # ..
+
+    print ('json tests')
+    LogfileJson.Close()
+
     Close()                                                   # ..
     print ("Test of wdLogfile done")
     print (HexSpace(binascii.unhexlify("203031")))
     print (HexSpace('False'))
     print (HexSpace(False))
+
+
 else:
     pass                                # We're included so do not take action!

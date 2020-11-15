@@ -1,11 +1,15 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-05"
+__version__ = "2020-11-15"
+# 2020-11-15    Distance added to produce a valid TCX
 # 2020-11-05    First version
 #-------------------------------------------------------------------------------
 import time
-from datetime import datetime
+from   datetime         import datetime
+
+import logfile
+from   FortiusAntGui    import mode_Power, mode_Grade
 #-------------------------------------------------------------------------------
 # TCX template
 #-------------------------------------------------------------------------------
@@ -87,10 +91,12 @@ TcxCadence =    '                   <Cadence>%s</Cadence>\n'
 
                 #---------------------------------------------------------------
                 # parameter 1  = Watts              = integer   71
+                # parameter 2  = SPeed              = float     7.777
                 #---------------------------------------------------------------
-TcxWatts =      '                   <Extensions>\n' \
+TcxWattSpeed =  '                   <Extensions>\n' \
                 '                       <ns3:TPX>\n' \
                 '                           <ns3:Watts>%s</ns3:Watts>\n' \
+                '                           <ns3:Speed>%s</ns3:Speed>\n' \
                 '                       </ns3:TPX>\n' \
                 '                   </Extensions>\n'
                 #---------------------------------------------------------------
@@ -102,7 +108,7 @@ TcxFooter =	    '           </Track>\n' \
                 '</Activities>\n' \
                 '</TrainingCenterDatabase>\n'
 
-class TcxExport():
+class clsTcxExport():
     def __init__(self):
         self.Start()
 
@@ -110,71 +116,234 @@ class TcxExport():
         #-----------------------------------------------------------------------
         # Return a time string in TCX format
         #-----------------------------------------------------------------------
-        return dt.strftime("%Y-%m-%dT%H:%M:%S") + "Z"
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
 
+    #---------------------------------------------------------------------------
+    # S t a r t
+    #---------------------------------------------------------------------------
+    # Function      Initialize all variables so that trackpoints can be added.
+    #
+    # Output        self.variables
+    #
+    # Returns       none
+    #---------------------------------------------------------------------------
     def Start(self):
-        #-----------------------------------------------------------------------
-        # Initialize class variables
-        #-----------------------------------------------------------------------
-        self.tcx                = ''                    # Contents for TCX file
-        self.StartTime          = datetime.utcnow()     # Start time of the track
-        self.StartTimeSeconds   = time.time()
-        self.TotalTimeSeconds   = 0
-        self.TotalDistance      = 0
-        self.TotalCalories      = 0
-        self.SumCadence         = 0                     # To be averaged!
-        self.SumHeartRate       = 0                     # To be averaged!
-        self.HeartRateMax       = 0                     # Max of HeartRate
-        self.NrTrackpoints      = 0                     # Count
+        self.tcx                    = ''                # Contents for TCX file
+        self.StartTime              = datetime.utcnow() # Start time of the track
+        self.StartTimeSeconds       = time.time()
+        self.TotalTimeSeconds       = 0
+        self.TotalDistance          = 0
+        self.TotalCalories          = 0
+        self.SumCadence             = 0                 # To be averaged!
+        self.NrCadence              = 1
+        self.SumHeartRate           = 0                 # To be averaged!
+        self.NrHeartRate            = 1
+        self.HeartRateMax           = 0                 # Max of HeartRate
+        self.NrTrackpoints          = 0                 # Count
 
-    def Trackpoint(self, Position=None, Latitude=None, Longitude=None, Altitude=None, Distance=None, HeartRate=None, Cadence=None, Watts=None):
+        self.TrackpointXcalled      = 0
+
+        self.Distance               = 0                 # Temp field
+        self.ElapsedTime            = 0
+
+        self.TrackpointTime         = ''
+        self.TrackpointDistance     = 0                 # Calculated on Tacx speed
+        self.TrackpointAltitude     = 0                 # idem
+        self.TrackpointSpeedKmh     = 0
+
+        self.TrackpointHeartRate    = 0                 # Provided by Tacx
+        self.TrackpointCadence      = 0
+        self.TrackpointCurrentPower = 0
+
+        #-----------------------------------------------------------------------
+        # Note that we continue where we stopped!
+        #-----------------------------------------------------------------------
+
+    #---------------------------------------------------------------------------
+    # T r a c k p o i n t X
+    #---------------------------------------------------------------------------
+    # Input         Time of previous call, CurrentPower
+    #               In GradeMode: TargetGrade
+    #
+    # Function      A TacxTrainer knows about power, not altitude, position or distance.
+    #               Using power and grade, the speed can be calculated
+    #               Using the speed, the distance can be calculated
+    #
+    #               And THEN the trackpoint can be created
+    #
+    # Output        self.variables
+    #
+    # Returns       none
+    #---------------------------------------------------------------------------
+    def TrackpointX(self, TacxTrainer, HeartRate):
+        TrackpointXcalled = time.time()
+        self.ElapsedTime = TrackpointXcalled - self.TrackpointXcalled
+        #-----------------------------------------------------------------------
+        # Skip first call; without previous trackpoint no data
+        #-----------------------------------------------------------------------
+        if self.TrackpointXcalled == 0:
+            self.TrackpointXcalled = TrackpointXcalled
+
+        #-----------------------------------------------------------------------
+        # Ignore if called within a second
+        #-----------------------------------------------------------------------
+        elif self.ElapsedTime < 1:
+            pass
+
+        #-----------------------------------------------------------------------
+        # Create trackpoint
+        #-----------------------------------------------------------------------
+        else:
+            self.TrackpointXcalled = TrackpointXcalled
+            #-------------------------------------------------------------------
+            # Calculate speed, based upon the current power and grade
+            # (provided) Grade is used only in Power mode
+            # TargetGrade is used in Grade mode anyway
+            #-------------------------------------------------------------------
+            TacxTrainer.Power2Speed(0)          # Assume flat ride (power mode)
+
+            #-------------------------------------------------------------------
+            # Calculate distance since previous call of TrackpointX
+            # Note that distance is accumulated as long as trainer-fields are
+            # equal to reduce number of trackpoints
+            #-------------------------------------------------------------------
+            d = TacxTrainer.CalculatedSpeedKmh * 1000 / 3600 * self.ElapsedTime
+            self.Distance       += d
+
+            #-------------------------------------------------------------------
+            # Calculate altitude
+            #-------------------------------------------------------------------
+            if TacxTrainer.TargetMode == mode_Grade:
+                self.TrackpointAltitude += d * TacxTrainer.TargetGrade / 100
+            else:
+                self.TrackpointAltitude = 0
+
+            #-------------------------------------------------------------------
+            # Write this trackpoint to the exportTCX file
+            # (but avoid duplicate trainer data to reduce #trackpoints)
+            #-------------------------------------------------------------------
+            if     HeartRate                != self.TrackpointHeartRate        \
+                or TacxTrainer.Cadence      != self.TrackpointCadence          \
+                or TacxTrainer.CurrentPower != self.TrackpointCurrentPower:
+
+                self.TrackpointDistance     = self.Distance
+                self.TrackpointHeartRate    = HeartRate
+                self.TrackpointCadence      = TacxTrainer.Cadence
+                self.TrackpointCurrentPower = TacxTrainer.CurrentPower
+                self.TrackpointSpeedKmh     = TacxTrainer.CalculatedSpeedKmh
+
+                self.Trackpoint(None,                           \
+                                None,                           \
+                                self.TrackpointAltitude,        \
+                                self.TrackpointDistance,        \
+                                self.TrackpointHeartRate,       \
+                                self.TrackpointCadence,         \
+                                self.TrackpointCurrentPower,    \
+                                self.TrackpointSpeedKmh)
+                self.Distance = 0
+
+    #---------------------------------------------------------------------------
+    # T r a c k p o i n t
+    #---------------------------------------------------------------------------
+    # Input         Parameters at current trackpoint
+    #
+    # Function      Add trackpoint
+    #               Note that DISTANCE is the TotalDistance, not the distance
+    #               since previous as expected.
+    #               The speed (in tool reading the TCX) is calculated, using the
+    #               elapsed time since previous trackpoint.
+    #
+    #               SpeedKmh is written in the trackpoint but seems unused (?)
+    #
+    # Output        self.tcx; trackpoint added
+    #               self.variables incremented with trackpoint data
+    #
+    # Returns       none
+    #---------------------------------------------------------------------------
+    def Trackpoint(self, Latitude=None, Longitude=None, \
+                         Altitude=None, Distance=None, HeartRate=None, \
+                         Cadence=None,  Watts=None,    SpeedKmh=None):
         #-----------------------------------------------------------------------
         # Trackpoint calculations
         #-----------------------------------------------------------------------
-        self.NrTrackpoints += 1
+        self.NrTrackpoints  += 1
+        self.TrackpointTime  = self.TcxTime(datetime.utcnow())
         #-----------------------------------------------------------------------
         # Add trackpoint
         #-----------------------------------------------------------------------
-        self.tcx += TcxTrackpoint % (self.TcxTime(datetime.utcnow()))
-        if Latitude:    self.tcx += TcxPosition   % (float(Latitude), float(Longitude))
-        if Altitude:    self.tcx += TcxAltitude   % (float(Altitude))
-        if Watts:       self.tcx += TcxWatts      % (int(Watts))
+        s = ''
+        s += TcxTrackpoint % (self.TrackpointTime)
+        if Latitude != None:    s += TcxPosition   % (float(Latitude), float(Longitude))
+        if Altitude != None:    s += TcxAltitude   % (float(Altitude))
 
-        if Distance:
-                        self.tcx += TcxDistance   % (float(Distance))
-                        self.TotalDistance += Distance
-        if HeartRate:
-                        self.tcx += TcxHeartRate  % (int(HeartRate))
-                        self.SumHeartRate += HeartRate
-        if Cadence:     
-                        self.tcx += TcxCadence    % (int(Cadence))
-                        self.SumCadence += Cadence
+        if Distance != None:
+                                self.TotalDistance += Distance
+                                s += TcxDistance   % (float(self.TotalDistance))
+        if HeartRate != None:
+                                s += TcxHeartRate  % (int(HeartRate))
+                                self.SumHeartRate += HeartRate
+                                self.NrHeartRate  += 1
+        if Cadence != None:     
+                                s += TcxCadence    % (int(Cadence))
+                                self.SumCadence += Cadence
+                                self.NrCadence  += 1
 
-        if HeartRate > self.HeartRateMax:
-                        self.HeartRateMax = HeartRate
-        self.tcx += TcxTpEnd
+        if Watts    != None:    s += TcxWattSpeed  % (int(Watts), float(SpeedKmh))
 
+        if HeartRate != None and HeartRate > self.HeartRateMax:
+                                self.HeartRateMax = HeartRate
+        s += TcxTpEnd
+
+        self.tcx += s.replace('   ', '\t')
+
+    #---------------------------------------------------------------------------
+    # S t o p
+    #---------------------------------------------------------------------------
+    # Input         self.tcx
+    #
+    # Function      Add the last pending trackpoint.
+    #               write the *.tcx file
+    #               reset all variables
+    #
+    # Output        self.variables
+    #
+    # Returns       none
+    #---------------------------------------------------------------------------
     def Stop(self):
+        #-----------------------------------------------------------------------
+        # Write the last trackpoint to the exportTCX file
+        #-----------------------------------------------------------------------
+        if  self.Distance:
+            self.Trackpoint(None,                           \
+                            None,                           \
+                            self.TrackpointAltitude,        \
+                            self.TrackpointDistance,        \
+                            self.TrackpointHeartRate,       \
+                            self.TrackpointCadence,         \
+                            self.TrackpointCurrentPower,    \
+                            self.TrackpointSpeedKmh)
+
         #-----------------------------------------------------------------------
         # Track calculations
         #-----------------------------------------------------------------------
         self.TotalTimeSeconds = time.time() - self.StartTimeSeconds
-        if self.NrTrackpoints == 0: self.NrTrackpoints = 1 # Avoid divide by zero
+
         #-----------------------------------------------------------------------
         # Pre-pend the Activity totals
         #-----------------------------------------------------------------------
-        self.tcx = TcxActivities % ('FortiusANT @ ' + self.TcxTime(self.StartTime), \
+        self.tcx = TcxActivities % (self.TcxTime(self.StartTime) + ' @ FortiusANT ' , \
                                     self.TcxTime(self.StartTime), \
                                     int(self.TotalTimeSeconds), \
                                     int(self.TotalDistance), \
                                     int(self.TotalCalories), \
                                     'Active', \
-                                    int(self.SumCadence / self.NrTrackpoints * 60), \
+                                    int(self.SumCadence   / self.NrCadence), \
                                     'Manual', \
-                                    int(self.SumHeartRate / self.NrTrackpoints * 60), \
+                                    int(self.SumHeartRate / self.NrHeartRate), \
                                     int(self.HeartRateMax) \
                                    ) + \
                     self.tcx
+
         #-----------------------------------------------------------------------
         # Pre-pend header and append footer
         #-----------------------------------------------------------------------
@@ -194,7 +363,7 @@ class TcxExport():
         self.Start()
 
 if __name__ == "__main__":
-    tcx = TcxExport()
+    tcx = clsTcxExport()
     tcx.Start()                                             # Optional
     tcx.Trackpoint(HeartRate=78, Cadence=123, Watts=456)
     tcx.Trackpoint(HeartRate=78, Cadence=123, Watts=456)
