@@ -104,11 +104,11 @@ class CommandLineVariables(object):
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
 
         ant_tacx_models = ['i-Vortex', 'i-Genius']
-        ant_tacx_help = 'Specify Tacx Type, default=autodetect. Allowed values are: ' + ', '.join(ant_tacx_models) 
+        ant_tacx_help = 'Specify Tacx Type, default=autodetect. Allowed values are: %s' % ', '.join(ant_tacx_models) 
         parser.add_argument('-t', '--TacxType', help=ant_tacx_help, choices=ant_tacx_models, metavar='',    required=False, default=False)
 
         parser.add_argument('-u','--uphill',    help='Uphill only; negative grade is ignored',              required=False, action='store_true')
-        parser.add_argument('--no-headunit',    help='Do not use Tacx Genius headunit',                     required=False, action='store_true')
+        parser.add_argument('--no-headunit',    help='Do not use Tacx headunit (only for ANT+ brakes)',     required=False, action='store_true')
 
         #-----------------------------------------------------------------------
         # Deprecated
@@ -123,6 +123,10 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         args                        = parser.parse_args()
         self.args                   = args
+
+        # Check if '--no-headunit' was used without '--TacxType'
+        if args.no_headunit and not args.TacxType:
+            parser.error('--no-headunit should only be specified with ANT+ brakes, meaning --TacxType should be one of {%s}' % ', '.join(ant_tacx_models))
 
         #-----------------------------------------------------------------------
         # Booleans; either True or False
