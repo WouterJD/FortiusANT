@@ -102,9 +102,13 @@ class CommandLineVariables(object):
                                                                                                             required=False, action='store_true')
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
-        parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex or i-Genius, default=autodetect',required=False, default=False)
+
+        ant_tacx_models = ['i-Vortex', 'i-Genius']
+        ant_tacx_help = 'Specify Tacx Type, default=autodetect. Allowed values are: ' + ', '.join(ant_tacx_models) 
+        parser.add_argument('-t', '--TacxType', help=ant_tacx_help, choices=ant_tacx_models, metavar='',    required=False, default=False)
+
         parser.add_argument('-u','--uphill',    help='Uphill only; negative grade is ignored',              required=False, action='store_true')
-        parser.add_argument('--no-headunit',    help='Do not use Tacx Genius headunit', required=False, action='store_true')
+        parser.add_argument('--no-headunit',    help='Do not use Tacx Genius headunit',                     required=False, action='store_true')
 
         #-----------------------------------------------------------------------
         # Deprecated
@@ -280,9 +284,6 @@ class CommandLineVariables(object):
                 self.Tacx_iVortex = True
             elif self.TacxType in ('i-Genius'):
                 self.Tacx_iGenius = True
-            else:
-                logfile.Console('Command line error; -t incorrect value=%s' % args.TacxType)
-                args.TacxType = False
 
         #-----------------------------------------------------------------------
         # Check pedal stroke analysis
