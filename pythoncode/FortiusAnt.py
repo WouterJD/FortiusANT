@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-13"
+__version__ = "2020-11-18"
+# 2020-11-18    Logfile shows what version is started; windows exe or python
 # 2020-11-13    Logfile was not closed on end
 # 2020-11-05    New files added, githubWindowTitle() used
 # 2020-05-24    WindowTitle in logfile
@@ -482,6 +483,12 @@ if __name__ == "__main__":
     # Component info
     #-------------------------------------------------------------------------------
     if debug.on(debug.Any):
+        # ----------------------------------------------------------------------
+        if getattr(sys, 'frozen', False):
+            logfile.Write('Windows executable started')
+        else:
+            logfile.Write('Python version started')
+        # ----------------------------------------------------------------------
         logfile.Write('Version info for the components' )
         logfile.Write(githubWindowTitle())
         s = " %20s = %s"

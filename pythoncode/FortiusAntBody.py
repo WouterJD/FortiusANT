@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-13"
+__version__ = "2020-11-18"
+# 2020-11-18    Same as 2020-09-30 In idle mode, modeCalibrate was used instead
+#                   of modeStop.
 # 2020-11-13    QuarterSecond calculation improved
 # 2020-11-12    tcxExport class definitions changed
 # 2020-11-10    Calibration employs moving average as requested by #132
@@ -231,7 +233,7 @@ def IdleFunction(self):
     global TacxTrainer
     rtn = 0
     if TacxTrainer and TacxTrainer.OK:
-        TacxTrainer.Refresh(True, usbTrainer.modeCalibrate)
+        TacxTrainer.Refresh(True, usbTrainer.modeStop)
         rtn = TacxTrainer.Buttons
     return rtn
 

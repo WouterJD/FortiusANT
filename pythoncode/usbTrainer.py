@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-10"
+__version__ = "2020-11-18"
+# 2020-11-18    Calibration also supported for 1942 headunit
 # 2020-11-10    Issue 135: React on button press only once corrected
 #               Function Power2Speed() added
 # 2020-11-03    Issue 118: Adjust virtual flywheel according to virtual gearbox
@@ -674,7 +675,7 @@ class clsTacxTrainer():
     # returns   True/False
     #---------------------------------------------------------------------------
     def CalibrateSupported(self):
-        if self.Headunit == hu1932:                 # And perhaps others as well
+        if self.Headunit in (hu1932, hu1942):       # And perhaps others as well
             return True
         else:
             return False
