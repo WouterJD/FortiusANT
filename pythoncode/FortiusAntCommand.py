@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-11"
+__version__ = "2020-11-18"
+# 2020-11-18    exportTCX implicit for manual mode (that's what is was asked for)
 # 2020-11-11    Added: -x exportTCX
 # 2020-10-09    Added: -u uphill
 # 2020-05-12    Default flags when no command-line arguments specified
@@ -135,7 +136,7 @@ class CommandLineVariables(object):
         self.PedalStrokeAnalysis    = args.PedalStrokeAnalysis
         self.SimulateTrainer        = args.simulate
         self.uphill                 = args.uphill
-        self.exportTCX              = args.exportTCX
+        self.exportTCX              = args.exportTCX or self.manual or self.manualGrade
 
         if self.manual and self.manualGrade:
             logfile.Console("-m and -M are mutually exclusive; manual power selected")
@@ -341,8 +342,7 @@ class CommandLineVariables(object):
 #scs        if      self.args.scs:           logfile.Console("-S %s" % self.scs )
             if      self.args.TacxType:      logfile.Console("-t %s" % self.TacxType)
             if      self.uphill:             logfile.Console("-u")
-            if      self.exportTCX or self.manual or self.manualGrade:          
-                                             logfile.Console("-x")
+            if      self.exportTCX:          logfile.Console("-x")
 
             #-------------------------------------------------------------------
             # Deprecated

@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-13"
+__version__ = "2020-11-19"
+# 2020-11-19    json DepalEcho added and time-format made JAVA-style
 # 2020-11-13    json logfile added
 # 2020-04-28    Logfile flushed as well
 # 2020-04-17    Open() provides suffix option
@@ -34,14 +35,33 @@ class clsLogfileJson():
         self.first          = True  # Comma preceeds next record (not the 1st)
         self.jsonFile       = None  # Not opened yet
         self.NrTrackpoints  = None  # To detect new trackpoint
+        self.PedalCycle     = 0     # 0 or 50 during one pedal cycle
         # Create JSON file
         self.jsonFile = open(filename,"w+")
         self.jsonFile.write('[\n')
 
     def Write(self, QuarterSecond, TacxTrainer, tcx, HeartRate):
         if self.first:  self.first = False
-        else:           self.jsonFile.write(',')	
-        s = '{"time"                :  %s ,' % (time.time() / (24 * 3600))          + \
+        else:           self.jsonFile.write(',')
+
+        #-----------------------------------------------------------------------
+        # The json file is intended to analyze the data
+        # It is interesting to see what measurements are done per pedal rotation
+        # PedalRotation is set to 50, so it can be displayed on the speed-scale
+        #-----------------------------------------------------------------------
+        if TacxTrainer.PedalEcho:
+            if self.PedalCycle == 0:
+                self.PedalCycle = 50
+            else:
+                self.PedalCycle = 0
+        #-----------------------------------------------------------------------
+        # Add all usefull variables
+        #-----------------------------------------------------------------------
+        # Use "2012-04-23T18:25:43.511Z" format to be application-independant
+        #     time.time() / (24 * 3600) is excel-style, but offset is different
+        #old'{"time"                :  %s ,' % (time.time() / (24 * 3600))          + \
+        #-----------------------------------------------------------------------
+        s = '{"time"                : "%s",' % datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ") + \
             ' "QuarterSecond"       : "%s",' % QuarterSecond                        + \
             ' "HeartRate"           :  %s ,' % HeartRate                            + \
             ' "Target"              : "|" ,'                                        + \
@@ -55,8 +75,13 @@ class clsLogfileJson():
             ' "CurrentResistance"   :  %s ,' % TacxTrainer.CurrentResistance        + \
             ' "SpeedKmh"            :  %s ,' % TacxTrainer.SpeedKmh                 + \
             ' "VirtualSpeedKmh"     :  %s ,' % TacxTrainer.VirtualSpeedKmh          + \
-            ' "CalculatedSpeedKmh"  :  %s ,' % TacxTrainer.CalculatedSpeedKmh
+            ' "CalculatedSpeedKmh"  :  %s ,' % TacxTrainer.CalculatedSpeedKmh       + \
+            ' "PedalEcho"           :  %s ,' % TacxTrainer.PedalEcho                + \
+            ' "PedalCycle"          :  %s ,' % self.PedalCycle
 
+        #-----------------------------------------------------------------------
+        # TCX only when active
+        #-----------------------------------------------------------------------
         if tcx != None and tcx.NrTrackpoints != self.NrTrackpoints:
             self.NrTrackpoints = tcx.NrTrackpoints
             s += \

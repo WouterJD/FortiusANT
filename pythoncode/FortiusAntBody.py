@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-13"
+__version__ = "2020-11-19"
+# 2020-11-19    QuarterSecond calculation code modified (functionally unchanged)
+# 2020-11-18    Same as 2020-09-30 In idle mode, modeCalibrate was used instead
+#                   of modeStop.
 # 2020-11-13    QuarterSecond calculation improved
 # 2020-11-12    tcxExport class definitions changed
 # 2020-11-10    Calibration employs moving average as requested by #132
@@ -399,8 +402,9 @@ def Runoff(self):
         # case 2. Cadence = 120 and Cycle time (in seconds) = 0.25
         #       angle = .25 * 6 * 120 = 180 degrees
         #
-        # case 2. Cadence = 120 and Cycle time (in seconds) = 0.01
-        #       angle = .01 * 6 * 120 = 1.80 degrees
+        # case 3. Cadence = 120 and Cycle time (in seconds) = 0.02
+        #       angle = .02 * 6 * 120 = 14.40 degrees
+        #                             = 25 samples per circle
         #-------------------------------------------------------------------------
         if clv.PedalStrokeAnalysis:
             if LastPedalEcho == 0   and TacxTrainer.PedalEcho == 1 \
@@ -745,7 +749,7 @@ def Tacx2DongleSub(self, Restart):
             # ANT process is done once every 250ms
             # In case of PedalStrokeAnalysis, check whether it's time for ANT
             #-------------------------------------------------------------------
-            if (time.time() - LastANTtime) > 0.25 or not clv.PedalStrokeAnalysis:
+            if CycleTime == CycleTimeANT or (time.time() - LastANTtime) > 0.25:
                 LastANTtime = time.time()
                 QuarterSecond = True
             else:

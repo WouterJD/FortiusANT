@@ -1771,12 +1771,19 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         # loop will send a command and then receive again.
         # Perhaps just ignoring the short buffer would be enough as well, but
         # this has been tested and found working so I leave it.
+        #
+        # 2020-11-18 sleep() only done when too short buffer received
+        #   As said this SHOULD occur seldomly; if frequently it's bad behaviour
+        #   at this location. It is logged so that we don't mis it.
         #-----------------------------------------------------------------------
         retry = 4
         data  = array.array('B', [])        # Empty Binary array
+        data  = self.USB_Read()             # Try without a sleep first!
         while retry and len(data) < 40:
-            time.sleep(0.1)                 # 2020-09-29 short delay @RogerPleijers
+            time.sleep(0.1)             # 2020-09-29 short delay @RogerPleijers
             data = self.USB_Read()
+            if debug.on(debug.Any):
+                logfile.Write ('Retry because short buffer received')
             retry -= 1
 
         if len(data) < 40:
