@@ -2,7 +2,7 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-11-19"
-# 2020-11-19    json DepalEcho added and time-format made JAVA-style
+# 2020-11-19    json PedalEcho added and time-format made JAVA-style
 # 2020-11-13    json logfile added
 # 2020-04-28    Logfile flushed as well
 # 2020-04-17    Open() provides suffix option
