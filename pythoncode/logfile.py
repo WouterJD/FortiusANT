@@ -36,6 +36,7 @@ class clsLogfileJson():
         self.jsonFile       = None  # Not opened yet
         self.NrTrackpoints  = None  # To detect new trackpoint
         self.PedalCycle     = 0     # 0 or 50 during one pedal cycle
+        self.LastPedalEcho  = 0     # Previous pedalecho from TacxTrainer
         # Create JSON file
         self.jsonFile = open(filename,"w+")
         self.jsonFile.write('[\n')
@@ -47,21 +48,28 @@ class clsLogfileJson():
         #-----------------------------------------------------------------------
         # The json file is intended to analyze the data
         # It is interesting to see what measurements are done per pedal rotation
-        # PedalRotation is set to 50, so it can be displayed on the speed-scale
+        # PedalCycle is set to 50, so it can be displayed on the speed-scale
+        #
+        # PedalCycle changes when PedalEcho goes from 0 --> 1
         #-----------------------------------------------------------------------
-        if TacxTrainer.PedalEcho:
+        if self.LastPedalEcho == 0 and TacxTrainer.PedalEcho == 1:
             if self.PedalCycle == 0:
                 self.PedalCycle = 50
             else:
                 self.PedalCycle = 0
+        self.LastPedalEcho = TacxTrainer.PedalEcho
         #-----------------------------------------------------------------------
         # Add all usefull variables
         #-----------------------------------------------------------------------
-        # Use "2012-04-23T18:25:43.511Z" format to be application-independant
-        #     time.time() / (24 * 3600) is excel-style, but offset is different
-        #old'{"time"                :  %s ,' % (time.time() / (24 * 3600))          + \
+        # datetime.now() is not understood by Excel.
+        # "2012-04-23T18:25:43.511Z" is not understood either (altough 'standard')
+        # time.time() / (24 * 3600) is excel-style, but offset is different
+        #       We add 25569 so that Excel understands it.
+        #       It' does not account for summer/wintertime...
         #-----------------------------------------------------------------------
-        s = '{"time"                : "%s",' % datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ") + \
+        # = '{"time"                : "%s",' % datetime.now()                       + \
+        # = '{"time"                : "%s",' % datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ") + \
+        s = '{"time"                :  %s ,' % ((time.time() / (24 * 3600)) + 25569)+ \
             ' "QuarterSecond"       : "%s",' % QuarterSecond                        + \
             ' "HeartRate"           :  %s ,' % HeartRate                            + \
             ' "Target"              : "|" ,'                                        + \

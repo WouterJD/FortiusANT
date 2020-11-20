@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v3.6"                # Double quotes, see below!
+WindowTitle = "Fortius Antifier v3.8"                # Double quotes, see below!
+# 2020-11-18    Version 3.7
 # 2020-11-12    Version 3.6
 # 2020-11-05    Version 3.5
 # 2020-11-04    First version
