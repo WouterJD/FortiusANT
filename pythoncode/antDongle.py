@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-11-03"
+__version__ = "2020-11-18"
+# 2020-11-18    Retry added when intiating USB dongle as suggested by @martin-vi
 # 2020-11-03    If there is no dongle, Write() and Read() become completely
 #               dummy, so that we can run without ANTdongle.
 # 2020-06-16    Added: When pairing with a master, the master-id is printed
@@ -355,29 +356,38 @@ class clsAntDongle():
                         if debug.on(debug.Function): logfile.Write ("GetDongle - Set configuration")
                         self.devAntDongle.set_configuration()
 
+                        for _ in range(2):
+                            #---------------------------------------------------
+                            # If not succesfull immediatly, repeat this
+                            # As suggested by @martin-vi
+                            #---------------------------------------------------
+                            reset_string = msg4A_ResetSystem()  # reset string probe
+                                                                # same as ResetDongle()
+                                                                # done here to have explicit error-handling.
+                            if debug.on(debug.Function): logfile.Write ("GetDongle - Send reset string to dongle")
+                            self.devAntDongle.write(0x01, reset_string)
+                            time.sleep(0.500)                           # after reset, 500ms before next action
 
-                        reset_string = msg4A_ResetSystem()  # reset string probe
-                                                            # same as ResetDongle()
-                                                            # done here to have explicit error-handling.
-                        if debug.on(debug.Function): logfile.Write ("GetDongle - Send reset string to dongle")
-                        self.devAntDongle.write(0x01, reset_string)
-                        time.sleep(0.500)                           # after reset, 500ms before next action
+
+                            if debug.on(debug.Function): logfile.Write ("GetDongle - Read answer")
+                            reply = self.Read(False)
 
 
-                        if debug.on(debug.Function): logfile.Write ("GetDongle - Read answer")
-                        reply = self.Read(False)
+                            if debug.on(debug.Function): logfile.Write ("GetDongle - Check for an ANT+ reply")
+                            self.Message = "No expected reply from dongle"
+                            for s in reply:
+                                synch, length, id, _info, _checksum, _rest, _c, _d = DecomposeMessage(s)
+                                if synch==0xa4 and length==0x01 and id==0x6f:
+                                    found_available_ant_stick = True
+                                    self.Message = "Using %s dongle" %  self.devAntDongle.manufacturer # dongle[1]
+                                    self.Message = self.Message.replace('\0','')          # .manufacturer is NULL-terminated
+                                    if 'CYCPLUS' in self.Message:
+                                        self.Cycplus = True
 
-
-                        if debug.on(debug.Function): logfile.Write ("GetDongle - Check for an ANT+ reply")
-                        self.Message = "No expected reply from dongle"
-                        for s in reply:
-                            synch, length, id, _info, _checksum, _rest, _c, _d = DecomposeMessage(s)
-                            if synch==0xa4 and length==0x01 and id==0x6f:
-                                found_available_ant_stick = True
-                                self.Message = "Using %s dongle" %  self.devAntDongle.manufacturer # dongle[1]
-                                self.Message = self.Message.replace('\0','')          # .manufacturer is NULL-terminated
-                                if 'CYCPLUS' in self.Message:
-                                    self.Cycplus = True
+                            #---------------------------------------------------
+                            # If found, then done - else retry to reset
+                            #---------------------------------------------------
+                            if found_available_ant_stick: break
 
                     except usb.core.USBError as e:                  # cannot write to ANT dongle
                         if debug.on(debug.Data1 | debug.Function):
