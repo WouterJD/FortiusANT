@@ -103,12 +103,13 @@ class CommandLineVariables(object):
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
 
-        ant_tacx_models = ['i-Vortex', 'i-Genius']
-        ant_tacx_help = 'Specify Tacx Type, default=autodetect. Allowed values are: %s' % ', '.join(ant_tacx_models) 
-        parser.add_argument('-t', '--TacxType', help=ant_tacx_help, choices=ant_tacx_models, metavar='',    required=False, default=False)
+        ant_tacx_models = ['Vortex', 'Genius', 'Genius-']
+        ant_tacx_help = 'Specify Tacx Type, default=autodetect. Append \'-\' for brake only (no head unit).' \
+                      + 'Allowed values are: %s' % ', '.join(ant_tacx_models)
+        parser.add_argument('-t', '--TacxType', help=ant_tacx_help, metavar='',                             required=False, default=False, \
+                choices=ant_tacx_models + ['i-Vortex']) # i-Vortex is still allowed for compatibility
 
         parser.add_argument('-u','--uphill',    help='Uphill only; negative grade is ignored',              required=False, action='store_true')
-        parser.add_argument('--no-headunit',    help='Do not use Tacx headunit (only for ANT+ brakes)',     required=False, action='store_true')
 
         #-----------------------------------------------------------------------
         # Deprecated
@@ -124,10 +125,6 @@ class CommandLineVariables(object):
         args                        = parser.parse_args()
         self.args                   = args
 
-        # Check if '--no-headunit' was used without '--TacxType'
-        if args.no_headunit and not args.TacxType:
-            parser.error('--no-headunit should only be specified with ANT+ brakes, meaning --TacxType should be one of {%s}' % ', '.join(ant_tacx_models))
-
         #-----------------------------------------------------------------------
         # Booleans; either True or False
         #-----------------------------------------------------------------------
@@ -140,9 +137,7 @@ class CommandLineVariables(object):
         self.PedalStrokeAnalysis    = args.PedalStrokeAnalysis
         self.SimulateTrainer        = args.simulate
         self.uphill                 = args.uphill
-        self.NoHeadunit             = args.no_headunit or False
-
-        print(self.NoHeadunit)
+        self.NoHeadunit             = args.TacxType.endswith('-') or False
 
         if self.manual and self.manualGrade:
             logfile.Console("-m and -M are mutually exclusive; manual power selected")
@@ -284,9 +279,9 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         if args.TacxType:
             self.TacxType = args.TacxType
-            if self.TacxType in ('i-Vortex'):
+            if 'Vortex' in self.TacxType:
                 self.Tacx_iVortex = True
-            elif self.TacxType in ('i-Genius'):
+            elif 'Genius' in  self.TacxType:
                 self.Tacx_iGenius = True
 
         #-----------------------------------------------------------------------
