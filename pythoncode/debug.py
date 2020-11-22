@@ -4,7 +4,8 @@ assert sys.version_info >= (3,5), "Python version >= 3.5 required"
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-04-27"
+__version__ = "2020-11-13"
+# 2020-11-13    LogfileJson added
 # 2020-04-27    MultiProcessing added
 # 2020-03-04    Python version check added
 #                   Will affect every module that includes debug.py
@@ -21,6 +22,7 @@ Function       	= 0x02      # 2
 Data1          	= 0x04      # 4			antDongle
 Data2          	= 0x08      # 8			usbTrainer
 MultiProcessing = 0x10      # 16
+LogfileJson     = 0x20      # 32
 
 All	        	= 0xff      # 255		When setting, it's All
 Any				= All		#			When checing, it's Any

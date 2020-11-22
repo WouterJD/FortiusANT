@@ -1,6 +1,8 @@
 *.log
 *.pyc
 *.lnk
+*.tcx
+*.json
 pythoncode/build/
 pythoncode/dist/
 Miscellaneous/

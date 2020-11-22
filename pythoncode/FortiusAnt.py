@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-24"
+__version__ = "2020-11-18"
+# 2020-11-18    Logfile shows what version is started; windows exe or python
+# 2020-11-13    Logfile was not closed on end
+# 2020-11-05    New files added, githubWindowTitle() used
 # 2020-05-24    WindowTitle in logfile
 # 2020-04-23    First version; core functions separated into FortiusAntBody.py
 #               This module contains program startup, GUI-binding and
@@ -25,13 +28,17 @@ import wx
 import antDongle            as ant
 import antHRM               as hrm
 import antFE                as fe
+import antPWR               as pwr
 import debug
 import logfile
 import FortiusAntBody
 import FortiusAntCommand    as cmd
 import FortiusAntGui        as gui
-import usbTrainer
+from   FortiusAntTitle                  import githubWindowTitle
+import RadarGraph
 import structConstants      as sc
+import TCXexport
+import usbTrainer
 
 #-------------------------------------------------------------------------------
 # Directives for this module
@@ -476,19 +483,28 @@ if __name__ == "__main__":
     # Component info
     #-------------------------------------------------------------------------------
     if debug.on(debug.Any):
+        # ----------------------------------------------------------------------
+        if getattr(sys, 'frozen', False):
+            logfile.Write('Windows executable started')
+        else:
+            logfile.Write('Python version started')
+        # ----------------------------------------------------------------------
         logfile.Write('Version info for the components' )
-        logfile.Write(gui.WindowTitle)
+        logfile.Write(githubWindowTitle())
         s = " %20s = %s"
         logfile.Write(s % ('FortiusAnt',                    __version__ ))
         logfile.Write(s % ('antDongle',                 ant.__version__ ))
-        logfile.Write(s % ('antHRM',                    hrm.__version__ ))
         logfile.Write(s % ('antFE',                      fe.__version__ ))
+        logfile.Write(s % ('antHRM',                    hrm.__version__ ))
+        logfile.Write(s % ('antPWR',                    pwr.__version__ ))
         logfile.Write(s % ('debug',                   debug.__version__ ))
         logfile.Write(s % ('FortiusAntBody', FortiusAntBody.__version__ ))
         logfile.Write(s % ('FortiusAntCommand',         cmd.__version__ ))
         logfile.Write(s % ('FortiusAntGui',             gui.__version__ ))
         logfile.Write(s % ('logfile',               logfile.__version__ ))
+        logfile.Write(s % ('RadarGraph',         RadarGraph.__version__ ))
         logfile.Write(s % ('structConstants',            sc.__version__ ))
+        logfile.Write(s % ('TCXexport',           TCXexport.__version__ ))
         logfile.Write(s % ('usbTrainer',         usbTrainer.__version__ ))
 
         logfile.Write(s % ('argparse',             argparse.__version__ ))
@@ -560,3 +576,4 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------
     if debug.on(debug.Any):
         logfile.Console('FortiusAnt ended')
+        logfile.Close()

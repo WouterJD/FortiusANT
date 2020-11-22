@@ -1,7 +1,17 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-10-20"
+__version__ = "2020-11-19"
+# 2020-11-19    QuarterSecond calculation code modified (functionally unchanged)
+# 2020-11-18    Same as 2020-09-30 In idle mode, modeCalibrate was used instead
+#                   of modeStop.
+# 2020-11-13    QuarterSecond calculation improved
+# 2020-11-12    tcxExport class definitions changed
+# 2020-11-10    Calibration employs moving average as requested by #132
+# 2020-11-04    Basic Resistance implemented as a grade as requested by #119
+# 2020-11-03    If there is no dongle, AntDongle becomes completely dummy, 
+#               so that we can run without ANTdongle.
+#               As extension to 2020-09-29, which was not complete.
 # 2020-10-20    Pedalling replaced by pedaling.
 # 2020-09-30    During Runoff, modeCalibrate was used instead of modeResistance
 #                   an error introduced with release 3.0 and now resolved.
@@ -185,6 +195,7 @@ import antSCS            as scs
 import debug
 from   FortiusAntGui                import mode_Power, mode_Grade
 import logfile
+import TCXexport
 import usbTrainer
 
 PrintWarnings = False   # Print warnings even when logging = off
@@ -194,10 +205,13 @@ CycleTimeANT  = 0.25
 # Initialize globals
 # ------------------------------------------------------------------------------
 def Initialize(pclv):
-    global clv, AntDongle, TacxTrainer
+    global clv, AntDongle, TacxTrainer, tcx
     clv         = pclv
     AntDongle   = None
     TacxTrainer = None
+    tcx         = None
+    if clv.exportTCX: tcx = TCXexport.clsTcxExport()
+
     
 # ==============================================================================
 # Here we go, this is the real work what's all about!
@@ -220,7 +234,7 @@ def IdleFunction(self):
     global TacxTrainer
     rtn = 0
     if TacxTrainer and TacxTrainer.OK:
-        TacxTrainer.Refresh(True, usbTrainer.modeCalibrate)
+        TacxTrainer.Refresh(True, usbTrainer.modeStop)
         rtn = TacxTrainer.Buttons
     return rtn
 
@@ -388,8 +402,9 @@ def Runoff(self):
         # case 2. Cadence = 120 and Cycle time (in seconds) = 0.25
         #       angle = .25 * 6 * 120 = 180 degrees
         #
-        # case 2. Cadence = 120 and Cycle time (in seconds) = 0.01
-        #       angle = .01 * 6 * 120 = 1.80 degrees
+        # case 3. Cadence = 120 and Cycle time (in seconds) = 0.02
+        #       angle = .02 * 6 * 120 = 14.40 degrees
+        #                             = 25 samples per circle
         #-------------------------------------------------------------------------
         if clv.PedalStrokeAnalysis:
             if LastPedalEcho == 0   and TacxTrainer.PedalEcho == 1 \
@@ -475,10 +490,10 @@ def Tacx2Dongle(self):
     return rtn
 
 def Tacx2DongleSub(self, Restart):
-    global clv, AntDongle, TacxTrainer
+    global clv, AntDongle, TacxTrainer, tcx
 
-    assert(AntDongle   and AntDongle.OK)
-    assert(TacxTrainer and TacxTrainer.OK)
+    assert(AntDongle)                       # The class must be created
+    assert(TacxTrainer)                     # The class must be created
 
     AntHRMpaired = False
 
@@ -589,7 +604,8 @@ def Tacx2DongleSub(self, Restart):
     # Calibrate trainer
     #---------------------------------------------------------------------------
     CountDown       = 120 * 4 # 8 minutes; 120 is the max on the cadence meter
-    ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for running everage
+    ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for calculating running average
+    AvgResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for collating running averages
     Calibrate       = 0
     StartPedaling   = True
     Counter         = 0
@@ -645,16 +661,19 @@ def Tacx2DongleSub(self, Restart):
 
                 # --------------------------------------------------------------
                 # Average power over the last 20 readings
-                # Stop if difference between min/max is below threshold (30)
+                # Stop if difference between min/max running average is below threshold (2)
                 # At least 30 seconds but not longer than the countdown time (8 minutes)
                 # Note that the limits are empiracally established.
                 # --------------------------------------------------------------
-                ResistanceArray = numpy.append(ResistanceArray, TacxTrainer.CurrentResistance * -1) # Add new value to array
+                ResistanceArray = numpy.append(ResistanceArray, TacxTrainer.CurrentResistance * -1) # Add new instantaneous value to array
                 ResistanceArray = numpy.delete(ResistanceArray, 0)                      # Remove oldest from array
+
+                AvgResistanceArray = numpy.append(AvgResistanceArray, numpy.average(ResistanceArray)) # Add new running average value to array
+                AvgResistanceArray = numpy.delete(AvgResistanceArray, 0) # Remove oldest from array
                 
                 if CountDown < (120 * 4 - 30) and numpy.min(ResistanceArray) > 0:
-                    if (numpy.max(ResistanceArray) - numpy.min(ResistanceArray) ) < 30 or CountDown <= 0:
-                        Calibrate = TacxTrainer.CurrentResistance * -1
+                    if (numpy.max(AvgResistanceArray) - numpy.min(AvgResistanceArray) ) < 2 or CountDown <= 0:
+                        Calibrate = numpy.average(AvgResistanceArray)
                         if debug.on(debug.Function):
                             logfile.Write('Tacx2Dongle; calibration ended %s' % Calibrate)
 
@@ -681,6 +700,8 @@ def Tacx2DongleSub(self, Restart):
     # Initialize variables
     #---------------------------------------------------------------------------
     if not Restart:
+        if clv.exportTCX:
+            tcx.Start()                     # Start TCX export
         if clv.manualGrade:
             TacxTrainer.SetGrade(0)
         else:
@@ -726,8 +747,9 @@ def Tacx2DongleSub(self, Restart):
             StartTime = time.time()
             #-------------------------------------------------------------------
             # ANT process is done once every 250ms
+            # In case of PedalStrokeAnalysis, check whether it's time for ANT
             #-------------------------------------------------------------------
-            if (time.time() - LastANTtime) > 0.25:
+            if CycleTime == CycleTimeANT or (time.time() - LastANTtime) > 0.25:
                 LastANTtime = time.time()
                 QuarterSecond = True
             else:
@@ -766,6 +788,17 @@ def Tacx2DongleSub(self, Restart):
                             TacxTrainer.TargetResistance, \
                             HeartRate, \
                             TacxTrainer.Teeth)
+
+            #-------------------------------------------------------------------
+            # Add trackpoint
+            #-------------------------------------------------------------------
+            if QuarterSecond and clv.exportTCX:
+                tcx.TrackpointX(TacxTrainer, HeartRate)
+
+            #-------------------------------------------------------------------
+            # Store in JSON format
+            #-------------------------------------------------------------------
+            logfile.WriteJson(QuarterSecond, TacxTrainer, tcx, HeartRate)
 
             #-------------------------------------------------------------------
             # Pedal Stroke Analysis
@@ -814,7 +847,7 @@ def Tacx2DongleSub(self, Restart):
             messages = []       # messages to be sent to ANT
             data = []           # responses received from ANT
             if QuarterSecond:
-                LastANTtime = time.time()
+                # LastANTtime = time.time()         # 2020-11-13 removed since duplicate
                 #---------------------------------------------------------------
                 # Sending i-Vortex messages is done by Refesh() not here
                 #---------------------------------------------------------------
@@ -885,11 +918,18 @@ def Tacx2DongleSub(self, Restart):
                         # Data page 48 (0x30) Basic resistance
                         #-------------------------------------------------------
                         if   DataPageNumber == 48:
-                            logfile.Console('Data page 48 Basic mode not implemented')
+                            # logfile.Console('Data page 48 Basic mode not implemented')
                             # I never saw this appear anywhere (2020-05-08)
                             # TargetMode            = mode_Basic
                             # TargetGradeFromDongle = 0
                             # TargetPowerFromDongle = ant.msgUnpage48_BasicResistance(info) * 1000  # n % of maximum of 1000Watt
+
+                            # 2020-11-04 as requested in issue 119
+                            # The percentage is used to calculate grade 0...20%
+                            TacxTrainer.SetGrade(ant.msgUnpage48_BasicResistance(info) * 20)
+                            TacxTrainer.SetRollingResistance(0.004)
+                            TacxTrainer.SetWind(0.51, 0.0, 1.0)
+
                             p71_LastReceivedCommandID   = DataPageNumber
                             p71_SequenceNr              = int(p71_SequenceNr + 1) & 0xff
                             p71_CommandStatus           = 0xff
@@ -1159,7 +1199,11 @@ def Tacx2DongleSub(self, Restart):
             
     except KeyboardInterrupt:
         logfile.Console ("Stopped")
-        
+    #---------------------------------------------------------------------------
+    # Create TCXexport
+    #---------------------------------------------------------------------------
+    if not AntDongle.DongleReconnected and clv.exportTCX:
+        tcx.Stop()
     #---------------------------------------------------------------------------
     # Stop devices
     #---------------------------------------------------------------------------

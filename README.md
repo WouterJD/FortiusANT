@@ -6,3 +6,5 @@ You might also run TrainerRoad or Zwift on the same computer and then two ANT+ d
 
 # User manual and version information
 Refer [wiki](https://github.com/WouterJD/FortiusANT/wiki) first, then ask questions raising an issue. Succes!
+
+![image](https://raw.githubusercontent.com/WouterJD/FortiusANT/master/supportfiles/FortiusAntWorld.jpg)
