@@ -1,7 +1,18 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-09-30"
+__version__ = "2020-11-19"
+# 2020-11-19    QuarterSecond calculation code modified (functionally unchanged)
+# 2020-11-18    Same as 2020-09-30 In idle mode, modeCalibrate was used instead
+#                   of modeStop.
+# 2020-11-13    QuarterSecond calculation improved
+# 2020-11-12    tcxExport class definitions changed
+# 2020-11-10    Calibration employs moving average as requested by #132
+# 2020-11-04    Basic Resistance implemented as a grade as requested by #119
+# 2020-11-03    If there is no dongle, AntDongle becomes completely dummy, 
+#               so that we can run without ANTdongle.
+#               As extension to 2020-09-29, which was not complete.
+# 2020-10-20    Pedalling replaced by pedaling.
 # 2020-09-30    During Runoff, modeCalibrate was used instead of modeResistance
 #                   an error introduced with release 3.0 and now resolved.
 # 2020-09-29    If NO ANTdongle present; users want to be able to test
@@ -45,7 +56,7 @@ __version__ = "2020-09-30"
 # 2020-04-09    The PowercurveFactor is displayed as Digital Gearbox in number of
 #                   teeth. factor = 1 = 15 teeth.
 #               Not a bitmap but (new experience in Python) drawing rectangles.
-# 2020-04-07    Before Calibrating, "Start pedalling" is displayed
+# 2020-04-07    Before Calibrating, "Start pedaling" is displayed
 #               PowercurveFactor is limitted to 0.3 ... 3
 #               Runoff gives error "Calibrate not defined", resolved
 #                   Messaging improved, method is still as inherited from antifier
@@ -184,6 +195,7 @@ import antSCS            as scs
 import debug
 from   FortiusAntGui                import mode_Power, mode_Grade
 import logfile
+import TCXexport
 import usbTrainer
 
 PrintWarnings = False   # Print warnings even when logging = off
@@ -193,10 +205,13 @@ CycleTimeANT  = 0.25
 # Initialize globals
 # ------------------------------------------------------------------------------
 def Initialize(pclv):
-    global clv, AntDongle, TacxTrainer
+    global clv, AntDongle, TacxTrainer, tcx
     clv         = pclv
     AntDongle   = None
     TacxTrainer = None
+    tcx         = None
+    if clv.exportTCX: tcx = TCXexport.clsTcxExport()
+
     
 # ==============================================================================
 # Here we go, this is the real work what's all about!
@@ -219,7 +234,7 @@ def IdleFunction(self):
     global TacxTrainer
     rtn = 0
     if TacxTrainer and TacxTrainer.OK:
-        TacxTrainer.Refresh(True, usbTrainer.modeCalibrate)
+        TacxTrainer.Refresh(True, usbTrainer.modeStop)
         rtn = TacxTrainer.Buttons
     return rtn
 
@@ -317,8 +332,8 @@ def Runoff(self):
     #CALIBRATION TIPS: 
     #1. Tyre pressure 100psi (unloaded and cold) aim for 7.2s rolloff
     #2. Warm up for 2 mins, then cycle 30kph-40kph for 30s 
-    #3. SpeedKmh up to above 40kph then stop pedalling and freewheel
-    #4. Rolldown timer will start automatically when you hit 40kph, so stop pedalling quickly!
+    #3. SpeedKmh up to above 40kph then stop pedaling and freewheel
+    #4. Rolldown timer will start automatically when you hit 40kph, so stop pedaling quickly!
     #''')
     if clv.PedalStrokeAnalysis:
         CycleTime = CycleTimeFast   # Quick poll to get more info
@@ -350,7 +365,7 @@ def Runoff(self):
                 self.SetMessages(Tacx=TacxTrainer.Message + " - Cycle to above 40kph (then stop)")
             else:
                 self.SetMessages(Tacx=TacxTrainer.Message + \
-                                    " - Rolldown timer %s - STOP pedalling!" % \
+                                    " - Rolldown timer %s - STOP pedaling!" % \
                                     ( round((time.time() - rolldown_time),1) ) \
                                 )
           
@@ -387,8 +402,9 @@ def Runoff(self):
         # case 2. Cadence = 120 and Cycle time (in seconds) = 0.25
         #       angle = .25 * 6 * 120 = 180 degrees
         #
-        # case 2. Cadence = 120 and Cycle time (in seconds) = 0.01
-        #       angle = .01 * 6 * 120 = 1.80 degrees
+        # case 3. Cadence = 120 and Cycle time (in seconds) = 0.02
+        #       angle = .02 * 6 * 120 = 14.40 degrees
+        #                             = 25 samples per circle
         #-------------------------------------------------------------------------
         if clv.PedalStrokeAnalysis:
             if LastPedalEcho == 0   and TacxTrainer.PedalEcho == 1 \
@@ -403,7 +419,7 @@ def Runoff(self):
             LastPedalEcho = TacxTrainer.PedalEcho
             
             if TacxTrainer.CurrentPower > 50 and TacxTrainer.Cadence > 30:
-                # Gather some statistics while really pedalling
+                # Gather some statistics while really pedaling
                 PowerCount += 1
                 if TacxTrainer.CurrentPower == LastPower: PowerEqual += 1
                 LastPower = TacxTrainer.CurrentPower
@@ -474,10 +490,10 @@ def Tacx2Dongle(self):
     return rtn
 
 def Tacx2DongleSub(self, Restart):
-    global clv, AntDongle, TacxTrainer
+    global clv, AntDongle, TacxTrainer, tcx
 
-    assert(AntDongle   and AntDongle.OK)
-    assert(TacxTrainer and TacxTrainer.OK)
+    assert(AntDongle)                       # The class must be created
+    assert(TacxTrainer)                     # The class must be created
 
     AntHRMpaired = False
 
@@ -606,15 +622,16 @@ def Tacx2DongleSub(self, Restart):
     # Calibrate trainer
     #---------------------------------------------------------------------------
     CountDown       = 120 * 4 # 8 minutes; 120 is the max on the cadence meter
-    ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for running everage
+    ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for calculating running average
+    AvgResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for collating running averages
     Calibrate       = 0
-    StartPedalling  = True
+    StartPedaling   = True
     Counter         = 0
 
     if TacxTrainer.CalibrateSupported():
         self.SetMessages(Tacx="* * * * S T A R T   P E D A L L I N G * * * *")
         if debug.on(debug.Function):
-            logfile.Write('Tacx2Dongle; start pedalling for calibration')
+            logfile.Write('Tacx2Dongle; start pedaling for calibration')
     try:
     # if True:
         while         self.RunningSwitch \
@@ -636,7 +653,7 @@ def Tacx2DongleSub(self, Restart):
             # First reading on 'my' Fortius shows a positive number, then goes negative
             # so ignore the first x readings before deciding it will not work.
             #-------------------------------------------------------------------
-            # print(StartPedalling, SpeedKmh, CurrentResistance)
+            # print(StartPedaling, SpeedKmh, CurrentResistance)
             if TacxTrainer.CurrentResistance > 0:
                 Counter += 1
                 if Counter == 10:
@@ -647,14 +664,14 @@ def Tacx2DongleSub(self, Restart):
                 # Calibration is started (with pedal kick)
                 #---------------------------------------------------------------
                 # Show progress (when calibrating is started)
-                # This changes the message from "Start Pedalling" to "Calibrating"
+                # This changes the message from "Start Pedaling" to "Calibrating"
                 # The message must be given once for the console-mode (no GUI)
                 #---------------------------------------------------------------
-                if StartPedalling:
+                if StartPedaling:
                     self.SetMessages(Tacx="* * * * C A L I B R A T I N G * * * *")
                     if debug.on(debug.Function):
                         logfile.Write('Tacx2Dongle; start calibration')
-                    StartPedalling = False
+                    StartPedaling = False
 
                 self.SetValues(TacxTrainer.SpeedKmh, int(CountDown/4), \
                         round(TacxTrainer.CurrentPower * -1,0), \
@@ -662,16 +679,19 @@ def Tacx2DongleSub(self, Restart):
 
                 # --------------------------------------------------------------
                 # Average power over the last 20 readings
-                # Stop if difference between min/max is below threshold (30)
+                # Stop if difference between min/max running average is below threshold (2)
                 # At least 30 seconds but not longer than the countdown time (8 minutes)
                 # Note that the limits are empiracally established.
                 # --------------------------------------------------------------
-                ResistanceArray = numpy.append(ResistanceArray, TacxTrainer.CurrentResistance * -1) # Add new value to array
+                ResistanceArray = numpy.append(ResistanceArray, TacxTrainer.CurrentResistance * -1) # Add new instantaneous value to array
                 ResistanceArray = numpy.delete(ResistanceArray, 0)                      # Remove oldest from array
+
+                AvgResistanceArray = numpy.append(AvgResistanceArray, numpy.average(ResistanceArray)) # Add new running average value to array
+                AvgResistanceArray = numpy.delete(AvgResistanceArray, 0) # Remove oldest from array
                 
                 if CountDown < (120 * 4 - 30) and numpy.min(ResistanceArray) > 0:
-                    if (numpy.max(ResistanceArray) - numpy.min(ResistanceArray) ) < 30 or CountDown <= 0:
-                        Calibrate = TacxTrainer.CurrentResistance * -1
+                    if (numpy.max(AvgResistanceArray) - numpy.min(AvgResistanceArray) ) < 2 or CountDown <= 0:
+                        Calibrate = numpy.average(AvgResistanceArray)
                         if debug.on(debug.Function):
                             logfile.Write('Tacx2Dongle; calibration ended %s' % Calibrate)
 
@@ -698,6 +718,8 @@ def Tacx2DongleSub(self, Restart):
     # Initialize variables
     #---------------------------------------------------------------------------
     if not Restart:
+        if clv.exportTCX:
+            tcx.Start()                     # Start TCX export
         if clv.manualGrade:
             TacxTrainer.SetGrade(0)
         else:
@@ -743,8 +765,9 @@ def Tacx2DongleSub(self, Restart):
             StartTime = time.time()
             #-------------------------------------------------------------------
             # ANT process is done once every 250ms
+            # In case of PedalStrokeAnalysis, check whether it's time for ANT
             #-------------------------------------------------------------------
-            if (time.time() - LastANTtime) > 0.25:
+            if CycleTime == CycleTimeANT or (time.time() - LastANTtime) > 0.25:
                 LastANTtime = time.time()
                 QuarterSecond = True
             else:
@@ -783,6 +806,17 @@ def Tacx2DongleSub(self, Restart):
                             TacxTrainer.TargetResistance, \
                             HeartRate, \
                             TacxTrainer.Teeth)
+
+            #-------------------------------------------------------------------
+            # Add trackpoint
+            #-------------------------------------------------------------------
+            if QuarterSecond and clv.exportTCX:
+                tcx.TrackpointX(TacxTrainer, HeartRate)
+
+            #-------------------------------------------------------------------
+            # Store in JSON format
+            #-------------------------------------------------------------------
+            logfile.WriteJson(QuarterSecond, TacxTrainer, tcx, HeartRate)
 
             #-------------------------------------------------------------------
             # Pedal Stroke Analysis
@@ -831,7 +865,7 @@ def Tacx2DongleSub(self, Restart):
             messages = []       # messages to be sent to ANT
             data = []           # responses received from ANT
             if QuarterSecond:
-                LastANTtime = time.time()
+                # LastANTtime = time.time()         # 2020-11-13 removed since duplicate
                 #---------------------------------------------------------------
                 # Sending i-Vortex messages is done by Refesh() not here
                 #---------------------------------------------------------------
@@ -902,11 +936,18 @@ def Tacx2DongleSub(self, Restart):
                         # Data page 48 (0x30) Basic resistance
                         #-------------------------------------------------------
                         if   DataPageNumber == 48:
-                            logfile.Console('Data page 48 Basic mode not implemented')
+                            # logfile.Console('Data page 48 Basic mode not implemented')
                             # I never saw this appear anywhere (2020-05-08)
                             # TargetMode            = mode_Basic
                             # TargetGradeFromDongle = 0
                             # TargetPowerFromDongle = ant.msgUnpage48_BasicResistance(info) * 1000  # n % of maximum of 1000Watt
+
+                            # 2020-11-04 as requested in issue 119
+                            # The percentage is used to calculate grade 0...20%
+                            TacxTrainer.SetGrade(ant.msgUnpage48_BasicResistance(info) * 20)
+                            TacxTrainer.SetRollingResistance(0.004)
+                            TacxTrainer.SetWind(0.51, 0.0, 1.0)
+
                             p71_LastReceivedCommandID   = DataPageNumber
                             p71_SequenceNr              = int(p71_SequenceNr + 1) & 0xff
                             p71_CommandStatus           = 0xff
@@ -1176,7 +1217,11 @@ def Tacx2DongleSub(self, Restart):
             
     except KeyboardInterrupt:
         logfile.Console ("Stopped")
-        
+    #---------------------------------------------------------------------------
+    # Create TCXexport
+    #---------------------------------------------------------------------------
+    if not AntDongle.DongleReconnected and clv.exportTCX:
+        tcx.Stop()
     #---------------------------------------------------------------------------
     # Stop devices
     #---------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v3.3"
-__version__ = "2020-10-16"
+__version__ = "2020-11-04"
+# 2020-11-04    WindowTitle separated into FortiusAntTitle.py
 # 2020-10-01    Version 3.2.2:
 #               - Enable manual mode withoout ANT dongle
 #               - Correct runoff procedure
@@ -58,7 +58,8 @@ import wx.lib.agw.speedmeter as SM
 
 import debug
 import logfile
-import FortiusAntCommand as cmd
+import FortiusAntCommand     as cmd
+from   FortiusAntTitle                  import githubWindowTitle
 import RadarGraph
 
 #-------------------------------------------------------------------------------
@@ -99,7 +100,7 @@ class frmFortiusAntGui(wx.Frame):
     power      = [] # Array with power-tuples
 
     def __init__(self, parent, pclv):
-        wx.Frame.__init__(self, parent, -1, WindowTitle, \
+        wx.Frame.__init__(self, parent, -1, githubWindowTitle(), \
                style = wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
         self.clv = pclv     # clv = Command Line Variables
         # ----------------------------------------------------------------------

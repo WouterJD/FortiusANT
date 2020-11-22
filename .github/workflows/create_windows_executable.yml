@@ -1,0 +1,17 @@
+name: MakeExe
+
+on: [push]
+
+jobs:
+    build:
+        runs-on: windows-latest
+        steps:
+          - uses: actions/setup-python@v1
+          - uses: actions/checkout@v1
+          - name: Install packages
+            run: Development\Install Python Modules.bat
+          - name: Create basic spec file for FortiusANT
+            run: pythoncode\FortiusANT Create basic spec file.bat
+          - name: Build FortiusANT
+            run: pythoncode\FortiusANT CreateWindowsExecutable.bat
+
