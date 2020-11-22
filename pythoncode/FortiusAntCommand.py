@@ -143,6 +143,7 @@ class CommandLineVariables(object):
         self.PedalStrokeAnalysis    = args.PedalStrokeAnalysis
         self.SimulateTrainer        = args.simulate
         self.uphill                 = args.uphill
+        self.NoHeadunit             = args.TacxType.endswith('-') or False
         self.exportTCX              = args.exportTCX or self.manual or self.manualGrade
 
         if self.manual and self.manualGrade:
