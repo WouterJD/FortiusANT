@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-18"
+__version__ = "2020-11-23"
+# 2020-11-11    Added: -r Resistance
 # 2020-11-18    exportTCX implicit for manual mode (that's what is was asked for)
 # 2020-11-11    Added: -x exportTCX
 # 2020-10-09    Added: -u uphill
@@ -52,6 +53,7 @@ class CommandLineVariables(object):
     manualGrade     = False
     PedalStrokeAnalysis = False
     PowerMode       = False      # introduced 2020-04-10; When specified Grade-commands are ignored xx seconds after Power-commands
+    Resistance      = False      # introduced 2020-11-23; When specified, Target Resistance equals Target Power
     scs             = None       # introduced 2020-02-10; None=not specified, numeric=SCS device
 
     PowerFactor     = 1.00
@@ -104,6 +106,8 @@ class CommandLineVariables(object):
                                                                                                             required=False, default=False)
         parser.add_argument('-P','--PowerMode', help='Power mode has preference over Resistance mode (for 30 seconds)',
                                                                                                             required=False, action='store_true')
+        parser.add_argument('-r','--Resistance',help='Target Resistance = Target Power (to create power curve)',
+                                                                                                            required=False, action='store_true')
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
         parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
@@ -134,6 +138,7 @@ class CommandLineVariables(object):
         self.calibrate              = args.calibrate
         self.PowerMode              = args.PowerMode
         self.PedalStrokeAnalysis    = args.PedalStrokeAnalysis
+        self.Resistance             = args.Resistance
         self.SimulateTrainer        = args.simulate
         self.uphill                 = args.uphill
         self.exportTCX              = args.exportTCX or self.manual or self.manualGrade
@@ -338,6 +343,7 @@ class CommandLineVariables(object):
             if      not self.args.calibrate: logfile.Console("-n")
             if v or self.args.factor:        logfile.Console("-p %s" % self.PowerFactor )
             if      self.args.PowerMode:     logfile.Console("-P")
+            if      self.args.Resistance:    logfile.Console("-r")
             if      self.args.simulate:      logfile.Console("-s")
 #scs        if      self.args.scs:           logfile.Console("-S %s" % self.scs )
             if      self.args.TacxType:      logfile.Console("-t %s" % self.TacxType)
