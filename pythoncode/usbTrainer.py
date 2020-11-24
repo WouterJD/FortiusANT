@@ -1417,16 +1417,6 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
         self.TargetResistance = self.TargetPower
 
     #---------------------------------------------------------------------------
-    # Refresh()
-    # No special actions required
-    # Note that TargetResistance=0 for the i-Genius; TargetPower is sent!
-    #---------------------------------------------------------------------------
-    # def Refresh(self, QuarterSecond, TacxMode):
-    #     super().Refresh(QuarterSecond, TacxMode)
-    #     if debug.on(debug.Function):logfile.Write ("clsTacxAntGeniusTrainer.Refresh()")
-    #     pass
-
-    #---------------------------------------------------------------------------
     # HandleANTmessage()
     #---------------------------------------------------------------------------
     def HandleANTmessage(self, msg):
