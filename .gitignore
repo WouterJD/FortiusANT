@@ -3,6 +3,8 @@
 *.lnk
 *.tcx
 *.json
+*.swp 
 pythoncode/build/
 pythoncode/dist/
 Miscellaneous/
+
