@@ -116,6 +116,7 @@ channel_SCS_s       = channel_SCS # slave=display or Cycle Training Program
 
 channel_VTX         = 4           # ANT+ Channel for Tacx i-Vortex
 channel_VTX_s       = channel_VTX # slave=Cycle Training Program
+channel_GNS         = channel_VTX 
 
 channel_VHU_s       = 5           # ANT+ Channel for Tacx i-Vortex Headunit
                                   # slave=Cycle Training Program

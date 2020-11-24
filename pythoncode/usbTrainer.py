@@ -1370,7 +1370,7 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                     #---------------------------------------------------------------
                     # Set target slope
                     #---------------------------------------------------------------
-                    info = ant.msgPageDC_TacxGeniusSetSlope (ant.channel_VTX_s, \
+                    info = ant.msgPageDC_TacxGeniusSetSlope (ant.channel_GNS_s, \
                                                              self.TargetGrade, self.UserAndBikeWeight)
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     messages.append ( msg )
@@ -1378,11 +1378,10 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                     #---------------------------------------------------------------
                     # Set target power
                     #---------------------------------------------------------------
-                    info = ant.msgPageDC_TacxGeniusSetPower (ant.channel_VTX_s, \
+                    info = ant.msgPageDC_TacxGeniusSetPower (ant.channel_GNS_s, \
                                                              self.TargetPower, self.UserAndBikeWeight)
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     messages.append ( msg )
-
 
                 #---------------------------------------------------------------
                 # Avoid power off on headunit
@@ -1436,9 +1435,9 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
         dataHandled = False
         messages    = []
         #-----------------------------------------------------------------------
-        # VTX_s = Tacx i-Genius trainer
+        # GNS_s = Tacx i-Genius trainer
         #-----------------------------------------------------------------------
-        if Channel == ant.channel_VTX_s:
+        if Channel == ant.channel_GNS_s:
             if id == ant.msgID_AcknowledgedData:
                 dataHandled = True
 
@@ -1450,7 +1449,7 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                 # Ask what device is paired
                 #---------------------------------------------------------------
                 if not self.__AntGNSpaired:
-                    msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
+                    msg = ant.msg4D_RequestMessage(ant.channel_GNS_s, ant.msgID_ChannelID)
                     messages.append ( msg )
 
                 #---------------------------------------------------------------
@@ -1471,20 +1470,20 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                 #---------------------------------------------------------------
                 elif DataPageNumber == 1:
                     dataHandled = True
-                    VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm = ant.msgUnpage01_TacxVortexDataSerial(info)
+                    GNS_S1, GNS_S2, GNS_Serial, GNS_Alarm = ant.msgUnpage01_TacxVortexDataSerial(info)
                     if debug.on(debug.Function):
                         logfile.Write ('i-Genius Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % \
-                                       (DataPageNumber, VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm) )
+                                       (DataPageNumber, GNS_S1, GNS_S2, GNS_Serial, GNS_Alarm) )
 
                 #---------------------------------------------------------------
                 # Data page 02 msgUnpage02_TacxGeniusDataVersion
                 #---------------------------------------------------------------
                 elif DataPageNumber == 2:
                     dataHandled = True
-                    VTX_Major, VTX_Minor, VTX_Build = ant.msgUnpage02_TacxVortexDataVersion(info)
+                    GNS_Major, GNS_Minor, GNS_Build = ant.msgUnpage02_TacxVortexDataVersion(info)
                     if debug.on(debug.Function):
                         logfile.Write ('i-Genius Page=%s Major=%s Minor=%s Build=%s' % \
-                                       (DataPageNumber, VTX_Major, VTX_Minor, VTX_Build))
+                                       (DataPageNumber, GNS_Major, GNS_Minor, GNS_Build))
 
             #-------------------------------------------------------------------
             # ChannelID - the info that a master on the network is paired
@@ -1493,13 +1492,13 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                 Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \
                     ant.unmsg51_ChannelID(info)
 
-                if DeviceTypeID == ant.DeviceTypeID_VTX:
+                if DeviceTypeID == ant.DeviceTypeID_GNS:
                     dataHandled = True
                     self.__AntGNSpaired    = True
                     self.__DeviceNumberGNS = DeviceNumber
 
             #-------------------------------------------------------------------
-            # Outer loop does not need to handle channel_VTX_s messages
+            # Outer loop does not need to handle channel_GNS_s messages
             #-------------------------------------------------------------------
             dataHandled = True
 
