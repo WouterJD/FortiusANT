@@ -3,7 +3,10 @@
 #-------------------------------------------------------------------------------
 __version__ = "2020-11-23"
 # 2020-11-23    Motor Brake command implemented for NewUSB interface
-#               TargetResistance = TargetPower implemented
+#               CalibrateSupported depends on motorbrake, not head unit
+#               Magnetic brake formula's adjusted
+#               -r TargetResistance = TargetPower implemented
+#               -G ModifyGrade implemented
 # 2020-11-18    Calibration also supported for 1942 headunit
 # 2020-11-10    Issue 135: React on button press only once corrected
 #               Function Power2Speed() added
@@ -225,11 +228,13 @@ class clsTacxTrainer():
     AntDevice               = None          # clsVortexTrainer only!
     OK                      = False
     Message                 = None
+    MotorBrake              = False         # Fortius motorbrake, supports calibration
 
     # Target provided by CTP (Trainer Road, Zwift, Rouvy, ...)
     # See Refresh() for dependencies
     TargetMode              = mode_Power    # Start with power mode
     TargetGrade             = 0             # no grade
+    TargetGradeOrg          = 0             # Grade, before ModifyGrade
     TargetPower             = 100           # and 100Watts
     TargetResistance        = 0             # calculated and input to trainer
     DynamicAdjust           = 1             # adjustment when CurrentPower <> TargetPower
@@ -435,7 +440,7 @@ class clsTacxTrainer():
     def SetPower(self, Power):
         if debug.on(debug.Function):logfile.Write ("SetPower(%s)" % Power)
         self.TargetMode         = mode_Power
-        self.TargetGrade        = 0
+        self.SetGrade(0)
         self.TargetPower        = Power
         self.TargetResistance   = 0             # .Refresh() must be called
 
@@ -449,12 +454,20 @@ class clsTacxTrainer():
         if Grade < -30: Grade = -30
 
         self.TargetMode         = mode_Grade
-        self.TargetGrade        = Grade
+        self.TargetGradeOrg     = Grade
+        self.TargetGrade        = (Grade + self.clv.GradeOffset) / self.clv.GradeFactor
+                                # Note that default is Offset=0, Factor=1
+                                # ==> self.TargetGrade = Grade (the original formula)
+                                #
+                                # Implemented for Magnetic Brake:
+                                # e.g. Offset = 4.3 and Factor = 2
+                                # Then Grade = -4.3% becomes 0%
+                                #  and Grade =  20 % becomes 12.15%
         self.TargetPower        = 0             # .Refresh() must be called
         self.TargetResistance   = 0             # .Refresh() must be called
 
     def AddGrade(self, deltaGrade):
-        self.SetGrade(self.TargetGrade + deltaGrade)
+        self.SetGrade(self.TargetGradeOrg + deltaGrade)
     
     def SetRollingResistance(self, RollingResistance):
         if debug.on(debug.Function):
@@ -678,10 +691,11 @@ class clsTacxTrainer():
     # returns   True/False
     #---------------------------------------------------------------------------
     def CalibrateSupported(self):
-        if self.Headunit in (hu1932, hu1942):       # And perhaps others as well
-            return True
-        else:
-            return False
+        # if self.Headunit in (hu1932, hu1942):       # And perhaps others as well
+        #     return True
+        # else:
+        #     return False
+        return self.MotorBrake
 
     #---------------------------------------------------------------------------
     # Convert G r a d e T o P o w e r           |  Grade = slope
@@ -1451,6 +1465,14 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
         self.OK         = True
         self.SpeedScale = 11.9 # GoldenCheetah: curSpeed = curSpeedInternal / (1.19f * 10.0f);
         #PowerResistanceFactor = (1 / 0.0036)       # GoldenCheetah ~= 277.778
+        #-----------------------------------------------------------------------
+        # A Magnetic Brake cannot handle negative slope (and negative power)
+        # therefore shift the zero-point and reduce slope [like antifier]
+        # If not set on command-line, set default value
+        #-----------------------------------------------------------------------
+        if not self.clv.ModifyGrade:
+            self.clv.GradeOffset = 4.3
+            self.clv.GradeFactor = 2
 
     #---------------------------------------------------------------------------
     # Basic physics: Power = Resistance * Speed  <==> Resistance = Power / Speed
@@ -1675,23 +1697,73 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             self.SendToTrainer(True, modeStop)
             time.sleep(0.1)                        # Allow head unit time to process
             self.Refresh(True, modeStop)
+        #-----------------------------------------------------------------------
+        # A Magnetic Brake cannot handle negative slope (and negative power)
+        # therefore shift the zero-point and reduce slope [like antifier]
+        # If not set on command-line, set default value
+        #-----------------------------------------------------------------------
+        if not self.MotorBrake and not self.clv.ModifyGrade:
+            self.clv.GradeOffset = 4.3
+            self.clv.GradeFactor = 2
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__() done")
 
     #---------------------------------------------------------------------------
     # Basic physics: Power = Resistance * Speed  <==> Resistance = Power / Speed
     #---------------------------------------------------------------------------
     def CurrentResistance2Power(self):
-        self.CurrentPower = int(self.CurrentResistance / self.PowerResistanceFactor * self.WheelSpeed)
+        if self.MotorBrake:
+            #-------------------------------------------------------------------
+            # e.g. Tacx Fortius: Motor Brake T1941 connected to head unit T1932
+            #-------------------------------------------------------------------
+            self.CurrentPower = int(self.CurrentResistance / self.PowerResistanceFactor * self.WheelSpeed)
+
+        else:
+            #-------------------------------------------------------------------
+            # e.g. Tacx Flow: Magnetic Brake T1901 connected to head unit T1932
+            #-------------------------------------------------------------------
+            self.CurrentPower = self.Resistance2Power_MagneticBrake\
+                                        (self.SpeedKmh, self.CurrentResistance)
+
+    def Resistance2Power_MagneticBrake(self, SpeedKmh, Resistance):
+            Factor = 268
+            Offset = -40
+            
+            if Resistance < 1819: Factor = Factor - (1819 - Resistance) / 15
+
+            return int( ( (SpeedKmh / Factor) + (1 / Offset) ) * Resistance)
 
     def TargetPower2Resistance(self):
         rtn        = 0
 
         if self.clv.Resistance:
-            rtn = self.TargetPower  # e.g. in manual mode you can directly set Resistance
-        else:
+            #-------------------------------------------------------------------
+            # # e.g. in manual mode you can directly set Resistance
+            #-------------------------------------------------------------------
+            rtn = self.TargetPower
+
+        elif self.MotorBrake:
+            #-------------------------------------------------------------------
+            # e.g. Tacx Fortius: Motor Brake T1941 connected to head unit T1932
+            #-------------------------------------------------------------------
             if self.WheelSpeed > 0:
                 rtn = self.TargetPower * self.PowerResistanceFactor / self.WheelSpeed
                 rtn = self.__AvoidCycleOfDeath(rtn)
+        else:
+            #-------------------------------------------------------------------
+            # e.g. Tacx Flow: Magnetic Brake T1901 connected to head unit T1932
+            # This brake has a series of distinct values that can be set;
+            #       more exact estimation is not usefull (antifier)
+            #-------------------------------------------------------------------
+            if self.WheelSpeed > 0:
+                if self.SpeedKmh > 20 and self.TargetPower > self.SpeedKmh * 6:
+                    Factor = 268
+                    Offset = -40
+                    rtn = self.TargetPower / ( (self.SpeedKmh / Factor) + (1 / Offset) )
+                else:
+                    for self.TargetResistance in (1039, 1299, 1559, 1819, 2078, 2338, 2598, 2858, 3118, 3378, 3767, 4027, 4287, 4677):
+                        if self.Resistance2Power_MagneticBrake \
+                                (self.SpeedKmh, self.TargetResistance) >= self.TargetPower:
+                            break
 
         rtn = int(rtn)
 
@@ -2056,10 +2128,17 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             self.MotorBrakeUnitSerial = d                       # remaining
 
             #-----------------------------------------------------------------------
+            # If T1942 or T1942 motorbrake, then calibration is supported
+            # e.g. Headunit T1932 does not return a value for T1901
+            #-----------------------------------------------------------------------
+            if self.MotorBrakeUnitType in (41, 42):
+                self.MotorBrake = True
+
+            #-----------------------------------------------------------------------
             # Important enough; always display
             #-----------------------------------------------------------------------
-            logfile.Console ("Motor Brake Unit Firmware=%s Serial=%5s year=%s type=T19%s Version2=%s" % \
+            logfile.Console ("Motor Brake Unit Firmware=%s Serial=%5s year=%s type=T19%s Version2=%s MotorBrake=%s" % \
                             (   self.MotorBrakeUnitFirmware, self.MotorBrakeUnitSerial, \
                                 self.MotorBrakeUnitYear + 2000, self.MotorBrakeUnitType, \
-                                self.Version2) \
+                                self.Version2, self.MotorBrake) \
                             )

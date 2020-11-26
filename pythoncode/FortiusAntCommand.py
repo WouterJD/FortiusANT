@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-23"
+__version__ = "2020-11-26"
+# 2020-11-25    Added: -G Offset/Factor
+#               Lot of old stuff removed
 # 2020-11-11    Added: -r Resistance
 # 2020-11-18    exportTCX implicit for manual mode (that's what is was asked for)
 # 2020-11-11    Added: -x exportTCX
@@ -47,6 +49,9 @@ class CommandLineVariables(object):
 
     exportTCX       = False      # introduced 2020-11-11;
 
+    ModifyGrade     = False      # introduced 2020-11-26; ModifyGrade defined
+    GradeOffset     = 0          # introduced 2020-11-26; Offset in GradeMode
+    GradeFactor     = 1          # introduced 2020-11-26; factor in GradeMode (1...10)
     gui             = False
     hrm             = None       # introduced 2020-02-09; None=not specified, numeric=HRM device, -1=no HRM
     manual          = False
@@ -64,27 +69,6 @@ class CommandLineVariables(object):
     uphill          = False      # introduced 2020-10-09; Negative grade is ignored
 
     #---------------------------------------------------------------------------
-    # Deprecated
-    #---------------------------------------------------------------------------
-    # __tyre__        = 2.096
-    # __ftp__         = 200
-    # __fL__          = 50
-    # __fS__          = 34
-    # __rS__          = 15
-    # __rL__          = 25
-
-    # ftp             = __ftp__
-
-    # tyre            = __tyre__   # m        tyre circumference
-    # fL              = __fL__     # teeth    chain wheel front / large
-    # fS              = __fS__     # teeth    chain wheel front / small
-    # rL              = __rL__     # teeth    cassette back / large
-    # rS              = __rS__     # teeth    cassette back / small
-
-    # ResistanceH     = 150        # % of ftp
-    # ResistanceL     = 100        # % of ftp
-
-    #---------------------------------------------------------------------------
     # Define and process command line
     #---------------------------------------------------------------------------
     def __init__(self):
@@ -94,33 +78,26 @@ class CommandLineVariables(object):
         # Define and process command line
         #-----------------------------------------------------------------------
         parser = argparse.ArgumentParser(description='Program to broadcast data from USB Tacx Fortius trainer, and to receive resistance data for the trainer')
-        parser.add_argument('-a','--autostart', help='Automatically start',                                 required=False, action='store_true')
-        parser.add_argument('-A','--PedalStrokeAnalysis', help='Pedal Stroke Analysis',                     required=False, action='store_true')
-        parser.add_argument('-d','--debug',     help='Show debugging data',                                 required=False, default=False)
-        parser.add_argument('-g','--gui',       help='Run with graphical user interface',                   required=False, action='store_true')
-        parser.add_argument('-H','--hrm',       help='Pair this Heart Rate Monitor (0: any, -1: none)',     required=False, default=False)
-        parser.add_argument('-m','--manual',    help='Run manual power (ignore target from ANT+ Dongle)',   required=False, action='store_true')
-        parser.add_argument('-M','--manualGrade',help='Run manual grade (ignore target from ANT+ Dongle)',  required=False, action='store_true')
-        parser.add_argument('-n','--calibrate', help='Do not calibrate before start',                       required=False, action='store_false')
-        parser.add_argument('-p','--factor',    help='Adjust target Power by multiplying by this factor for static calibration',
-                                                                                                            required=False, default=False)
-        parser.add_argument('-P','--PowerMode', help='Power mode has preference over Resistance mode (for 30 seconds)',
-                                                                                                            required=False, action='store_true')
-        parser.add_argument('-r','--Resistance',help='Target Resistance = Target Power (to create power curve)',
-                                                                                                            required=False, action='store_true')
-        parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
-#scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
-        parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
-        parser.add_argument('-u','--uphill',    help='Uphill only; negative grade is ignored',              required=False, action='store_true')
-        parser.add_argument('-x','--exportTCX', help='Export TCX file',                                     required=False, action='store_true')
-
-        #-----------------------------------------------------------------------
-        # Deprecated
-        #-----------------------------------------------------------------------
-        # s = '%s,%s/%s,%s/%s' % (self.__tyre__, self.__fL__, self.__fS__, self.__rS__, self.__rL__)
-        # parser.add_argument('-b','--bicycle',   help='Bicycle definition, default=' + s,                    required=False, default=False)
-        # parser.add_argument('-f','--ftp',       help='FTP of the rider, default=%s' % self.__ftp__,         required=False, default=False)
-        # parser.add_argument('-r','--resistance',help='FTP percentages for resistance mode, default=150/100',required=False, default=False)
+        parser.add_argument('-a','--autostart',     help='Automatically start',                                 required=False, action='store_true')
+        parser.add_argument('-A','--PedalStrokeAnalysis', help='Pedal Stroke Analysis',                         required=False, action='store_true')
+        parser.add_argument('-d','--debug',         help='Show debugging data',                                 required=False, default=False)
+        parser.add_argument('-g','--gui',           help='Run with graphical user interface',                   required=False, action='store_true')
+        parser.add_argument('-G','--ModifyGrade',   help='Modify GradeMode: offset/factor',                     required=False, default=False)
+        parser.add_argument('-H','--hrm',           help='Pair this Heart Rate Monitor (0: any, -1: none)',     required=False, default=False)
+        parser.add_argument('-m','--manual',        help='Run manual power (ignore target from ANT+ Dongle)',   required=False, action='store_true')
+        parser.add_argument('-M','--manualGrade',   help='Run manual grade (ignore target from ANT+ Dongle)',   required=False, action='store_true')
+        parser.add_argument('-n','--calibrate',     help='Do not calibrate before start',                       required=False, action='store_false')
+        parser.add_argument('-p','--factor',        help='Adjust target Power by multiplying by this factor for static calibration',
+                                                                                                                required=False, default=False)
+        parser.add_argument('-P','--PowerMode',     help='Power mode has preference over Resistance mode (for 30 seconds)',
+                                                                                                                required=False, action='store_true')
+        parser.add_argument('-r','--Resistance',    help='Target Resistance = Target Power (to create power curve)',
+                                                                                                                required=False, action='store_true')
+        parser.add_argument('-s','--simulate',      help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
+#scs    parser.add_argument('-S','--scs',           help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
+        parser.add_argument('-t','--TacxType',      help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
+        parser.add_argument('-u','--uphill',        help='Uphill only; negative grade is ignored',              required=False, action='store_true')
+        parser.add_argument('-x','--exportTCX',     help='Export TCX file',                                     required=False, action='store_true')
 
         #-----------------------------------------------------------------------
         # Parse
@@ -151,62 +128,6 @@ class CommandLineVariables(object):
             logfile.Console("-m/-M and -s both specified, most likely for program test purpose")
 
         #-----------------------------------------------------------------------
-        # Bicycle definition to be parsed; three parameters
-        # format=tyre,chainring,cassette, e.g. "2.096,50/34,15/25"
-        #-----------------------------------------------------------------------
-        # if args.bicycle:
-        #     b = args.bicycle.split(",")
-        #     #-------------------------------------------------------------------
-        #     # parameter1: Tyre defined?
-        #     #-------------------------------------------------------------------
-        #     if len(b) >= 1:
-        #         try:
-        #             self.tyre = float(b[0])
-        #             if self.tyre < 1: self.tyre = self.__tyre__
-        #         except:
-        #             logfile.Console('Command line error; -b incorrect tyre=%s' % b[0])
-        #             self.tyre = self.__tyre__
-
-        #     #-------------------------------------------------------------------
-        #     # parameter2: Chainring, large/small separated by /
-        #     # format=large/small, e.g. 50/34
-        #     # If one value is specified, e.g. "50" 50/50 is assumed
-        #     #-------------------------------------------------------------------
-        #     if len(b) >= 2:
-        #         s = b[1].split('/')
-        #         if len(s) >= 0:
-        #             try:
-        #                 self.fL = int(s[0])
-        #             except:
-        #                 logfile.Console('Command line error; -b incorrect large chainring=%s' % s[0])
-
-        #         self.fS = self.fL                       # Default is single chainring
-        #         if len(s) >= 1:
-        #             try:
-        #                 self.fS = int(s[1])
-        #             except:
-        #                 logfile.Console('Command line error; -b incorrect small chainring=%s' % s[1])
-
-        #     #-------------------------------------------------------------------
-        #     # parameter3: Cassette, small/large separated by /
-        #     # If one value is specified, e.g. "15" 15/15 is assumed
-        #     #-------------------------------------------------------------------
-        #     if len(b) >= 3:
-        #         s = b[2].split('/')
-        #         if len(s) >= 0:
-        #             try:
-        #                 self.rS = int(s[0])
-        #             except:
-        #                 logfile.Console('Command line error; -b incorrect small cassette=%s' % s[0])
-
-        #         self.rL = self.rS               # Default is single speed cassette
-        #         if len(s) >= 1:
-        #             try:
-        #                 self.rL = int(s[1])
-        #             except:
-        #                 logfile.Console('Command line error; -b incorrect large cassette=%s' % s[1])
-
-        #-----------------------------------------------------------------------
         # Get debug-flags, used in debug module
         #-----------------------------------------------------------------------
         if args.debug:
@@ -214,16 +135,6 @@ class CommandLineVariables(object):
                 self.debug = int(args.debug)
             except:
                 logfile.Console('Command line error; -d incorrect debugging flags=%s' % args.debug)
-
-        #-----------------------------------------------------------------------
-        # Get riders FTP
-        #-----------------------------------------------------------------------
-        # if args.ftp:
-        #     try:
-        #         self.ftp = int(args.ftp)
-        #         if self.ftp < 50: self.ftp = self.__ftp__
-        #     except:
-        #         logfile.Console('Command line error; -f incorrect ftp=%s' % args.ftp)
 
         #-----------------------------------------------------------------------
         # Get HRM
@@ -262,21 +173,26 @@ class CommandLineVariables(object):
                 logfile.Console('Command line error; -f incorrect power factor=%s' % args.factor)
 
         #-----------------------------------------------------------------------
-        # Parse Resistance
+        # Parse ModifyGrade
         #-----------------------------------------------------------------------
-        # if args.resistance:
-        #     s = args.resistance.split('/')
-        #     if len(s) >= 0:
-        #         try:
-        #             self.ResistanceH = int(s[0])
-        #         except:
-        #             logfile.Console('Command line error; -r incorrect high resistance=%s' % s[0])
+        if args.ModifyGrade:
+            self.ModifyGrade = True
+            s = args.ModifyGrade.split('/')
+            if len(s) > 0:
+                try:
+                    self.GradeOffset = float(s[0])
+                    if self.GradeOffset < -20 or self.GradeOffset > 20:
+                        raise ValueError
+                except:
+                    logfile.Console('Command line error; -G incorrect GradeOffset=%s' % s[0])
 
-        #     if len(s) >= 1:
-        #         try:
-        #             self.ResistanceL = int(s[1])
-        #         except:
-        #             logfile.Console('Command line error; -r incorrect low resistance=%s' % s[1])
+            if len(s) > 1:
+                try:
+                    self.GradeFactor = float(s[1])
+                    if self.GradeFactor < 1 or self.GradeFactor > 10:
+                        raise ValueError
+                except:
+                    logfile.Console('Command line error; -G incorrect GradeFactor=%s' % s[1])
 
         #-----------------------------------------------------------------------
         # Get TacxType
@@ -337,6 +253,7 @@ class CommandLineVariables(object):
             if      self.PedalStrokeAnalysis:logfile.Console("-A")
             if v or self.args.debug:         logfile.Console("-d %s (%s)" % (self.debug, bin(self.debug) ) )
             if      self.gui:                logfile.Console("-g")
+            if v or self.args.ModifyGrade:   logfile.Console("-G %s/%s" % (self.GradeOffset, self.GradeFactor) )
             if v or self.args.hrm:           logfile.Console("-H %s" % self.hrm )
             if      self.manual:             logfile.Console("-m")
             if      self.manualGrade:        logfile.Console("-M")
@@ -350,12 +267,6 @@ class CommandLineVariables(object):
             if      self.uphill:             logfile.Console("-u")
             if      self.exportTCX:          logfile.Console("-x")
 
-            #-------------------------------------------------------------------
-            # Deprecated
-            #-------------------------------------------------------------------
-#           if v or self.args.bicycle:       logfile.Console("-b %s,%s/%s,%s/%s" % (self.tyre, self.fL, self.fS, self.rS, self.rL))
-#           if v or self.args.ftp:           logfile.Console("-f %s" % self.ftp )
-#           if v or self.args.resistance:    logfile.Console("-r %s/%s" % (self.ResistanceH, self.ResistanceL))
         except:
             pass # May occur when incorrect command line parameters, error already given before
 
