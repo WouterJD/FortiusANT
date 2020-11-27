@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-23"
+__version__ = "2020-11-27"
+# 2020-11-27    Comment added to MagneticBrake formula's, no changes.
 # 2020-11-23    Motor Brake command implemented for NewUSB interface
 #               CalibrateSupported depends on motorbrake, not head unit
 #               Magnetic brake formula's adjusted
@@ -1654,6 +1655,9 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
 # c l s T a c x N e w U s b T r a i n e r
 #-------------------------------------------------------------------------------
 # Tacx-trainer with New interface & USB connection
+#
+# This class implements the MotorBrake AND the MagneticBrake.
+# Creating a derived class duplicates more common code than simplifying it.
 #-------------------------------------------------------------------------------
 class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     def __init__(self, clv, Message, Headunit, UsbDevice):
@@ -1725,6 +1729,21 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
                                         (self.SpeedKmh, self.CurrentResistance)
 
     def Resistance2Power_MagneticBrake(self, SpeedKmh, Resistance):
+            #-------------------------------------------------------------------
+            # The following formula is derived from antifier's constants,
+            #                  see manual "PowerCurve for i-Flow (T1901-T1932)".
+            # If rewritten to WheelSpeed:
+            #   Power = ( (SpeedKmh / Factor     ) + (1 / Offset) ) * Resistance
+            #   Power = ( (WheelSpeed / 301 * 268) + (1 / 40    ) ) * Resistance
+            #   Power = ( (WheelSpeed / 80668    ) + (1 / 40    ) ) * Resistance
+            # ignoring the offset
+            #   Power = ( (WheelSpeed / 80668    )                ) * Resistance
+            #   Power = Resistance / 80668 * WheelSpeed
+            # only the factor is different from the MotorBrake formula above.
+            #-------------------------------------------------------------------
+            # The formula also matches the structure of the formula as described
+            # in clsTacxLegacyUsbTrainer.CurrentResistance2Power.
+            #-------------------------------------------------------------------
             Factor = 268
             Offset = -40
             
