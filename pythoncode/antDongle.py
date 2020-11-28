@@ -807,13 +807,13 @@ class clsAntDongle():
         logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Genius (GNS Controller)' + s)
         if debug.on(debug.Data1): logfile.Write ("SlaveGNS_ChannelConfig()")
         messages=[
-            msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
-            msg51_ChannelID             (channel_VTX_s, DeviceNumber, DeviceTypeID_GNS, TransmissionType_IC),
-            msg45_ChannelRfFrequency    (channel_VTX_s, RfFrequency_2460Mhz),
-            msg43_ChannelPeriod         (channel_VTX_s, ChannelPeriod=0x1000),
-            msg60_ChannelTransmitPower  (channel_VTX_s, TransmitPower_0dBm),
-            msg4B_OpenChannel           (channel_VTX_s),
-            msg4D_RequestMessage        (channel_VTX_s, msgID_ChannelID)
+            msg42_AssignChannel         (channel_GNS, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
+            msg51_ChannelID             (channel_GNS, DeviceNumber, DeviceTypeID_GNS, TransmissionType_IC),
+            msg45_ChannelRfFrequency    (channel_GNS, RfFrequency_2460Mhz),
+            msg43_ChannelPeriod         (channel_GNS, ChannelPeriod=0x1000),
+            msg60_ChannelTransmitPower  (channel_GNS, TransmitPower_0dBm),
+            msg4B_OpenChannel           (channel_GNS),
+            msg4D_RequestMessage        (channel_GNS, msgID_ChannelID)
         ]
         self.Write(messages)
 

@@ -108,7 +108,7 @@ class CommandLineVariables(object):
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
 
-        ant_tacx_models = ['Vortex', 'Genius', 'Genius-']
+        ant_tacx_models = ['Vortex', 'Genius']
         ant_tacx_help = 'Specify Tacx Type, default=autodetect. Append \'-\' for brake only (no head unit).' \
                       + 'Allowed values are: %s' % ', '.join(ant_tacx_models)
         parser.add_argument('-t', '--TacxType', help=ant_tacx_help, metavar='',                             required=False, default=False, \
