@@ -2,6 +2,7 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2020-12-01"
+# 2020-12-01    Speedscale set to 289.75
 # 2020-12-01    -G option and Magnetic Brake formula's removed
 #               and marked "TO BE IMPLEMENTED"
 # 2020-11-23    Motor Brake command implemented for NewUSB interface
@@ -1646,7 +1647,8 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     def __init__(self, clv, Message, Headunit, UsbDevice):
         super().__init__(clv, Message)
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__()")
-        self.SpeedScale = 301                       # TotalReverse: 289.75
+        self.SpeedScale = 289.75                    # TotalReverse: 289.75
+                                                    # 301 was used untill 2020-12-01
         self.PowerResistanceFactor = 128866         # TotalReverse
 
         self.Headunit   = Headunit
