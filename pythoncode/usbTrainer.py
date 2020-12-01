@@ -1,13 +1,12 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-27"
-# 2020-11-27    Comment added to MagneticBrake formula's, no changes.
+__version__ = "2020-12-01"
+# 2020-12-01    -G option and Magnetic Brake formula's removed
+#               and marked "TO BE IMPLEMENTED"
 # 2020-11-23    Motor Brake command implemented for NewUSB interface
 #               CalibrateSupported depends on motorbrake, not head unit
-#               Magnetic brake formula's adjusted
 #               -r TargetResistance = TargetPower implemented
-#               -G ModifyGrade implemented
 # 2020-11-18    Calibration also supported for 1942 headunit
 # 2020-11-10    Issue 135: React on button press only once corrected
 #               Function Power2Speed() added
@@ -235,7 +234,6 @@ class clsTacxTrainer():
     # See Refresh() for dependencies
     TargetMode              = mode_Power    # Start with power mode
     TargetGrade             = 0             # no grade
-    TargetGradeOrg          = 0             # Grade, before ModifyGrade
     TargetPower             = 100           # and 100Watts
     TargetResistance        = 0             # calculated and input to trainer
     DynamicAdjust           = 1             # adjustment when CurrentPower <> TargetPower
@@ -441,7 +439,7 @@ class clsTacxTrainer():
     def SetPower(self, Power):
         if debug.on(debug.Function):logfile.Write ("SetPower(%s)" % Power)
         self.TargetMode         = mode_Power
-        self.SetGrade(0)
+        self.TargetGrade        = 0
         self.TargetPower        = Power
         self.TargetResistance   = 0             # .Refresh() must be called
 
@@ -455,20 +453,12 @@ class clsTacxTrainer():
         if Grade < -30: Grade = -30
 
         self.TargetMode         = mode_Grade
-        self.TargetGradeOrg     = Grade
-        self.TargetGrade        = (Grade + self.clv.GradeOffset) / self.clv.GradeFactor
-                                # Note that default is Offset=0, Factor=1
-                                # ==> self.TargetGrade = Grade (the original formula)
-                                #
-                                # Implemented for Magnetic Brake:
-                                # e.g. Offset = 4.3 and Factor = 2
-                                # Then Grade = -4.3% becomes 0%
-                                #  and Grade =  20 % becomes 12.15%
+        self.TargetGrade        = Grade
         self.TargetPower        = 0             # .Refresh() must be called
         self.TargetResistance   = 0             # .Refresh() must be called
 
     def AddGrade(self, deltaGrade):
-        self.SetGrade(self.TargetGradeOrg + deltaGrade)
+        self.SetGrade(self.TargetGrade + deltaGrade)
     
     def SetRollingResistance(self, RollingResistance):
         if debug.on(debug.Function):
@@ -1466,14 +1456,6 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
         self.OK         = True
         self.SpeedScale = 11.9 # GoldenCheetah: curSpeed = curSpeedInternal / (1.19f * 10.0f);
         #PowerResistanceFactor = (1 / 0.0036)       # GoldenCheetah ~= 277.778
-        #-----------------------------------------------------------------------
-        # A Magnetic Brake cannot handle negative slope (and negative power)
-        # therefore shift the zero-point and reduce slope [like antifier]
-        # If not set on command-line, set default value
-        #-----------------------------------------------------------------------
-        if not self.clv.ModifyGrade:
-            self.clv.GradeOffset = 4.3
-            self.clv.GradeFactor = 2
 
     #---------------------------------------------------------------------------
     # Basic physics: Power = Resistance * Speed  <==> Resistance = Power / Speed
@@ -1657,7 +1639,8 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
 # Tacx-trainer with New interface & USB connection
 #
 # This class implements the MotorBrake AND the MagneticBrake.
-# Creating a derived class duplicates more common code than simplifying it.
+# For the time being; Creating a derived class duplicates more common code than
+# simplifying it.
 #-------------------------------------------------------------------------------
 class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     def __init__(self, clv, Message, Headunit, UsbDevice):
@@ -1701,14 +1684,6 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             self.SendToTrainer(True, modeStop)
             time.sleep(0.1)                        # Allow head unit time to process
             self.Refresh(True, modeStop)
-        #-----------------------------------------------------------------------
-        # A Magnetic Brake cannot handle negative slope (and negative power)
-        # therefore shift the zero-point and reduce slope [like antifier]
-        # If not set on command-line, set default value
-        #-----------------------------------------------------------------------
-        if not self.MotorBrake and not self.clv.ModifyGrade:
-            self.clv.GradeOffset = 4.3
-            self.clv.GradeFactor = 2
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__() done")
 
     #---------------------------------------------------------------------------
@@ -1724,39 +1699,16 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         else:
             #-------------------------------------------------------------------
             # e.g. Tacx Flow: Magnetic Brake T1901 connected to head unit T1932
+            # TO BE IMPLEMENTED; below formula is not satisfactory!
             #-------------------------------------------------------------------
-            self.CurrentPower = self.Resistance2Power_MagneticBrake\
-                                        (self.SpeedKmh, self.CurrentResistance)
-
-    def Resistance2Power_MagneticBrake(self, SpeedKmh, Resistance):
-            #-------------------------------------------------------------------
-            # The following formula is derived from antifier's constants,
-            #                  see manual "PowerCurve for i-Flow (T1901-T1932)".
-            # If rewritten to WheelSpeed:
-            #   Power = ( (SpeedKmh / Factor     ) + (1 / Offset) ) * Resistance
-            #   Power = ( (WheelSpeed / 301 * 268) + (1 / 40    ) ) * Resistance
-            #   Power = ( (WheelSpeed / 80668    ) + (1 / 40    ) ) * Resistance
-            # ignoring the offset
-            #   Power = ( (WheelSpeed / 80668    )                ) * Resistance
-            #   Power = Resistance / 80668 * WheelSpeed
-            # only the factor is different from the MotorBrake formula above.
-            #-------------------------------------------------------------------
-            # The formula also matches the structure of the formula as described
-            # in clsTacxLegacyUsbTrainer.CurrentResistance2Power.
-            #-------------------------------------------------------------------
-            Factor = 268
-            Offset = -40
-            
-            if Resistance < 1819: Factor = Factor - (1819 - Resistance) / 15
-
-            return int( ( (SpeedKmh / Factor) + (1 / Offset) ) * Resistance)
+            self.CurrentPower = int(self.CurrentResistance / self.PowerResistanceFactor * self.WheelSpeed)
 
     def TargetPower2Resistance(self):
         rtn        = 0
 
         if self.clv.Resistance:
             #-------------------------------------------------------------------
-            # # e.g. in manual mode you can directly set Resistance
+            # e.g. in manual mode you can directly set Resistance
             #-------------------------------------------------------------------
             rtn = self.TargetPower
 
@@ -1770,19 +1722,11 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         else:
             #-------------------------------------------------------------------
             # e.g. Tacx Flow: Magnetic Brake T1901 connected to head unit T1932
-            # This brake has a series of distinct values that can be set;
-            #       more exact estimation is not usefull (antifier)
+            # TO BE IMPLEMENTED; below formula is not satisfactory!
             #-------------------------------------------------------------------
             if self.WheelSpeed > 0:
-                if self.SpeedKmh > 20 and self.TargetPower > self.SpeedKmh * 6:
-                    Factor = 268
-                    Offset = -40
-                    rtn = self.TargetPower / ( (self.SpeedKmh / Factor) + (1 / Offset) )
-                else:
-                    for self.TargetResistance in (1039, 1299, 1559, 1819, 2078, 2338, 2598, 2858, 3118, 3378, 3767, 4027, 4287, 4677):
-                        if self.Resistance2Power_MagneticBrake \
-                                (self.SpeedKmh, self.TargetResistance) >= self.TargetPower:
-                            break
+                rtn = self.TargetPower * self.PowerResistanceFactor / self.WheelSpeed
+                rtn = self.__AvoidCycleOfDeath(rtn)
 
         rtn = int(rtn)
 
