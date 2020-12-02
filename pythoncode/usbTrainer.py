@@ -1356,8 +1356,11 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                     #---------------------------------------------------------------
                     # Set target power
                     #---------------------------------------------------------------
+                    # lower flywheel weight in ERG mode to make the trainer more responsive
+                    # 10kg is what is used on the Fortius
+                    flywheel_weight = 10
                     info = ant.msgPageDC_TacxGeniusSetPower (ant.channel_GNS, \
-                                                             self.TargetPower, self.UserAndBikeWeight)
+                                                             self.TargetPower, flywheel_weight)
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     messages.append ( msg )
 
