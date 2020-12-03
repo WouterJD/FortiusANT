@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-01"
+__version__ = "2020-12-03"
+# 2020-12-03    For Magnetic brake -r uses the resistance table [0...13]
+#               introduced: Resistance2PowerMB(), under investigation!!
 # 2020-12-01    Speedscale set to 289.75
 # 2020-12-01    -G option and Magnetic Brake formula's removed
 #               and marked "TO BE IMPLEMENTED"
@@ -1289,11 +1291,31 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     # Convert WheelSpeed --> Speed in km/hr
     # SpeedScale must be defined in sub-class
     #---------------------------------------------------------------------------
+    # TotalReverse wiki:
+    # - 'Load' is the target speed. load_speed = 'kph * 289.75'
+    # - TTS4 calibrates with value '0x16a3' and says that this is 20 kph.
+    #       0x16a3 / 20 (kph) = 289.75.
+    #---------------------------------------------------------------------------
     # WheelSpeed = 1 mm/sec <==> 1.000.000 / 3600 km/hr = 1/278 km/hr
     # TotalReverse: Other implementations are using values between 1/277 and 1/360.
-    # A practical test shows that Cadence=92 gives 40km/hr at a given ratio
+    # WouterJD: A practical test shows that Cadence=92 gives 40km/hr at a given ratio
     #		factor 289.75 gives a slightly higher speed
     #		factor 301 would be good (8-11-2019)
+    #---------------------------------------------------------------------------
+    # @switchable 2020-12-02:
+    # If you mean: is there some simple explanation why the factor 289.75 is? 
+    # Unfortunately I did not find one. Maybe it is just related to the way the
+    # speed was orignally measured on the Fortius and there isn't one.
+    # What I did to calculate the factor was this: with a roll diameter of 29mm,
+    # if the speed is v then it will rotate at a rate v / (29mm * pi).
+    # The sensor in the brake will output 4 pulses per turn, so I set my function
+    # generator to a frequency of 4 * v / (29mm * pi) to simulate riding at speed
+    # v and compared the value sent over USB.
+    # I also compared the value calculated by TTS and it agreed well with the
+    # theoretical one. This was repeated 60 times for different speeds, the factor
+    # calculated using linear regression. It may in fact be closer to 289.76, 
+    # but that ist irrelevant in practice.
+    # It definitely isn't 280 or 300, at least on my unit.
     #---------------------------------------------------------------------------
     def Wheel2Speed(self):
         self.SpeedKmh = round(self.WheelSpeed / self.SpeedScale, 1)
@@ -1647,8 +1669,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     def __init__(self, clv, Message, Headunit, UsbDevice):
         super().__init__(clv, Message)
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__()")
-        self.SpeedScale = 289.75                    # TotalReverse: 289.75
-                                                    # 301 was used untill 2020-12-01
+        self.SpeedScale = 289.75                    # See comment above
         self.PowerResistanceFactor = 128866         # TotalReverse
 
         self.Headunit   = Headunit
@@ -1661,6 +1682,25 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         self.MotorBrakeUnitType     = 0             # 41 = T1941 (Fortius motorbrake)
                                                     # 01 = T1901 (Magnetic brake)
         self.Version2               = 0
+
+        #---------------------------------------------------------------------------
+        # Resistance values for MagneticBrake
+        # - possible force values to be recv from device
+        # - possible resistance value to be transmitted to device
+        #
+        # The head-unit only returns the values 1039...4677 in CurrentResistance.
+        # the head-unit only accepts the TargetResistances 1900...3750; other values
+        # are rounded down to the nearest value..
+        # Sending 1000 is the same as 1900
+        # Sending 2029 is the same as 1900
+        # Sending 5000 is the same as 3750
+        #
+        # The idea behind this, why there are 14 entries, why these values and why
+        # the steps between these values are not equal is the secret of the new USB
+        # interface with the Magnetic brake attached.
+        #---------------------------------------------------------------------------
+        self.currentR = [1039, 1299, 1559, 1819, 2078, 2338, 2598, 2858, 3118, 3378, 3767, 4027, 4287, 4677]
+        self.targetR  = [1900, 2030, 2150, 2300, 2400, 2550, 2700, 2900, 3070, 3200, 3350, 3460, 3600, 3750]
 
         #---------------------------------------------------------------------------
         # Initial state = stop
@@ -1701,9 +1741,26 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         else:
             #-------------------------------------------------------------------
             # e.g. Tacx Flow: Magnetic Brake T1901 connected to head unit T1932
-            # TO BE IMPLEMENTED; below formula is not satisfactory!
             #-------------------------------------------------------------------
-            self.CurrentPower = int(self.CurrentResistance / self.PowerResistanceFactor * self.WheelSpeed)
+            self.CurrentPower = int(self.Resistance2PowerMB(self.CurrentResistance, self.SpeedKmh))
+
+    #---------------------------------------------------------------------------
+    # Power formula for Magnetic brake; thanks to @swichabl and @cyclingflow
+    #---------------------------------------------------------------------------
+    # The formula used is this:
+    # power = speed * (scale factor * resistance * 
+    #                     speed / (speed + critical speed) + rolling resistance)
+    # So there are just two parameters (scale factor and critical speed) that
+    # would be the same for everyone + rolling resistance which should
+    # eventually be determined individually using the "runoff"/spin-down test.
+    #---------------------------------------------------------------------------
+    def Resistance2PowerMB(self, Resistance, SpeedKmh):
+        ScaleFactor         = 0.013   # N
+        CriticalSpeed       = 4.67    # m/s
+        RollingResistance   = 3.31    # N
+
+        Speed = SpeedKmh / 3.6
+        return Speed * (ScaleFactor * Resistance * Speed / (Speed + CriticalSpeed) + RollingResistance)
 
     def TargetPower2Resistance(self):
         rtn        = 0
@@ -1711,8 +1768,17 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         if self.clv.Resistance:
             #-------------------------------------------------------------------
             # e.g. in manual mode you can directly set Resistance
+            # For the magnetic brake, there are 13 individual values
+            #       knowing that we UP/DOWN by 50 Watt, divide TargetPower by 50
+            #       So 0...650 Watt results in passing the targetR[] table
             #-------------------------------------------------------------------
-            rtn = self.TargetPower
+            if self.MotorBrake:
+                rtn = self.TargetPower
+            else:
+                i = int(self.TargetPower / 50)
+                i = max(                    0, i)        # Not less than 0
+                i = min(len(self.targetR) - 1, i)        # Not more than 13
+                rtn = self.targetR[i]
 
         elif self.MotorBrake:
             #-------------------------------------------------------------------
@@ -1721,14 +1787,16 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             if self.WheelSpeed > 0:
                 rtn = self.TargetPower * self.PowerResistanceFactor / self.WheelSpeed
                 rtn = self.__AvoidCycleOfDeath(rtn)
+
         else:
             #-------------------------------------------------------------------
             # e.g. Tacx Flow: Magnetic Brake T1901 connected to head unit T1932
-            # TO BE IMPLEMENTED; below formula is not satisfactory!
             #-------------------------------------------------------------------
             if self.WheelSpeed > 0:
-                rtn = self.TargetPower * self.PowerResistanceFactor / self.WheelSpeed
-                rtn = self.__AvoidCycleOfDeath(rtn)
+                for i in range(0, len(self.currentR)):
+                    if self.Resistance2PowerMB(self.currentR[i], self.SpeedKmh) >= self.TargetPower:
+                        break
+                rtn = self.targetR[i]
 
         rtn = int(rtn)
 
@@ -2098,6 +2166,10 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             #-----------------------------------------------------------------------
             if self.MotorBrakeUnitType in (41, 42):
                 self.MotorBrake = True
+
+            if False:
+                print ('MagneticBrake active --- to test code ---  T O   B E   R E M O V E D')
+                self.MotorBrake = False
 
             #-----------------------------------------------------------------------
             # Important enough; always display
