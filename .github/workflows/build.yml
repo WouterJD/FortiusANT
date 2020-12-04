@@ -12,6 +12,7 @@ jobs:
         python-version: 3.7
     - name: Install dependencies
       run: |
+        cd pythoncode
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     - name: Build executable
