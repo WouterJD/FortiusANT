@@ -29,7 +29,7 @@ jobs:
         pyinstaller --clean MakeFortiusANT.spec
     - uses: actions/upload-artifact@v2
       with:
-        name: FortiusANT.exe
+        name: Artifacts
         path: |
           pythoncode\dist\FortiusANT.exe
           pythoncode\dist\ExplorANT.exe
