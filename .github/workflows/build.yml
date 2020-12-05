@@ -22,11 +22,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install pyinstaller
         pip install -r requirements.txt
-    - name: Build executable
+    - name: Build executables
       run: |
         cd pythoncode
+        pyinstaller --clean MakeExplorANT.spec
         pyinstaller --clean MakeFortiusANT.spec
     - uses: actions/upload-artifact@v2
       with:
-        name: FortiusANT executable
-        path: pythoncode\dist\FortiusANT.exe
+        name: FortiusANT.exe
+        path: |
+          pythoncode\dist\FortiusANT.exe
+          pythoncode\dist\ExplorANT.exe
