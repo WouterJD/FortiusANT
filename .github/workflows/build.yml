@@ -12,7 +12,7 @@ jobs:
         python-version: 3.7
     - name: Get libusb
       run: |
-        bitsadmin /transfer downloadJob /download /priority foregound https://sourceforge.net/projects/libusb-win32/files/libusb-win32-releases/1.2.6.0/libusb-win32-bin-1.2.6.0.zip %cd%\libusb-win32-bin-1.2.6.0.zip
+        bitsadmin /transfer downloadJob /download /priority foreground https://sourceforge.net/projects/libusb-win32/files/libusb-win32-releases/1.2.6.0/libusb-win32-bin-1.2.6.0.zip %cd%\libusb-win32-bin-1.2.6.0.zip
         tar -xf %cd%\libusb-win32-bin-1.2.6.0.zip
         copy %cd%\libusb-win32-bin-1.2.6.0\bin\amd64\libusb0.dll C:\Windows\System32\libusb0.dll
     - name: Install dependencies
