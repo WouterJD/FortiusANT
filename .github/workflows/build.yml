@@ -26,3 +26,7 @@ jobs:
       run: |
         cd pythoncode
         pyinstaller --clean MakeFortiusANT.spec
+    - uses: actions/upload-artifact@v2
+      with:
+        name: FortiusANT executable
+        path: pythoncode\dist\FortiusANT.exe
