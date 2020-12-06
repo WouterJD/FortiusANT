@@ -1348,8 +1348,12 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                     #---------------------------------------------------------------
                     # Set target slope
                     #---------------------------------------------------------------
+
+                    # effective slope (including possible additional rolling
+                    # resistance)
+                    effective_slope = self.TargetGrade + self.RollingResistance2Grade()
                     info = ant.msgPageDC_TacxGeniusSetSlope (ant.channel_GNS, \
-                                                             self.TargetGrade, self.UserAndBikeWeight)
+                                                             effective_slope, self.UserAndBikeWeight)
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     messages.append ( msg )
                 else:
@@ -1378,6 +1382,20 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
     #---------------------------------------------------------------------------
     def TargetPower2Resistance(self):
         self.TargetResistance = self.TargetPower
+
+    #---------------------------------------------------------------------------
+    # RollingResistance2Grade
+    #
+    # Some trainers (Genius, Bushido) do not support setting a rolling
+    # resistance coefficient, but it is possible to calculate an additional
+    # slope that realizes the same effect
+    #---------------------------------------------------------------------------
+    def RollingResistance2Grade(self):
+        # assume the default rolling resistance applied internally is 0.004
+        # and calculate a slope that accounts for the difference
+        defaultRR = 0.004
+        deltaRR = self.RollingResistance - defaultRR
+        return deltaRR * 100
 
     #---------------------------------------------------------------------------
     # HandleANTmessage()
