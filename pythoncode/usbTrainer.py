@@ -1360,7 +1360,7 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                     # 10kg is what is used on the Fortius
                     flywheel_weight = 10
                     info = ant.msgPageDC_TacxGeniusSetPower (ant.channel_GNS, \
-                                                             self.TargetPower, flywheel_weight)
+                                                             self.TargetResistance, flywheel_weight)
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     messages.append ( msg )
 
