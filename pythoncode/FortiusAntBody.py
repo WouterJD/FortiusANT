@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-19"
+__version__ = "2020-12-07"
+# 2020-12-07    Slope grade as received from CTP is reduced with self.clv.GradeAdjust
 # 2020-11-19    QuarterSecond calculation code modified (functionally unchanged)
 # 2020-11-18    Same as 2020-09-30 In idle mode, modeCalibrate was used instead
 #                   of modeStop.
@@ -926,7 +927,14 @@ def Tacx2DongleSub(self, Restart):
 
                             # 2020-11-04 as requested in issue 119
                             # The percentage is used to calculate grade 0...20%
-                            TacxTrainer.SetGrade(ant.msgUnpage48_BasicResistance(info) * 20)
+                            Grade = ant.msgUnpage48_BasicResistance(info) * 20
+
+                            # Implemented for Magnetic Brake:
+                            # - grade is NOT shifted with GradeAdjust (here never negative)
+                            # - but is reduced to 30% (can be re-adjusted with Virtual Gearbox)
+                            if not TacxTrainer.MotorBrake: Grade *= 0.2
+
+                            TacxTrainer.SetGrade(Grade)
                             TacxTrainer.SetRollingResistance(0.004)
                             TacxTrainer.SetWind(0.51, 0.0, 1.0)
 
@@ -990,6 +998,13 @@ def Tacx2DongleSub(self, Restart):
                                 pass
                             else:
                                 Grade, RollingResistance = ant.msgUnpage51_TrackResistance(info)
+
+                                # Implemented for Magnetic Brake:
+                                # - grade is shifted with GradeAdjust
+                                # - then reduced to 30% (can be re-adjusted with Virtual Gearbox)
+                                Grade -= clv.GradeAdjust
+                                if not TacxTrainer.MotorBrake: Grade *= 0.2
+
                                 TacxTrainer.SetGrade(Grade)
                                 TacxTrainer.SetRollingResistance(RollingResistance)
                                 PowerModeActive       = ''

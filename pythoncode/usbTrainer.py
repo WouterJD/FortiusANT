@@ -276,6 +276,7 @@ class clsTacxTrainer():
     PowercurveFactor        = 1             # 1.1 causes higher load
                                             # 0.9 causes lower load
                                             # Is manually set in Grademode
+
     Teeth                   = 15            # See Refresh()
 
     # USB devices only:
@@ -1726,6 +1727,19 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             self.SendToTrainer(True, modeStop)
             time.sleep(0.1)                        # Allow head unit time to process
             self.Refresh(True, modeStop)
+        #---------------------------------------------------------------------------
+        # For MotorBrake, use standard PowerCurve
+        #
+        # For Magnetic Brake, adjust operation in GradeMode
+        # - modify -10% ... 0 ... +10% into 0 ... 10% ... 20% (no negative slope)
+        # - set Virtual Gearbox to 30% (can be changed through headunit)
+        #---------------------------------------------------------------------------
+        if self.MotorBrake:
+            if not self.clv.GradeAdjust: self.clv.GradeAdjust = 0
+        else:
+            if not self.clv.GradeAdjust: self.clv.GradeAdjust = 10
+
+        #---------------------------------------------------------------------------
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__() done")
 
     #---------------------------------------------------------------------------
@@ -1755,9 +1769,15 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     # eventually be determined individually using the "runoff"/spin-down test.
     #---------------------------------------------------------------------------
     def Resistance2PowerMB(self, Resistance, SpeedKmh):
-        ScaleFactor         = 0.013   # N
-        CriticalSpeed       = 4.67    # m/s
-        RollingResistance   = 3.31    # N
+        ScaleFactor             = 0.013   # N
+        CriticalSpeed           = 4.67    # m/s
+
+        if self.clv.CalibrateRR:
+            RollingResistance = self.clv.CalibrateRR    # Value 0...100 allowed
+            RollingResistance = min(100, RollingResistance)
+            RollingResistance = max(  0, RollingResistance)
+        else:
+            RollingResistance   = 15      # N
 
         Speed = SpeedKmh / 3.6
         return Speed * (ScaleFactor * Resistance * Speed / (Speed + CriticalSpeed) + RollingResistance)
@@ -2168,7 +2188,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
                 self.MotorBrake = True
 
             if False:
-                print ('MagneticBrake active --- to test code ---  T O   B E   R E M O V E D')
+                print ('MagneticBrake active --- to test code ---  T O   B E   D E A C T I V A T E D')
                 self.MotorBrake = False
 
             #-----------------------------------------------------------------------
