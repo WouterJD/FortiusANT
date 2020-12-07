@@ -1000,9 +1000,9 @@ def Tacx2DongleSub(self, Restart):
                                 Grade, RollingResistance = ant.msgUnpage51_TrackResistance(info)
 
                                 # Implemented for Magnetic Brake:
-                                # - grade is shifted with GradeAdjust
+                                # - grade is shifted with GradeAdjust (-10% --> 0)
                                 # - then reduced to 30% (can be re-adjusted with Virtual Gearbox)
-                                Grade -= clv.GradeAdjust
+                                Grade += clv.GradeAdjust
                                 if not TacxTrainer.MotorBrake: Grade *= 0.2
 
                                 TacxTrainer.SetGrade(Grade)
