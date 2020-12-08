@@ -5,4 +5,5 @@
 *.json
 pythoncode/build/
 pythoncode/dist/
+pythoncode/help.txt
 Miscellaneous/

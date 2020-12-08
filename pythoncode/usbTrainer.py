@@ -1730,14 +1730,12 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         #---------------------------------------------------------------------------
         # For MotorBrake, use standard PowerCurve
         #
-        # For Magnetic Brake, adjust operation in GradeMode
-        # - modify -10% ... 0 ... +10% into 0 ... 10% ... 20% (no negative slope)
-        # - set Virtual Gearbox to 30% (can be changed through headunit)
+        # For Magnetic Brake, adjust operation in GradeMode (by default)
+        # See FortiusAntCommand for more explanation to avoid duplication.
         #---------------------------------------------------------------------------
-        if self.MotorBrake:
-            if not self.clv.GradeAdjust: self.clv.GradeAdjust = 0
-        else:
-            if not self.clv.GradeAdjust: self.clv.GradeAdjust = 10
+        if not self.MotorBrake:
+            if self.clv.GradeAdjust < 1: self.clv.GradeShift  = 10
+            if self.clv.GradeAdjust < 2: self.clv.GradeFactor = 5
 
         #---------------------------------------------------------------------------
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__() done")

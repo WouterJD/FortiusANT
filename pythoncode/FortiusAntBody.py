@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-07"
+__version__ = "2020-12-08"
+# 2020-12-08    GradeAdjust is split into GradeShift/GradeFactor
 # 2020-12-07    Slope grade as received from CTP is reduced with self.clv.GradeAdjust
 # 2020-11-19    QuarterSecond calculation code modified (functionally unchanged)
 # 2020-11-18    Same as 2020-09-30 In idle mode, modeCalibrate was used instead
@@ -930,9 +931,9 @@ def Tacx2DongleSub(self, Restart):
                             Grade = ant.msgUnpage48_BasicResistance(info) * 20
 
                             # Implemented for Magnetic Brake:
-                            # - grade is NOT shifted with GradeAdjust (here never negative)
-                            # - but is reduced to 30% (can be re-adjusted with Virtual Gearbox)
-                            if not TacxTrainer.MotorBrake: Grade *= 0.2
+                            # - grade is NOT shifted with GradeShift (here never negative)
+                            # - but is reduced with factor
+                            Grade /= clv.GradeFactor
 
                             TacxTrainer.SetGrade(Grade)
                             TacxTrainer.SetRollingResistance(0.004)
@@ -1000,10 +1001,10 @@ def Tacx2DongleSub(self, Restart):
                                 Grade, RollingResistance = ant.msgUnpage51_TrackResistance(info)
 
                                 # Implemented for Magnetic Brake:
-                                # - grade is shifted with GradeAdjust (-10% --> 0)
-                                # - then reduced to 30% (can be re-adjusted with Virtual Gearbox)
-                                Grade += clv.GradeAdjust
-                                if not TacxTrainer.MotorBrake: Grade *= 0.2
+                                # - grade is shifted with GradeShift (-10% --> 0)
+                                # - then reduced with factor (can be re-adjusted with Virtual Gearbox)
+                                Grade += clv.GradeShift
+                                Grade /= clv.GradeFactor
 
                                 TacxTrainer.SetGrade(Grade)
                                 TacxTrainer.SetRollingResistance(RollingResistance)
