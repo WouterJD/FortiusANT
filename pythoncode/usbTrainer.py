@@ -1758,8 +1758,8 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     # eventually be determined individually using the "runoff"/spin-down test.
     #---------------------------------------------------------------------------
     def Resistance2PowerMB(self, Resistance, SpeedKmh):
-        ScaleFactor             = 0.013   # N
-        CriticalSpeed           = 4.67    # m/s
+        ScaleFactor             = 0.0149   # N
+        CriticalSpeed           = 4.85     # m/s
 
         if self.clv.CalibrateRR:
             RollingResistance = self.clv.CalibrateRR    # Value 0...100 allowed
