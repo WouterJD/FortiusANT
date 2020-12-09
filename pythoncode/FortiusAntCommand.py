@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-08"
+__version__ = "2020-12-09"
+# 2020-12-09    GradeAdjust is split into GradeFactor/GradeFactorDH/GradeShift
 # 2020-12-08    GradeAdjust is split into GradeShift/GradeFactor
 #               old code removed
 # 2020-12-07    -c -G flags added
@@ -50,9 +51,10 @@ class CommandLineVariables(object):
     calibrate       = True
     debug           = 0
     exportTCX       = False      # introduced 2020-11-11;
-    GradeAdjust     = 0          # introduced 2020-12-07; The numnber of parameters specified
+    GradeAdjust     = 0          # introduced 2020-12-07; The number of parameters specified
+    GradeFactor     = 1          #                        The factor to be applied
+    GradeFactorDH   = 1          #                        Extra factor to be applied downhill
     GradeShift      = 0          #                        The number of degrees to be added
-    GradeFactor     = 1          #                        The factor to be applpied
     gui             = False
     hrm             = None       # introduced 2020-02-09; None=not specified, numeric=HRM device, -1=no HRM
     manual          = False
@@ -100,7 +102,7 @@ class CommandLineVariables(object):
         parser.add_argument('-c','--CalibrateRR',help='calibrate Rolling Resistance for Magnetic Brake',    required=False, default=False)
         parser.add_argument('-d','--debug',     help='Show debugging data',                                 required=False, default=False)
         parser.add_argument('-g','--gui',       help='Run with graphical user interface',                   required=False, action='store_true')
-        parser.add_argument('-G','--GradeAdjust',help='Adjust slope%% in GradeMode (shift/factor)',         required=False, default=False)
+        parser.add_argument('-G','--GradeAdjust',help='Adjust slope%% in GradeMode (factor/factorDownhill)',required=False, default=False)
         parser.add_argument('-H','--hrm',       help='Pair this ANT+ Heart Rate Monitor (0: any, -1: none); Tacx HRM is used if not specified',
                                                                                                             required=False, default=False)
         parser.add_argument('-m','--manual',    help='Run manual power (ignore target from ANT+ Dongle)',   required=False, action='store_true')
@@ -209,29 +211,43 @@ class CommandLineVariables(object):
             s = args.GradeAdjust.split("/")
             self.GradeAdjust = len(s)
             #-------------------------------------------------------------------
-            # parameter1: shift percentage (default = 0, allowed = 0...20)
-            # The target slope is incremented by this number.
-            # Shift = 10 means: requested slope = -10% --> 0%
+            # parameter1: factor (default = 1, allowed = 1...5)
+            # The target slope is divided by this number.
+            # Factor = 5 means: requested slope = 20% --> 4%
             #-------------------------------------------------------------------
             if len(s) >= 1:
                 try:
-                    self.GradeShift = int(s[0])
-                    self.GradeShift = max( 0, self.GradeShift)
-                    self.GradeShift = min(20, self.GradeShift)
+                    self.GradeFactor = int(s[0])
+                    self.GradeFactor = max( 1, self.GradeFactor)
+                    self.GradeFactor = min( 5, self.GradeFactor)
                 except:
                     logfile.Console('Command line error; -G incorrect Grade Adjust=%s' % args.GradeAdjust)
                     self.GradeAdjust = 0
 
             #-------------------------------------------------------------------
-            # parameter2: factor (default = 1, allowed = 1...10)
+            # parameter2: factor (default = 1, allowed = 1...5)
             # The target slope is divided by this number.
             # Factor = 5 means: requested slope = 20% --> 4%
             #-------------------------------------------------------------------
             if len(s) >= 2:
                 try:
-                    self.GradeFactor = int(s[1])
-                    self.GradeFactor = max( 1, self.GradeFactor)
-                    self.GradeFactor = min(10, self.GradeFactor)
+                    self.GradeFactorDH = int(s[1])
+                    self.GradeFactorDH = max( 1, self.GradeFactorDH)
+                    self.GradeFactorDH = min( 5, self.GradeFactorDH)
+                except:
+                    logfile.Console('Command line error; -G incorrect Grade Adjust=%s' % args.GradeAdjust)
+                    self.GradeAdjust = 0
+
+            #-------------------------------------------------------------------
+            # parameter3: shift percentage (default = 0, allowed = 0...20)
+            # The target slope is incremented by this number.
+            # Shift = 10 means: requested slope = -10% --> 0%
+            #-------------------------------------------------------------------
+            if len(s) >= 3:
+                try:
+                    self.GradeShift = int(s[2])
+                    self.GradeShift = max( 0, self.GradeShift)
+                    self.GradeShift = min(20, self.GradeShift)
                 except:
                     logfile.Console('Command line error; -G incorrect Grade Adjust=%s' % args.GradeAdjust)
                     self.GradeAdjust = 0
@@ -295,7 +311,13 @@ class CommandLineVariables(object):
             if      self.PedalStrokeAnalysis:logfile.Console("-A")
             if v or self.args.CalibrateRR:   logfile.Console("-c %s" % self.CalibrateRR )
             if v or self.args.debug:         logfile.Console("-d %s (%s)" % (self.debug, bin(self.debug) ) )
-            if v or self.args.GradeAdjust:   logfile.Console("-G %s/%s" % (self.GradeShift, self.GradeFactor ) )
+            if v or self.args.GradeAdjust:
+                if self.GradeAdjust == 1: logfile.Console("-G defines Grade = antGrade / %s" \
+                                                    % (self.GradeFactor ) )
+                if self.GradeAdjust == 2: logfile.Console("-G defines Grade = antGrade / %s [/ %s (downhill)]" \
+                                                    % (self.GradeFactor, self.GradeFactorDH) )
+                if self.GradeAdjust == 3: logfile.Console("-G defines Grade = (antGrade - %s) / %s [/ %s (downhill)]" \
+                                                    % (self.GradeShift, self.GradeFactor, self.GradeFactorDH) )
             if      self.gui:                logfile.Console("-g")
             if v or self.args.hrm:           logfile.Console("-H %s" % self.hrm )
             if      self.manual:             logfile.Console("-m")

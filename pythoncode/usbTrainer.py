@@ -1727,15 +1727,6 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             self.SendToTrainer(True, modeStop)
             time.sleep(0.1)                        # Allow head unit time to process
             self.Refresh(True, modeStop)
-        #---------------------------------------------------------------------------
-        # For MotorBrake, use standard PowerCurve
-        #
-        # For Magnetic Brake, adjust operation in GradeMode (by default)
-        # See FortiusAntCommand for more explanation to avoid duplication.
-        #---------------------------------------------------------------------------
-        if not self.MotorBrake:
-            if self.clv.GradeAdjust < 1: self.clv.GradeShift  = 10
-            if self.clv.GradeAdjust < 2: self.clv.GradeFactor = 5
 
         #---------------------------------------------------------------------------
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__() done")

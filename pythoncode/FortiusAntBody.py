@@ -933,6 +933,7 @@ def Tacx2DongleSub(self, Restart):
                             # Implemented for Magnetic Brake:
                             # - grade is NOT shifted with GradeShift (here never negative)
                             # - but is reduced with factor
+                            # - and is NOT reduced with factorDH since never negative
                             Grade /= clv.GradeFactor
 
                             TacxTrainer.SetGrade(Grade)
@@ -1000,11 +1001,21 @@ def Tacx2DongleSub(self, Restart):
                             else:
                                 Grade, RollingResistance = ant.msgUnpage51_TrackResistance(info)
 
-                                # Implemented for Magnetic Brake:
-                                # - grade is shifted with GradeShift (-10% --> 0)
+                                #-----------------------------------------------
+                                # Implemented when implementing Magnetic Brake:
+                                # [-] grade is shifted with GradeShift (-10% --> 0) ]
                                 # - then reduced with factor (can be re-adjusted with Virtual Gearbox)
+                                # - and reduced with factorDH (for downhill only)
+                                #
+                                # GradeAdjust is valid for all configurations!
+                                #
+                                # GradeShift is not expected to be used anymore,
+                                # and only left from earliest implementations
+                                # to avoid it has to be re-introduced in future again.
+                                #-----------------------------------------------
                                 Grade += clv.GradeShift
                                 Grade /= clv.GradeFactor
+                                if Grade < 0: Grade /= clv.GradeFactorDH
 
                                 TacxTrainer.SetGrade(Grade)
                                 TacxTrainer.SetRollingResistance(RollingResistance)
