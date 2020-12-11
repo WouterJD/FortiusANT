@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-03"
+__version__ = "2020-12-10"
+# 2020-12-10    Removed: -u uphill
 # 2020-12-03    For Magnetic brake -r uses the resistance table [0...13]
 #               introduced: Resistance2PowerMB(), under investigation!!
 # 2020-12-01    Speedscale set to 289.75
@@ -759,7 +760,6 @@ class clsTacxTrainer():
         Pair  = 0.5 * p_cdA * (v+w) * (v+w) * d * v # Watt
 
         i     = self.TargetGrade                    # Percentage 0...100
-        if self.clv.uphill and i < 0: i = 0         # 2020-10-09 suppress downhill
         Pslope= i/100 * m * g * v                   # Watt
 
         self.TargetPower = int(Proll + Pair + Pslope)
@@ -785,7 +785,6 @@ class clsTacxTrainer():
         Pair  = 0.5 * p * cdA * (v+w)*(v+w)* v  # Watt
 
         i     = self.TargetGrade                # Percentage 0...100
-        if self.clv.uphill and i < 0: i = 0     # 2020-10-09 suppress downhill
         Pslope= i/100 * m * g * v               # Watt
 
         Pbike = 37

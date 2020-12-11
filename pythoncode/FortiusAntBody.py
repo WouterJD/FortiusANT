@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-08"
+__version__ = "2020-12-10"
+# 2020-12-10    GradeShift/GradeFactor are multipliers
+#               antDeviceID specified on command-line
 # 2020-12-08    GradeAdjust is split into GradeShift/GradeFactor
 # 2020-12-07    Slope grade as received from CTP is reduced with self.clv.GradeAdjust
 # 2020-11-19    QuarterSecond calculation code modified (functionally unchanged)
@@ -265,7 +267,7 @@ def LocateHW(self):
     if AntDongle and AntDongle.OK:
         pass
     else:
-        AntDongle = ant.clsAntDongle()
+        AntDongle = ant.clsAntDongle(clv.antDeviceID)
         if AntDongle.OK or not clv.Tacx_iVortex:                    # 2020-09-29
              if clv.manual:      AntDongle.Message += ' (manual power)'
              if clv.manualGrade: AntDongle.Message += ' (manual grade)'
@@ -613,7 +615,7 @@ def Tacx2DongleSub(self, Restart):
     Counter         = 0
 
     if TacxTrainer.CalibrateSupported():
-        self.SetMessages(Tacx="* * * * S T A R T   P E D A L L I N G * * * *")
+        self.SetMessages(Tacx="* * * * G I V E   A   P E D A L   K I C K   T O   S T A R T   C A L I B R A T I O N * * * *")
         if debug.on(debug.Function):
             logfile.Write('Tacx2Dongle; start pedaling for calibration')
     try:
@@ -652,7 +654,7 @@ def Tacx2DongleSub(self, Restart):
                 # The message must be given once for the console-mode (no GUI)
                 #---------------------------------------------------------------
                 if StartPedaling:
-                    self.SetMessages(Tacx="* * * * C A L I B R A T I N G * * * *")
+                    self.SetMessages(Tacx="* * * * C A L I B R A T I N G   (Do not pedal) * * * *")
                     if debug.on(debug.Function):
                         logfile.Write('Tacx2Dongle; start calibration')
                     StartPedaling = False
@@ -934,7 +936,7 @@ def Tacx2DongleSub(self, Restart):
                             # - grade is NOT shifted with GradeShift (here never negative)
                             # - but is reduced with factor
                             # - and is NOT reduced with factorDH since never negative
-                            Grade /= clv.GradeFactor
+                            Grade *= clv.GradeFactor
 
                             TacxTrainer.SetGrade(Grade)
                             TacxTrainer.SetRollingResistance(0.004)
@@ -1014,8 +1016,8 @@ def Tacx2DongleSub(self, Restart):
                                 # to avoid it has to be re-introduced in future again.
                                 #-----------------------------------------------
                                 Grade += clv.GradeShift
-                                Grade /= clv.GradeFactor
-                                if Grade < 0: Grade /= clv.GradeFactorDH
+                                Grade *= clv.GradeFactor
+                                if Grade < 0: Grade *= clv.GradeFactorDH
 
                                 TacxTrainer.SetGrade(Grade)
                                 TacxTrainer.SetRollingResistance(RollingResistance)

@@ -1,6 +1,7 @@
-usage: FortiusAntCommand.py [-h] [-a] [-A] [-d DEBUG] [-g] [-G MODIFYGRADE]
-                            [-H HRM] [-m] [-M] [-n] [-p FACTOR] [-P] [-r] [-s]
-                            [-t TACXTYPE] [-u] [-x]
+usage: FortiusAntCommand.py [-h] [-a] [-A] [-c CALIBRATERR] [-d DEBUG]
+                            [-D ANTDEVICEID] [-g] [-G GRADEADJUST] [-H HRM]
+                            [-m] [-M] [-n] [-p FACTOR] [-P] [-r] [-s]
+                            [-t TACXTYPE] [-x]
 
 Program to broadcast data from USB Tacx Fortius trainer, and to receive
 resistance data for the trainer
@@ -10,10 +11,17 @@ optional arguments:
   -a, --autostart       Automatically start
   -A, --PedalStrokeAnalysis
                         Pedal Stroke Analysis
+  -c CALIBRATERR, --CalibrateRR CALIBRATERR
+                        calibrate Rolling Resistance for Magnetic Brake
   -d DEBUG, --debug DEBUG
                         Show debugging data
+  -D ANTDEVICEID, --antDeviceID ANTDEVICEID
+                        Use this antDongle type only
   -g, --gui             Run with graphical user interface
-  -H HRM, --hrm HRM     Pair this Heart Rate Monitor (0: any, -1: none)
+  -G GRADEADJUST, --GradeAdjust GRADEADJUST
+                        Adjust slope% in GradeMode (factor/factorDownhill)
+  -H HRM, --hrm HRM     Pair this ANT+ Heart Rate Monitor (0: any, -1: none);
+                        Tacx HRM is used if not specified
   -m, --manual          Run manual power (ignore target from ANT+ Dongle)
   -M, --manualGrade     Run manual grade (ignore target from ANT+ Dongle)
   -n, --calibrate       Do not calibrate before start
@@ -27,5 +35,4 @@ optional arguments:
   -s, --simulate        Simulated trainer to test ANT+ connectivity
   -t TACXTYPE, --TacxType TACXTYPE
                         Specify Tacx Type; e.g. i-Vortex, default=autodetect
-  -u, --uphill          Uphill only; negative grade is ignored
   -x, --exportTCX       Export TCX file

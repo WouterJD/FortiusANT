@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v3.9.e #153"           # Double quotes, see below!
+WindowTitle = "Fortius Antifier v4.0"                # Double quotes, see below!
+# 2020-12-11    Version 4.0     Implementation of Magnetic Brake on "USB"
 # 2020-11-19    Version 3.8
 # 2020-11-18    Version 3.7
 # 2020-11-12    Version 3.6
