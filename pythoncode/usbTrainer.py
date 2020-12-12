@@ -1277,16 +1277,16 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
 # c l s T a c x A n t G e n i u s T r a i n e r
 #-------------------------------------------------------------------------------
 # Tacx-trainer with ANT connection
-# Actually, only the data-storage and Refresh() with Grade2Power() is used!
 #-------------------------------------------------------------------------------
 class clsTacxAntGeniusTrainer(clsTacxTrainer):
-    def __init__(self, clv, AntDevice, useHeadUnit=False):
-        msg = "Pair with Tacx i-Genius%s" % (" and Headunit" if useHeadUnit else "")
+    def __init__(self, clv, AntDevice):
+        msg = "Pair with Tacx Genius"
         super().__init__(clv, msg)
-        if debug.on(debug.Function):logfile.Write ("clsTacxAntGeniusTrainer.__init__()")
+        if debug.on(debug.Function):
+            logfile.Write ("clsTacxAntGeniusTrainer.__init__()")
         self.AntDevice         = AntDevice
-        self.OK                = True           # The AntDevice is there,
-        # the trainer not yet paired!
+        self.OK                = True
+        # The AntDevice is there, the trainer is not yet paired!
 
         self.__ResetTrainer()
 
@@ -1298,8 +1298,6 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
         self.__CurrentPower    = 0
         self.__WheelSpeed      = 0
         self.__SpeedKmh        = 0              #     (from WheelSpeed)
-
-        msg = "Pair with Tacx i-Genius%s"
 
     #---------------------------------------------------------------------------
     # R e c e i v e F r o m T r a i n e r
@@ -1327,12 +1325,9 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
         # Compose displayable message
         # ----------------------------------------------------------------------
         if self.__DeviceNumberGNS:
-            self.Message = 'Tacx i-Genius paired: %s' % self.__DeviceNumberGNS
+            self.Message = 'Tacx Genius paired: %s' % self.__DeviceNumberGNS
         else:
-            self.Message = "Pair with Tacx i-Genius"
-
-        if not self.__DeviceNumberGNS:
-            self.Message += ' (pairing can take a minute)'
+            self.Message = "Pair with Tacx Genius (pairing can take a minute)"
 
     #---------------------------------------------------------------------------
     # SendToTrainer()
@@ -1352,10 +1347,10 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                     # effective slope (including possible additional rolling
                     # resistance)
                     effective_slope = self.TargetGrade + self.RollingResistance2Grade()
-                    info = ant.msgPageDC_TacxGeniusSetSlope (ant.channel_GNS, \
-                                                             effective_slope, self.UserAndBikeWeight)
-                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
-                    messages.append ( msg )
+                    info = ant.msgPage220_01_TacxGeniusSetTarget(ant.channel_GNS_s, ant.GNS_Mode_Slope,
+                                                                 effective_slope * 10, self.UserAndBikeWeight)
+                    msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
+                    messages.append(msg)
                 else:
                     #---------------------------------------------------------------
                     # Set target power
@@ -1363,10 +1358,10 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                     # lower flywheel weight in ERG mode to make the trainer more responsive
                     # 10kg is what is used on the Fortius
                     flywheel_weight = 10
-                    info = ant.msgPageDC_TacxGeniusSetPower (ant.channel_GNS, \
-                                                             self.TargetResistance, flywheel_weight)
-                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
-                    messages.append ( msg )
+                    info = ant.msgPage220_01_TacxGeniusSetTarget(ant.channel_GNS_s, ant.GNS_Mode_Power,
+                                                                  self.TargetResistance, flywheel_weight)
+                    msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
+                    messages.append(msg)
 
             #-------------------------------------------------------------------
             # Send messages, leave receiving to the outer loop
@@ -1377,7 +1372,7 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
     #---------------------------------------------------------------------------
     # TargetPower2Resistance
     #
-    # TargetResistance is used for the i-Genius, even when expressed in Watt, so
+    # TargetResistance is used for the Genius, even when expressed in Watt, so
     # that PowerFactor and PowercurveFactor apply; see clsUsbTrainer.Refresh().
     #---------------------------------------------------------------------------
     def TargetPower2Resistance(self):
@@ -1401,14 +1396,15 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
     # HandleANTmessage()
     #---------------------------------------------------------------------------
     def HandleANTmessage(self, msg):
-        _synch, _length, id, info, _checksum, _rest, Channel, DataPageNumber = \
-            ant.DecomposeMessage(msg)
+        _synch, _length, id, info, _checksum, _rest,\
+                Channel, DataPageNumber = ant.DecomposeMessage(msg)
+        SubPageNumber = info[2]
         dataHandled = False
-        messages    = []
+        messages = []
         #-----------------------------------------------------------------------
-        # GNS = Tacx i-Genius trainer
+        # GNS = Tacx Genius trainer
         #-----------------------------------------------------------------------
-        if Channel == ant.channel_GNS:
+        if Channel == ant.channel_GNS_s:
             if id == ant.msgID_AcknowledgedData:
                 dataHandled = True
 
@@ -1420,41 +1416,43 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                 # Ask what device is paired
                 #---------------------------------------------------------------
                 if not self.__AntGNSpaired:
-                    msg = ant.msg4D_RequestMessage(ant.channel_GNS, ant.msgID_ChannelID)
-                    messages.append ( msg )
+                    msg = ant.msg4D_RequestMessage(ant.channel_GNS_s, ant.msgID_ChannelID)
+                    messages.append (msg)
 
-                #---------------------------------------------------------------
-                # Data page DD msgUnpageDD_TacxGeniusDataSpeed
-                #---------------------------------------------------------------
-                if DataPageNumber == 0xdd and info[2] == 1:
+                #-----------------------------------------------------------------
+                # Data page 221 (0x01) msgUnpage221_01_TacxGeniusSpeedPowerCadence
+                #-----------------------------------------------------------------
+                if DataPageNumber == 221 and SubPageNumber == 0x01:
                     dataHandled = True
-                    self.__CurrentPower, self.__WheelSpeed, self.__Cadence = \
-                        ant.msgUnpageDD_TacxGeniusData(info)
+                    self.__CurrentPower, self.__WheelSpeed, self.__Cadence, Balance = \
+                        ant.msgUnpage221_01_TacxGeniusSpeedPowerCadence(info)
 
                     if debug.on(debug.Function):
-                        logfile.Write ('i-Genius Page=%s  Power=%s Speed=%s Cadence=%s' % \
-                                       (DataPageNumber, self.__CurrentPower, \
-                                        self.__SpeedKmh, self.__Cadence) )
-
-                #---------------------------------------------------------------
-                # Data page 01 msgUnpage01_TacxGeniusDataSerial
-                #---------------------------------------------------------------
-                elif DataPageNumber == 1:
+                        logfile.Write('Genius Page=%d/%#x  Power=%d Speed=%d Cadence=%d Balance=%d' %
+                                       (DataPageNumber, SubPageNumber, self.__CurrentPower,
+                                        self.__SpeedKmh, self.__Cadence, Balance))
+                # -----------------------------------------------------------------
+                # Data page 221 (0x02) msgUnpage221_02_TacxGeniusDistanceHR
+                # -----------------------------------------------------------------
+                elif DataPageNumber == 221 and SubPageNumber == 0x02:
                     dataHandled = True
-                    GNS_S1, GNS_S2, GNS_Serial, GNS_Alarm = ant.msgUnpage01_TacxVortexDataSerial(info)
-                    if debug.on(debug.Function):
-                        logfile.Write ('i-Genius Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % \
-                                       (DataPageNumber, GNS_S1, GNS_S2, GNS_Serial, GNS_Alarm) )
+                    Distance, Heartrate = \
+                        ant.msgUnpage221_02_TacxGeniusDistanceHR(info)
 
-                #---------------------------------------------------------------
-                # Data page 02 msgUnpage02_TacxGeniusDataVersion
-                #---------------------------------------------------------------
-                elif DataPageNumber == 2:
-                    dataHandled = True
-                    GNS_Major, GNS_Minor, GNS_Build = ant.msgUnpage02_TacxVortexDataVersion(info)
                     if debug.on(debug.Function):
-                        logfile.Write ('i-Genius Page=%s Major=%s Minor=%s Build=%s' % \
-                                       (DataPageNumber, GNS_Major, GNS_Minor, GNS_Build))
+                        logfile.Write('Genius Page=%d/%#x  Distance=%d Heartrate=%d' %
+                                      (DataPageNumber, SubPageNumber, Distance, Heartrate))
+                # -----------------------------------------------------------------
+                # Data page 221 (0x03) msgUnpage221_03_TacxGeniusAlarmTemperature
+                # -----------------------------------------------------------------
+                elif DataPageNumber == 221 and SubPageNumber == 0x03:
+                    dataHandled = True
+                    Alarm, Temperature, Powerback = \
+                        ant.msgUnpage221_03_TacxGeniusAlarmTemperature(info)
+
+                    if debug.on(debug.Function):
+                        logfile.Write('Genius Page=%d/%#x  Alarm=%d Temperature=%d Powerback=%d' %
+                                      (DataPageNumber, SubPageNumber, Alarm, Temperature, Powerback))
 
             #-------------------------------------------------------------------
             # ChannelID - the info that a master on the network is paired
