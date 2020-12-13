@@ -745,7 +745,8 @@ class clsTacxTrainer():
         p_cdA = self.WindResistance                 # default=0.51
         w     = self.WindSpeed / 3.6                # default=0
         d     = self.DraftingFactor                 # default=1
-        Pair  = 0.5 * p_cdA * (v+w) * (v+w) * d * v # Watt
+        # without abs a strong tailwind would result in a higher power
+        Pair  = 0.5 * p_cdA * (v+w) * abs(v+w) * d * v # Watt
 
         i     = self.TargetGrade                    # Percentage 0...100
         if self.clv.uphill and i < 0: i = 0         # 2020-10-09 suppress downhill
@@ -1298,6 +1299,7 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
         self.__CurrentPower    = 0
         self.__WheelSpeed      = 0
         self.__SpeedKmh        = 0              #     (from WheelSpeed)
+        self.__CommandCounter  = 0
 
     #---------------------------------------------------------------------------
     # R e c e i v e F r o m T r a i n e r
@@ -1340,15 +1342,39 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
             messages = []
             if TacxMode == modeResistance:
                 if self.TargetMode == mode_Grade:
-                    #---------------------------------------------------------------
-                    # Set target slope
-                    #---------------------------------------------------------------
+                    # insert a wind resistance page at regular intervals
+                    WindResistanceInterval = 4
 
-                    # effective slope (including possible additional rolling
-                    # resistance)
-                    effective_slope = self.TargetGrade + self.RollingResistance2Grade()
-                    info = ant.msgPage220_01_TacxGeniusSetTarget(ant.channel_GNS_s, ant.GNS_Mode_Slope,
-                                                                 effective_slope * 10, self.UserAndBikeWeight)
+                    self.__CommandCounter += 1
+                    if self.__CommandCounter < WindResistanceInterval:
+                        #---------------------------------------------------------------
+                        # Set target slope
+                        #---------------------------------------------------------------
+
+                        # the brake does not support changing the rolling resistance
+                        # directly; higher than default rolling resistance is simulated
+                        # by increasing the grade (result is the same)
+                        effectiveGrade = self.TargetGrade + self._RollingResistance2Grade()
+
+                        info = ant.msgPage220_01_TacxGeniusSetTarget(ant.channel_GNS_s, ant.GNS_Mode_Slope,
+                                                                     effectiveGrade, self.UserAndBikeWeight)
+
+                        if debug.on(debug.Function):
+                            logfile.Write(
+                                "Genius page 220/0x01 (OUT)  Mode=%d Target=%.1f Weight=%.1f" % \
+                                (ant.GNS_Mode_Slope, effectiveGrade, self.UserAndBikeWeight))
+                    else:
+                        #---------------------------------------------------------------
+                        # Set wind resistance and speed
+                        #---------------------------------------------------------------
+                        info = ant.msgPage220_02_TacxGeniusWindResistance(ant.channel_GNS_s,
+                                                                          self.WindResistance, self.WindSpeed)
+                        if debug.on(debug.Function):
+                            logfile.Write(
+                                "Genius page 220/0x02 (OUT)  WindResistance=%.1f WindSpeed=%.1f" % \
+                                (self.WindResistance, self.WindSpeed))
+                        self.__CommandCounter = 0
+
                     msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
                     messages.append(msg)
                 else:
@@ -1357,11 +1383,16 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                     #---------------------------------------------------------------
                     # lower flywheel weight in ERG mode to make the trainer more responsive
                     # 10kg is what is used on the Fortius
-                    flywheel_weight = 10
+                    flywheelWeight = 10
                     info = ant.msgPage220_01_TacxGeniusSetTarget(ant.channel_GNS_s, ant.GNS_Mode_Power,
-                                                                  self.TargetResistance, flywheel_weight)
+                                                                  self.TargetResistance, flywheelWeight)
                     msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
                     messages.append(msg)
+
+                    if debug.on(debug.Function):
+                        logfile.Write(
+                            "Genius page 220/0x01 (OUT)  Mode=%d Target=%.1f Weight=%.1f" % \
+                            (ant.GNS_Mode_Power, self.TargetResistance, flywheelWeight))
 
             #-------------------------------------------------------------------
             # Send messages, leave receiving to the outer loop
@@ -1379,13 +1410,13 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
         self.TargetResistance = self.TargetPower
 
     #---------------------------------------------------------------------------
-    # RollingResistance2Grade
+    # _RollingResistance2Grade
     #
     # Some trainers (Genius, Bushido) do not support setting a rolling
     # resistance coefficient, but it is possible to calculate an additional
     # slope that realizes the same effect
     #---------------------------------------------------------------------------
-    def RollingResistance2Grade(self):
+    def _RollingResistance2Grade(self):
         # assume the default rolling resistance applied internally is 0.004
         # and calculate a slope that accounts for the difference
         defaultRR = 0.004
@@ -1428,9 +1459,9 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                         ant.msgUnpage221_01_TacxGeniusSpeedPowerCadence(info)
 
                     if debug.on(debug.Function):
-                        logfile.Write('Genius Page=%d/%#x  Power=%d Speed=%d Cadence=%d Balance=%d' %
+                        logfile.Write('Genius Page=%d/%#x (IN)  Power=%d Speed=%d Cadence=%d Balance=%d' %
                                        (DataPageNumber, SubPageNumber, self.__CurrentPower,
-                                        self.__SpeedKmh, self.__Cadence, Balance))
+                                        self.__WheelSpeed, self.__Cadence, Balance))
                 # -----------------------------------------------------------------
                 # Data page 221 (0x02) msgUnpage221_02_TacxGeniusDistanceHR
                 # -----------------------------------------------------------------
@@ -1440,7 +1471,7 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                         ant.msgUnpage221_02_TacxGeniusDistanceHR(info)
 
                     if debug.on(debug.Function):
-                        logfile.Write('Genius Page=%d/%#x  Distance=%d Heartrate=%d' %
+                        logfile.Write('Genius Page=%d/%#x (IN)  Distance=%d Heartrate=%d' %
                                       (DataPageNumber, SubPageNumber, Distance, Heartrate))
                 # -----------------------------------------------------------------
                 # Data page 221 (0x03) msgUnpage221_03_TacxGeniusAlarmTemperature
@@ -1451,7 +1482,7 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                         ant.msgUnpage221_03_TacxGeniusAlarmTemperature(info)
 
                     if debug.on(debug.Function):
-                        logfile.Write('Genius Page=%d/%#x  Alarm=%d Temperature=%d Powerback=%d' %
+                        logfile.Write('Genius Page=%d/%#x (IN)  Alarm=%d Temperature=%d Powerback=%d' %
                                       (DataPageNumber, SubPageNumber, Alarm, Temperature, Powerback))
 
             #-------------------------------------------------------------------

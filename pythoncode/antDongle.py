@@ -1698,7 +1698,7 @@ def msgUnpage221_TacxGeniusHU_ButtonPressed (info):
 
 
 # ------------------------------------------------------------------------------
-# T a c x  G e n i u s  d a t a  p a g e s
+# T a c x  G e n i u s  p a g e s
 # ------------------------------------------------------------------------------
 # Refer:    https://gist.github.com/switchabl/75b2619e2e3381f49425479d59523ead
 # ------------------------------------------------------------------------------
@@ -1709,8 +1709,11 @@ def msgUnpage221_TacxGeniusHU_ButtonPressed (info):
 def msgPage220_01_TacxGeniusSetTarget (Channel, Mode, Target, Weight):
     DataPageNumber      = 220
     SubPageNumber       = 0x01
-    Target              = int(Target)
     Weight              = int(Weight)
+    if Mode == GNS_Mode_Slope:
+        Target = int(Target * 10)
+    else:
+        Target = int(Target)
 
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
@@ -1722,6 +1725,27 @@ def msgPage220_01_TacxGeniusSetTarget (Channel, Mode, Target, Weight):
 
     format = sc.big_endian +     fChannel + fDataPageNumber + fSubPageNumber + fMode + fTarget + fWeight + fPadding
     info   = struct.pack (format, Channel,   DataPageNumber,   SubPageNumber,   Mode,   Target,   Weight)
+
+    return info
+
+# ------------------------------------------------------------------------------
+# P a g e 2 2 0  ( 0 x 0 2 )  T a c x G e n i u s W i n d R e s i s t a n c e
+# ------------------------------------------------------------------------------
+def msgPage220_02_TacxGeniusWindResistance (Channel, WindResistance, WindSpeed):
+    DataPageNumber      = 220
+    SubPageNumber       = 0x02
+    WindResistance      = int(0.5 * WindResistance * 1000)
+    WindSpeed           = int(-250 * WindSpeed / 3.6)
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char
+    fWindResistance     = sc.unsigned_short # 0.5 * wind resistance cofficient (kg/m) * 1000
+    fWindSpeed          = sc.short          # wind speed (m/s) * 250 (head wind = negative)
+    fPadding            = sc.pad * 2
+
+    format = sc.big_endian +     fChannel + fDataPageNumber + fSubPageNumber + fWindResistance + fWindSpeed + fPadding
+    info   = struct.pack (format, Channel,   DataPageNumber,   SubPageNumber,   WindResistance,   WindSpeed)
 
     return info
 
