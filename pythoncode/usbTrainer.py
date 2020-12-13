@@ -1299,6 +1299,7 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
         self.__CurrentPower    = 0
         self.__WheelSpeed      = 0
         self.__SpeedKmh        = 0              #     (from WheelSpeed)
+        self.__AlarmStatus     = 0
         self.__CommandCounter  = 0
 
     #---------------------------------------------------------------------------
@@ -1327,7 +1328,22 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
         # Compose displayable message
         # ----------------------------------------------------------------------
         if self.__DeviceNumberGNS:
-            self.Message = 'Tacx Genius paired: %s' % self.__DeviceNumberGNS
+            msg = "Tacx Genius paired: %d" % self.__DeviceNumberGNS
+            if self.__AlarmStatus & ant.GNS_Alarm_Overtemperature:
+                msg += " TEMPERATURE TOO HIGH!"
+            if self.__AlarmStatus & ant.GNS_Alarm_Overvoltage:
+                msg += " OVERVOLTAGE!"
+            if self.__AlarmStatus & ant.GNS_Alarm_GenericError:
+                msg += " BRAKE ERROR"
+            if self.__AlarmStatus & ant.GNS_Alarm_Overcurrent:
+                msg += " OVERCURRENT!"
+            if self.__AlarmStatus & ant.GNS_Alarm_SpeedTooHigh:
+                msg += " SPEED TOO HIGH!"
+            if self.__AlarmStatus & ant.GNS_Alarm_Undervoltage:
+                msg += " UNDERVOLTAGE!"
+            if self.__AlarmStatus & ant.GNS_Alarm_CommunicationError:
+                msg += " COMMUNICATION ERROR"
+            self.Message = msg
         else:
             self.Message = "Pair with Tacx Genius (pairing can take a minute)"
 
@@ -1478,12 +1494,12 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                 # -----------------------------------------------------------------
                 elif DataPageNumber == 221 and SubPageNumber == 0x03:
                     dataHandled = True
-                    Alarm, Temperature, Powerback = \
+                    self.__AlarmStatus, Temperature, Powerback = \
                         ant.msgUnpage221_03_TacxGeniusAlarmTemperature(info)
 
                     if debug.on(debug.Function):
                         logfile.Write('Genius Page=%d/%#x (IN)  Alarm=%d Temperature=%d Powerback=%d' %
-                                      (DataPageNumber, SubPageNumber, Alarm, Temperature, Powerback))
+                                      (DataPageNumber, SubPageNumber, self.__AlarmStatus, Temperature, Powerback))
 
             #-------------------------------------------------------------------
             # ChannelID - the info that a master on the network is paired

@@ -137,6 +137,18 @@ GNS_Mode_Slope      = 0x00
 GNS_Mode_Power      = 0x01
 GNS_Mode_Heartrate  = 0x02
 
+#---------------------------------------------------------------------------
+# Tacx Genius alarm bits
+#---------------------------------------------------------------------------
+GNS_Alarm_Overtemperature       = 0x10001
+GNS_Alarm_Overvoltage           = 0x10004
+GNS_Alarm_GenericError          = 0x10008
+GNS_Alarm_Overcurrent           = 0x10020
+GNS_Alarm_SpeedTooHigh          = 0x10080
+GNS_Alarm_Undervoltage          = 0x10100
+GNS_Alarm_DownhillLimited       = 0x14000
+GNS_Alarm_CommunicationError    = 0x18000
+
 
 DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
 DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT uses and
