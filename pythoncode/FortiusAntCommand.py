@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-10"
+__version__ = "2020-12-14"
+# 2020-12-14    added: -C for ANT+ Control device
 # 2020-12-10    GradeAdjust defined as integer%
 #               float (-p and -c); decimal-comma is replaced by decimal-point.
 #               Removed: -u uphill
@@ -54,6 +55,8 @@ class CommandLineVariables(object):
     antDeviceID     = None       # introduced 2020-12-10; Use this usb antDongle type only
     autostart       = False
     calibrate       = True
+    CTRL_SerialL    = 0          # introduced 2020-12-14; ANT+ Control command (Left/Right)
+    CTRL_SerialR    = 0
     debug           = 0
     exportTCX       = False      # introduced 2020-11-11;
     GradeAdjust     = 0          # introduced 2020-12-07; The number of parameters specified
@@ -103,6 +106,7 @@ class CommandLineVariables(object):
         parser.add_argument('-a','--autostart', help='Automatically start',                                 required=False, action='store_true')
         parser.add_argument('-A','--PedalStrokeAnalysis', help='Pedal Stroke Analysis',                     required=False, action='store_true')
         parser.add_argument('-c','--CalibrateRR',help='calibrate Rolling Resistance for Magnetic Brake',    required=False, default=False)
+        parser.add_argument('-C','--CtrlCommand',help='ANT+ Control Command (#1/#2)',                       required=False, default=False)
         parser.add_argument('-d','--debug',     help='Show debugging data',                                 required=False, default=False)
         parser.add_argument('-D','--antDeviceID',help='Use this antDongle type only',                       required=False, default=False)
         parser.add_argument('-g','--gui',       help='Run with graphical user interface',                   required=False, action='store_true')
@@ -158,6 +162,31 @@ class CommandLineVariables(object):
                 self.CalibrateRR = float(args.CalibrateRR.replace(',', '.'))
             except:
                 logfile.Console('Command line error; -c incorrect calibration of Rolling Resistance=%s' % args.CalibrateRR)
+
+        #-----------------------------------------------------------------------
+        # Get CtrlCommand = #1/#2
+        #-----------------------------------------------------------------------
+        if args.CtrlCommand:
+            s = args.CtrlCommand.split("/")
+            #-------------------------------------------------------------------
+            # First serial#
+            #-------------------------------------------------------------------
+            if len(s) >= 1:
+                try:
+                    self.CTRL_SerialL = int(s[0])
+                    assert(self.CTRL_SerialL >= 0)
+                except:
+                    logfile.Console('Command line error; -C incorrect SerialNumber in %s' % args.CtrlCommand)
+
+            #-------------------------------------------------------------------
+            # Second serial#
+            #-------------------------------------------------------------------
+            if len(s) >= 2:
+                try:
+                    self.CTRL_SerialR = int(s[1])
+                    assert(self.CTRL_SerialR >= 0)
+                except:
+                    logfile.Console('Command line error; -C incorrect SerialNumber in %s' % args.CtrlCommand)
 
         #-----------------------------------------------------------------------
         # Get debug-flags, used in debug module
@@ -314,13 +343,14 @@ class CommandLineVariables(object):
             self.hrm                    = 0         # Pair with HRM
             self.PedalStrokeAnalysis    = True      # Show it
 
-
     def print(self):
         try:
             v = debug.on(debug.Any)     # Verbose: print all command-line variables with values
             if      self.autostart:          logfile.Console("-a")
             if      self.PedalStrokeAnalysis:logfile.Console("-A")
             if v or self.args.CalibrateRR:   logfile.Console("-c %s" % self.CalibrateRR )
+            if v or self.CTRL_SerialL or self.CTRL_SerialR:
+                logfile.Console("-C %s/%s" % (self.CTRL_SerialL, self.CTRL_SerialR ) )
             if v or self.args.debug:         logfile.Console("-d %s (%s)" % (self.debug, bin(self.debug) ) )
             if v or self.args.antDeviceID:   logfile.Console("-D %s" % self.antDeviceID )
             if v or self.args.GradeAdjust:
