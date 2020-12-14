@@ -1,7 +1,16 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-18"
+__version__ = "2020-12-10"
+# 2020-12-10    Removed: -u uphill
+# 2020-12-03    For Magnetic brake -r uses the resistance table [0...13]
+#               introduced: Resistance2PowerMB(), under investigation!!
+# 2020-12-01    Speedscale set to 289.75
+# 2020-12-01    -G option and Magnetic Brake formula's removed
+#               and marked "TO BE IMPLEMENTED"
+# 2020-11-23    Motor Brake command implemented for NewUSB interface
+#               CalibrateSupported depends on motorbrake, not head unit
+#               -r TargetResistance = TargetPower implemented
 # 2020-11-18    Calibration also supported for 1942 headunit
 # 2020-11-10    Issue 135: React on button press only once corrected
 #               Function Power2Speed() added
@@ -136,6 +145,7 @@ OKButton        = 16        # Non-existant for USB-trainers, for i-Vortex only
 modeStop        = 0         # USB Tacx modes
 modeResistance  = 2
 modeCalibrate   = 3
+modeMotorBrake  = 10        # To distinguish from the previous real modes
 
 #-------------------------------------------------------------------------------
 # path to firmware files; since 29-3-2020 in same folder as .py or .exe
@@ -223,6 +233,7 @@ class clsTacxTrainer():
     AntDevice               = None          # clsVortexTrainer only!
     OK                      = False
     Message                 = None
+    MotorBrake              = False         # Fortius motorbrake, supports calibration
 
     # Target provided by CTP (Trainer Road, Zwift, Rouvy, ...)
     # See Refresh() for dependencies
@@ -267,6 +278,7 @@ class clsTacxTrainer():
     PowercurveFactor        = 1             # 1.1 causes higher load
                                             # 0.9 causes lower load
                                             # Is manually set in Grademode
+
     Teeth                   = 15            # See Refresh()
 
     # USB devices only:
@@ -300,7 +312,7 @@ class clsTacxTrainer():
         if clv.SimulateTrainer: return clsSimulatedTrainer(clv)
         if clv.Tacx_iVortex:    return clsTacxAntVortexTrainer(clv, AntDevice)
         if clv.Tacx_iGenius:    return clsTacxAntGeniusTrainer(clv, AntDevice)
-            
+
         #-----------------------------------------------------------------------
         # So we are going to initialize USB
         # This may be either 'Legacy interface' or 'New interface'
@@ -677,10 +689,11 @@ class clsTacxTrainer():
     # returns   True/False
     #---------------------------------------------------------------------------
     def CalibrateSupported(self):
-        if self.Headunit in (hu1932, hu1942):       # And perhaps others as well
-            return True
-        else:
-            return False
+        # if self.Headunit in (hu1932, hu1942):       # And perhaps others as well
+        #     return True
+        # else:
+        #     return False
+        return self.MotorBrake
 
     #---------------------------------------------------------------------------
     # Convert G r a d e T o P o w e r           |  Grade = slope
@@ -750,7 +763,6 @@ class clsTacxTrainer():
         Pair  = 0.5 * p_cdA * (v+w) * abs(v+w) * d * v # Watt
 
         i     = self.TargetGrade                    # Percentage 0...100
-        if self.clv.uphill and i < 0: i = 0         # 2020-10-09 suppress downhill
         Pslope= i/100 * m * g * v                   # Watt
 
         self.TargetPower = int(Proll + Pair + Pslope)
@@ -776,7 +788,6 @@ class clsTacxTrainer():
         Pair  = 0.5 * p * cdA * (v+w)*(v+w)* v  # Watt
 
         i     = self.TargetGrade                # Percentage 0...100
-        if self.clv.uphill and i < 0: i = 0     # 2020-10-09 suppress downhill
         Pslope= i/100 * m * g * v               # Watt
 
         Pbike = 37
@@ -1686,11 +1697,31 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     # Convert WheelSpeed --> Speed in km/hr
     # SpeedScale must be defined in sub-class
     #---------------------------------------------------------------------------
+    # TotalReverse wiki:
+    # - 'Load' is the target speed. load_speed = 'kph * 289.75'
+    # - TTS4 calibrates with value '0x16a3' and says that this is 20 kph.
+    #       0x16a3 / 20 (kph) = 289.75.
+    #---------------------------------------------------------------------------
     # WheelSpeed = 1 mm/sec <==> 1.000.000 / 3600 km/hr = 1/278 km/hr
     # TotalReverse: Other implementations are using values between 1/277 and 1/360.
-    # A practical test shows that Cadence=92 gives 40km/hr at a given ratio
+    # WouterJD: A practical test shows that Cadence=92 gives 40km/hr at a given ratio
     #		factor 289.75 gives a slightly higher speed
     #		factor 301 would be good (8-11-2019)
+    #---------------------------------------------------------------------------
+    # @switchable 2020-12-02:
+    # If you mean: is there some simple explanation why the factor 289.75 is?
+    # Unfortunately I did not find one. Maybe it is just related to the way the
+    # speed was orignally measured on the Fortius and there isn't one.
+    # What I did to calculate the factor was this: with a roll diameter of 29mm,
+    # if the speed is v then it will rotate at a rate v / (29mm * pi).
+    # The sensor in the brake will output 4 pulses per turn, so I set my function
+    # generator to a frequency of 4 * v / (29mm * pi) to simulate riding at speed
+    # v and compared the value sent over USB.
+    # I also compared the value calculated by TTS and it agreed well with the
+    # theoretical one. This was repeated 60 times for different speeds, the factor
+    # calculated using linear regression. It may in fact be closer to 289.76,
+    # but that ist irrelevant in practice.
+    # It definitely isn't 280 or 300, at least on my unit.
     #---------------------------------------------------------------------------
     def Wheel2Speed(self):
         self.SpeedKmh = round(self.WheelSpeed / self.SpeedScale, 1)
@@ -1762,8 +1793,11 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     def SendToTrainerUSBData(self, TacxMode, Calibrate, PedalEcho, Target, Weight):
         raise NotImplementedError                   # To be defined in sub-class
 
+    def SendToTrainerUSBData_MotorBrake(self):
+        return False                                # Can be overwritten in sub-class
+
     def SendToTrainer(self, _QuarterSecond, TacxMode):
-        assert (TacxMode in (modeStop, modeResistance, modeCalibrate))
+        assert (TacxMode in (modeStop, modeResistance, modeCalibrate, modeMotorBrake))
 
         Calibrate = self.Calibrate
         PedalEcho = self.PedalEcho
@@ -1809,11 +1843,17 @@ class clsTacxUsbTrainer(clsTacxTrainer):
             Target      = self.Speed2Wheel(20)                  # 20 km/h is our decision for calibration
             Weight      = 0
 
+        elif TacxMode == modeMotorBrake:
+            pass                                                # No actions required
+
         if error:
             logfile.Console(error)
         else:
-            Target = int(Target)
-            data   = self.SendToTrainerUSBData(TacxMode, Calibrate, PedalEcho, Target, Weight)
+            if TacxMode == modeMotorBrake:
+                data   = self.SendToTrainerUSBData_MotorBrake()
+            else:
+                Target = int(Target)
+                data   = self.SendToTrainerUSBData(TacxMode, Calibrate, PedalEcho, Target, Weight)
 
             #-------------------------------------------------------------------
             # Send buffer to trainer
@@ -1866,16 +1906,20 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
 
     def TargetPower2Resistance(self):
         rtn = 0
-        if self.SpeedKmh > 0:
-            # instead of brakeCalibrationFactor use PowerFactor -p
-            # GoldenCheetah: setResistance = (((load  / curSpeedInternal) - 0.2f) / 0.0036f)
-            #                setResistance *= brakeCalibrationFactor
-            # rtn = ((PowerInWatt / WheelSpeed) - 0.2) * PowerResistanceFactor
 
-            # ref https://github.com/WouterJD/FortiusANT/wiki/Power-calibrated-with-power-meter-(iMagic)
-            rtn = (self.TargetPower - 2.2 * self.SpeedKmh) / \
-                    (self.SpeedKmh * self.SpeedKmh / 648 + \
-                     self.SpeedKmh / 5411 + 0.1058)
+        if self.clv.Resistance:
+            rtn = self.TargetPower  # e.g. in manual mode you can directly set Resistance
+        else:
+            if self.SpeedKmh > 0:
+                # instead of brakeCalibrationFactor use PowerFactor -p
+                # GoldenCheetah: setResistance = (((load  / curSpeedInternal) - 0.2f) / 0.0036f)
+                #                setResistance *= brakeCalibrationFactor
+                # rtn = ((PowerInWatt / WheelSpeed) - 0.2) * PowerResistanceFactor
+
+                # ref https://github.com/WouterJD/FortiusANT/wiki/Power-calibrated-with-power-meter-(iMagic)
+                rtn = (self.TargetPower - 2.2 * self.SpeedKmh) / \
+                        (self.SpeedKmh * self.SpeedKmh / 648 + \
+                        self.SpeedKmh / 5411 + 0.1058)
 
         # Check bounds
         rtn = min(226, rtn) # Maximum value; as defined by Golden Cheetah
@@ -2022,29 +2066,152 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
 # c l s T a c x N e w U s b T r a i n e r
 #-------------------------------------------------------------------------------
 # Tacx-trainer with New interface & USB connection
+#
+# This class implements the MotorBrake AND the MagneticBrake.
+# For the time being; Creating a derived class duplicates more common code than
+# simplifying it.
 #-------------------------------------------------------------------------------
 class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     def __init__(self, clv, Message, Headunit, UsbDevice):
         super().__init__(clv, Message)
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__()")
-        self.SpeedScale = 301                        # TotalReverse: 289.75
-        self.PowerResistanceFactor = 128866          # TotalReverse
+        self.SpeedScale = 289.75                    # See comment above
+        self.PowerResistanceFactor = 128866         # TotalReverse
 
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
         self.OK         = True
 
+        self.MotorBrakeUnitFirmware = 0             # Introduced 2020-11-23
+        self.MotorBrakeUnitSerial   = 0
+        self.MotorBrakeUnitYear     = 0
+        self.MotorBrakeUnitType     = 0             # 41 = T1941 (Fortius motorbrake)
+                                                    # 01 = T1901 (Magnetic brake)
+        self.Version2               = 0
+
+        #---------------------------------------------------------------------------
+        # Resistance values for MagneticBrake
+        # - possible force values to be recv from device
+        # - possible resistance value to be transmitted to device
+        #
+        # The head-unit only returns the values 1039...4677 in CurrentResistance.
+        # the head-unit only accepts the TargetResistances 1900...3750; other values
+        # are rounded down to the nearest value..
+        # Sending 1000 is the same as 1900
+        # Sending 2029 is the same as 1900
+        # Sending 5000 is the same as 3750
+        #
+        # The idea behind this, why there are 14 entries, why these values and why
+        # the steps between these values are not equal is the secret of the new USB
+        # interface with the Magnetic brake attached.
+        #---------------------------------------------------------------------------
+        self.currentR = [1039, 1299, 1559, 1819, 2078, 2338, 2598, 2858, 3118, 3378, 3767, 4027, 4287, 4677]
+        self.targetR  = [1900, 2030, 2150, 2300, 2400, 2550, 2700, 2900, 3070, 3200, 3350, 3460, 3600, 3750]
+
+        #---------------------------------------------------------------------------
+        # Initial state = stop
+        # Do not refresh() before sending a command
+        #---------------------------------------------------------------------------
+        self.SendToTrainer(True, modeStop)
+        time.sleep(0.1)                            # Allow head unit time to process
+        self.Refresh(True, modeStop)
+        time.sleep(0.1)                            # Allow head unit time to process
+
+        if True:
+            #-----------------------------------------------------------------------
+            # Check motor brake version
+            #-----------------------------------------------------------------------
+            self.SendToTrainer(True, modeMotorBrake)
+            time.sleep(0.1)                        # Allow head unit time to process
+            self._ReceiveFromTrainer_MotorBrake()
+            time.sleep(0.1)                        # Allow head unit time to process
+
+            #-----------------------------------------------------------------------
+            # Refresh with stop-command
+            #-----------------------------------------------------------------------
+            self.SendToTrainer(True, modeStop)
+            time.sleep(0.1)                        # Allow head unit time to process
+            self.Refresh(True, modeStop)
+
+        #---------------------------------------------------------------------------
+        if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__() done")
+
     #---------------------------------------------------------------------------
     # Basic physics: Power = Resistance * Speed  <==> Resistance = Power / Speed
     #---------------------------------------------------------------------------
     def CurrentResistance2Power(self):
-        self.CurrentPower = int(self.CurrentResistance / self.PowerResistanceFactor * self.WheelSpeed)
+        if self.MotorBrake:
+            #-------------------------------------------------------------------
+            # e.g. Tacx Fortius: Motor Brake T1941 connected to head unit T1932
+            #-------------------------------------------------------------------
+            self.CurrentPower = int(self.CurrentResistance / self.PowerResistanceFactor * self.WheelSpeed)
+
+        else:
+            #-------------------------------------------------------------------
+            # e.g. Tacx Flow: Magnetic Brake T1901 connected to head unit T1932
+            #-------------------------------------------------------------------
+            self.CurrentPower = int(self.Resistance2PowerMB(self.CurrentResistance, self.SpeedKmh))
+
+    #---------------------------------------------------------------------------
+    # Power formula for Magnetic brake; thanks to @swichabl and @cyclingflow
+    #---------------------------------------------------------------------------
+    # The formula used is this:
+    # power = speed * (scale factor * resistance *
+    #                     speed / (speed + critical speed) + rolling resistance)
+    # So there are just two parameters (scale factor and critical speed) that
+    # would be the same for everyone + rolling resistance which should
+    # eventually be determined individually using the "runoff"/spin-down test.
+    #---------------------------------------------------------------------------
+    def Resistance2PowerMB(self, Resistance, SpeedKmh):
+        ScaleFactor             = 0.0149   # N
+        CriticalSpeed           = 4.85     # m/s
+
+        if self.clv.CalibrateRR:
+            RollingResistance = self.clv.CalibrateRR    # Value 0...100 allowed
+            RollingResistance = min(100, RollingResistance)
+            RollingResistance = max(  0, RollingResistance)
+        else:
+            RollingResistance   = 15      # N
+
+        Speed = SpeedKmh / 3.6
+        return Speed * (ScaleFactor * Resistance * Speed / (Speed + CriticalSpeed) + RollingResistance)
 
     def TargetPower2Resistance(self):
         rtn        = 0
-        if self.WheelSpeed > 0:
-            rtn = self.TargetPower * self.PowerResistanceFactor / self.WheelSpeed
-            rtn = self.__AvoidCycleOfDeath(rtn)
+
+        if self.clv.Resistance:
+            #-------------------------------------------------------------------
+            # e.g. in manual mode you can directly set Resistance
+            # For the magnetic brake, there are 13 individual values
+            #       knowing that we UP/DOWN by 50 Watt, divide TargetPower by 50
+            #       So 0...650 Watt results in passing the targetR[] table
+            #-------------------------------------------------------------------
+            if self.MotorBrake:
+                rtn = self.TargetPower
+            else:
+                i = int(self.TargetPower / 50)
+                i = max(                    0, i)        # Not less than 0
+                i = min(len(self.targetR) - 1, i)        # Not more than 13
+                rtn = self.targetR[i]
+
+        elif self.MotorBrake:
+            #-------------------------------------------------------------------
+            # e.g. Tacx Fortius: Motor Brake T1941 connected to head unit T1932
+            #-------------------------------------------------------------------
+            if self.WheelSpeed > 0:
+                rtn = self.TargetPower * self.PowerResistanceFactor / self.WheelSpeed
+                rtn = self.__AvoidCycleOfDeath(rtn)
+
+        else:
+            #-------------------------------------------------------------------
+            # e.g. Tacx Flow: Magnetic Brake T1901 connected to head unit T1932
+            #-------------------------------------------------------------------
+            if self.WheelSpeed > 0:
+                for i in range(0, len(self.currentR)):
+                    if self.Resistance2PowerMB(self.currentR[i], self.SpeedKmh) >= self.TargetPower:
+                        break
+                rtn = self.targetR[i]
+
         rtn = int(rtn)
 
         if debug.on(debug.Function):logfile.Write (\
@@ -2147,6 +2314,30 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         return data
 
     #---------------------------------------------------------------------------
+    # S e n d T o T r a i n e r D a t a _ M o t o r B r a k e
+    #---------------------------------------------------------------------------
+    # input     None
+    #
+    # function  Called by SendToTrainer()
+    #           Compose buffer to ask for Motor Brake Version
+    #
+    # returns   data
+    #---------------------------------------------------------------------------
+    def SendToTrainerUSBData_MotorBrake(self):
+        #-----------------------------------------------------------------------
+        # Data buffer "T1941 Motor Brake Version Message", refer to TotalReverse
+        # https://github.com/totalreverse/ttyT1941/wiki#t1941-motor-brake-commands-and-answers
+        #-----------------------------------------------------------------------
+        fControlCommand     = sc.unsigned_int       # 0...3
+
+        #-----------------------------------------------------------------------
+        # Build data buffer to be sent to trainer
+        #-----------------------------------------------------------------------
+        format = sc.no_alignment + fControlCommand
+        data   = struct.pack (format, 0x00000002)
+        return data
+
+    #---------------------------------------------------------------------------
     # R e c e i v e F r o m T r a i n e r
     #---------------------------------------------------------------------------
     # input     usbDevice
@@ -2187,10 +2378,10 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         data  = array.array('B', [])        # Empty Binary array
         data  = self.USB_Read()             # Try without a sleep first!
         while retry and len(data) < 40:
-            time.sleep(0.1)             # 2020-09-29 short delay @RogerPleijers
-            data = self.USB_Read()
             if debug.on(debug.Any):
                 logfile.Write ('Retry because short buffer received')
+            time.sleep(0.1)             # 2020-09-29 short delay @RogerPleijers
+            data = self.USB_Read()
             retry -= 1
 
         if len(data) < 40:
@@ -2310,4 +2501,95 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             if debug.on(debug.Function):
                 logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
                             (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
+                            )
+    #---------------------------------------------------------------------------
+    # R e c e i v e F r o m T r a i n e r
+    #---------------------------------------------------------------------------
+    # input     usbDevice
+    #
+    # function  Read status from trainer
+    #
+    # returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
+    #
+    #---------------------------------------------------------------------------
+    def _ReceiveFromTrainer_MotorBrake(self):
+        if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer._ReceiveFromTrainer_MotorBrake()")
+        #-----------------------------------------------------------------------
+        # Read from trainer
+        #-----------------------------------------------------------------------
+        data  = array.array('B', [])        # Empty Binary array
+        data  = self.USB_Read()
+
+        if len(data) < 40:
+            pass
+        else:
+            #-----------------------------------------------------------------------
+            # Define buffer format
+            #-----------------------------------------------------------------------
+            fFiller0_23             = sc.pad * 24       #  0...23
+
+            _nHeader                = 0
+            fHeader                 = sc.unsigned_int   # 24...27
+
+            nMotorBrakeUnitFirmware = 1
+            fMotorBrakeUnitFirmware = sc.unsigned_int   # 28...31   0.x.y.z
+
+            nMotorBrakeUnitSerial   = 2                 # 32...35   tt-YY-##### (tt=41 (T1941), YY=year,
+            fMotorBrakeUnitSerial   = sc.unsigned_int   #                 ##### brake individual serial)
+
+            nVersion2               = 3                 # 36, 37
+            fVersion2               = sc.unsigned_short
+
+            fFiller38_63            = sc.pad * (63-37)  # 38...63
+
+            format = sc.no_alignment + fFiller0_23 + fHeader + fMotorBrakeUnitFirmware + \
+                        fMotorBrakeUnitSerial + \
+                        fVersion2 + fFiller38_63
+
+            #-----------------------------------------------------------------------
+            # Buffer must be 64 characters (struct.calcsize(format)),
+            # Note that tt_FortiusSB returns 48 bytes only; append with dummy
+            #-----------------------------------------------------------------------
+            for _v in range( 64 - len(data) ):
+                data.append(0)
+
+            #-----------------------------------------------------------------------
+            # Parse buffer
+            #-----------------------------------------------------------------------
+            tuple = struct.unpack (format, data)
+            self.MotorBrakeUnitFirmware = tuple[nMotorBrakeUnitFirmware]
+            self.MotorBrakeUnitSerial   = tuple[nMotorBrakeUnitSerial]
+            self.Version2               = tuple[nVersion2]
+
+            #-----------------------------------------------------------------------
+            # Split serial; all decimal digits = tt-yy-#####
+            #-----------------------------------------------------------------------
+            d = self.MotorBrakeUnitSerial                       # d = decimals
+
+            self.MotorBrakeUnitType = int(d / 10000000)         # move 7 digits to right
+            d = d - self.MotorBrakeUnitType * 10000000
+
+            self.MotorBrakeUnitYear = int(d / 100000)           # move 5 digits to right
+            d = d - self.MotorBrakeUnitYear * 100000
+
+            self.MotorBrakeUnitSerial = d                       # remaining
+
+            #-----------------------------------------------------------------------
+            # If T1942 or T1942 motorbrake, then calibration is supported
+            # e.g. Headunit T1932 does not return a value for T1901
+            #-----------------------------------------------------------------------
+            if self.MotorBrakeUnitType in (41, 42):
+                self.MotorBrake = True
+
+            if False:
+                print ('MagneticBrake active --- to test code ---  T O   B E   D E A C T I V A T E D')
+                self.MotorBrake = False
+
+            #-----------------------------------------------------------------------
+            # Important enough; always display
+            #-----------------------------------------------------------------------
+            logfile.Console ("Motor Brake Unit Firmware=%s Serial=%5s year=%s type=T19%s Version2=%s MotorBrake=%s" % \
+                            (   self.MotorBrakeUnitFirmware, self.MotorBrakeUnitSerial, \
+                                self.MotorBrakeUnitYear + 2000, self.MotorBrakeUnitType, \
+                                self.Version2, self.MotorBrake) \
                             )

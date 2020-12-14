@@ -1713,23 +1713,6 @@ def msgUnpage221_TacxVortexHU_ButtonPressed (info):
 
     return tuple[nButton]
 
-def msgUnpage221_TacxGeniusHU_ButtonPressed (info):
-    fChannel            = sc.unsigned_char  # 0 First byte of the ANT+ message content
-    fDataPageNumber     = sc.unsigned_char  # 1 First byte of the ANT+ datapage (payload)
-    fCommand            = sc.unsigned_char  # 2 0x10 Button press
-
-    nButton             = 3
-    fButton             = sc.unsigned_char  # 3 Button 1...5
-
-    fReserved           = sc.pad * 4        # -
-    fCount              = sc.unsigned_char  # 4
-
-    format = sc.big_endian +    fChannel + fDataPageNumber + fCommand + fButton + fReserved + fCount
-    tuple = struct.unpack (format, info)
-
-    return tuple[nButton]
-
-
 # ------------------------------------------------------------------------------
 # T a c x  G e n i u s  p a g e s
 # ------------------------------------------------------------------------------
