@@ -100,6 +100,7 @@ __version__ = "2020-11-18"
 # 2019-12-25    Target grade implemented; modes defined
 #-------------------------------------------------------------------------------
 import array
+from enum import Enum
 import usb.core
 import os
 import random
@@ -1279,6 +1280,18 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
 #-------------------------------------------------------------------------------
 # Tacx-trainer with ANT connection
 #-------------------------------------------------------------------------------
+
+# Genius state machine
+class GeniusState(Enum):
+    Pairing = 0,
+    RequestCalibrationInfo = 1,
+    RequestCalibration = 2,
+    CalibrationStarted = 3,
+    CalibrationRunning = 4,
+    CalibrationDone = 5,
+    CalibrationFailed = 6,
+    Running = 7
+
 class clsTacxAntGeniusTrainer(clsTacxTrainer):
     def __init__(self, clv, AntDevice):
         msg = "Pair with Tacx Genius"
@@ -1292,15 +1305,36 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
         self.__ResetTrainer()
 
     def __ResetTrainer(self):
-        self.__AntGNSpaired    = False
-        self.__DeviceNumberGNS = 0              # provided by CHANNEL_ID msg
+        self.__DeviceNumberGNS  = 0              # provided by CHANNEL_ID msg
 
-        self.__Cadence         = 0              # provided by datapage 0
-        self.__CurrentPower    = 0
-        self.__WheelSpeed      = 0
-        self.__SpeedKmh        = 0              #     (from WheelSpeed)
-        self.__AlarmStatus     = 0
-        self.__CommandCounter  = 0
+        self.__Cadence          = 0              # provided by datapage 0
+        self.__CurrentPower     = 0
+        self.__WheelSpeed       = 0
+        self.__SpeedKmh         = 0              #     (from WheelSpeed)
+        self.__AlarmStatus      = 0
+        self.__CommandCounter   = 0
+        self.__Calibrated       = False
+        self.__WatchdogTime     = time.time()
+        self.__CalibrationValue = 0
+        self.__State            = GeniusState.Pairing
+
+    def __SetState(self, state):
+        if debug.on(debug.Function):
+            logfile.Write("Genius state %s -> %s" % (self.__State, state))
+        self.__State = state
+
+    def __ResetTimeout(self):
+        self.__WatchdogTime = time.time()
+
+    def __CheckCalibrationTimeout(self):
+        # cancel calibration if no progress in last 60s
+        timeout = 60
+        if time.time() > self.__WatchdogTime + timeout:
+            self.__SetState(GeniusState.CalibrationFailed)
+            self.__Calibrated = False
+
+            if debug.on(debug.Function):
+                logfile.Write("Genius calibration timed out")
 
     #---------------------------------------------------------------------------
     # R e c e i v e F r o m T r a i n e r
@@ -1327,8 +1361,26 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
         # ----------------------------------------------------------------------
         # Compose displayable message
         # ----------------------------------------------------------------------
-        if self.__DeviceNumberGNS:
+        if self.__State == GeniusState.CalibrationStarted:
+            self.Message = "* * * * N U D G E  W H E E L  F O R W A R D * * * *"
+        elif self.__State == GeniusState.CalibrationRunning:
+            self.Message = "* * * * C A L I B R A T I N G  ( D O  N O T  P E D A L ! ) * * * *"
+        elif self.__State == GeniusState.CalibrationDone:
+            nominalCalValue = 75
+            calMargin = 15
+            msg = "Calibration complete (%+d)" % \
+                           (self.__CalibrationValue - nominalCalValue)
+            if self.__CalibrationValue > nominalCalValue + calMargin:
+                msg += " - Decrease roller pressure!"
+            elif self.__CalibrationValue < nominalCalValue - calMargin:
+                msg += " - Increase roller pressure!"
+            self.Message = msg
+        elif self.__State == GeniusState.CalibrationFailed:
+            self.Message = "Calibration failed"
+        elif self.__DeviceNumberGNS:
             msg = "Tacx Genius paired: %d" % self.__DeviceNumberGNS
+            if not self.__Calibrated:
+                msg += " UNCALIBRATED"
             if self.__AlarmStatus & ant.GNS_Alarm_Overtemperature:
                 msg += " TEMPERATURE TOO HIGH!"
             if self.__AlarmStatus & ant.GNS_Alarm_Overvoltage:
@@ -1356,7 +1408,61 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
 
         if QuarterSecond:
             messages = []
-            if TacxMode == modeResistance:
+            if self.__State == GeniusState.RequestCalibrationInfo:
+                # ---------------------------------------------------------------
+                # Request calibration info (repeat until response received)
+                # ---------------------------------------------------------------
+                info = ant.msgPage220_04_TacxGeniusCalibration(ant.channel_GNS_s,
+                            ant.GNS_Calibration_Action_Request_Info)
+                msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
+                messages.append(msg)
+
+                if debug.on(debug.Function):
+                    logfile.Write(
+                        "Genius page 220/0x04 (OUT)  CalibrationAction=%d" % \
+                        ant.GNS_Calibration_Action_Request_Info)
+            elif self.__State == GeniusState.RequestCalibration:
+                # ---------------------------------------------------------------
+                # Request calibration (repeat until response received)
+                # ---------------------------------------------------------------
+                info = ant.msgPage220_04_TacxGeniusCalibration(ant.channel_GNS_s,
+                                                               ant.GNS_Calibration_Action_Start)
+                msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
+                messages.append(msg)
+
+                if debug.on(debug.Function):
+                    logfile.Write(
+                        "Genius page 220/0x04 (OUT)  CalibrationAction=%d" % \
+                        ant.GNS_Calibration_Action_Start)
+
+                self.__CheckCalibrationTimeout()
+            elif self.__State == GeniusState.CalibrationStarted or \
+                    self.__State == GeniusState.CalibrationRunning:
+                RequestInterval = 4
+                self.__CommandCounter += 1
+
+                if self.__CommandCounter >= RequestInterval:
+                    # ---------------------------------------------------------------
+                    # Request calibration info (at regular intervals)
+                    # ---------------------------------------------------------------
+                    info = ant.msgPage220_04_TacxGeniusCalibration(ant.channel_GNS_s,
+                                                                   ant.GNS_Calibration_Action_Request_Info)
+                    msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
+                    messages.append(msg)
+
+                    if debug.on(debug.Function):
+                        logfile.Write(
+                            "Genius page 220/0x04 (OUT)  CalibrationAction=%d" % \
+                            ant.GNS_Calibration_Action_Request_Info)
+
+                    self.__CommandCounter = 0
+
+                self.__CheckCalibrationTimeout()
+            elif self.__State == GeniusState.CalibrationDone or \
+                    self.__State == GeniusState.CalibrationFailed:
+                if self.WheelSpeed > 30:
+                    self.__SetState(GeniusState.Running)
+            elif self.__State == GeniusState.Running and TacxMode == modeResistance:
                 if self.TargetMode == mode_Grade:
                     # insert a wind resistance page at regular intervals
                     WindResistanceInterval = 4
@@ -1397,18 +1503,18 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                     #---------------------------------------------------------------
                     # Set target power
                     #---------------------------------------------------------------
-                    # lower flywheel weight in ERG mode to make the trainer more responsive
+                    # lower flywheel mass in ERG mode to make the trainer more responsive
                     # 10kg is what is used on the Fortius
-                    flywheelWeight = 10
+                    flywheelMass = 10
                     info = ant.msgPage220_01_TacxGeniusSetTarget(ant.channel_GNS_s, ant.GNS_Mode_Power,
-                                                                  self.TargetResistance, flywheelWeight)
+                                                                  self.TargetResistance, flywheelMass)
                     msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
                     messages.append(msg)
 
                     if debug.on(debug.Function):
                         logfile.Write(
                             "Genius page 220/0x01 (OUT)  Mode=%d Target=%.1f Weight=%.1f" % \
-                            (ant.GNS_Mode_Power, self.TargetResistance, flywheelWeight))
+                            (ant.GNS_Mode_Power, self.TargetResistance, flywheelMass))
 
             #-------------------------------------------------------------------
             # Send messages, leave receiving to the outer loop
@@ -1452,25 +1558,22 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
         # GNS = Tacx Genius trainer
         #-----------------------------------------------------------------------
         if Channel == ant.channel_GNS_s:
-            if id == ant.msgID_AcknowledgedData:
-                dataHandled = True
 
             #-------------------------------------------------------------------
             # BroadcastData - info received from the master device
             #-------------------------------------------------------------------
-            elif id == ant.msgID_BroadcastData:
+            if id == ant.msgID_BroadcastData:
                 #---------------------------------------------------------------
                 # Ask what device is paired
                 #---------------------------------------------------------------
-                if not self.__AntGNSpaired:
+                if self.__State == GeniusState.Pairing:
                     msg = ant.msg4D_RequestMessage(ant.channel_GNS_s, ant.msgID_ChannelID)
-                    messages.append (msg)
+                    messages.append(msg)
 
                 #-----------------------------------------------------------------
                 # Data page 221 (0x01) msgUnpage221_01_TacxGeniusSpeedPowerCadence
                 #-----------------------------------------------------------------
                 if DataPageNumber == 221 and SubPageNumber == 0x01:
-                    dataHandled = True
                     self.__CurrentPower, self.__WheelSpeed, self.__Cadence, Balance = \
                         ant.msgUnpage221_01_TacxGeniusSpeedPowerCadence(info)
 
@@ -1478,28 +1581,76 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                         logfile.Write('Genius Page=%d/%#x (IN)  Power=%d Speed=%d Cadence=%d Balance=%d' %
                                        (DataPageNumber, SubPageNumber, self.__CurrentPower,
                                         self.__WheelSpeed, self.__Cadence, Balance))
+
                 # -----------------------------------------------------------------
                 # Data page 221 (0x02) msgUnpage221_02_TacxGeniusDistanceHR
                 # -----------------------------------------------------------------
                 elif DataPageNumber == 221 and SubPageNumber == 0x02:
-                    dataHandled = True
                     Distance, Heartrate = \
                         ant.msgUnpage221_02_TacxGeniusDistanceHR(info)
 
                     if debug.on(debug.Function):
                         logfile.Write('Genius Page=%d/%#x (IN)  Distance=%d Heartrate=%d' %
                                       (DataPageNumber, SubPageNumber, Distance, Heartrate))
+
                 # -----------------------------------------------------------------
                 # Data page 221 (0x03) msgUnpage221_03_TacxGeniusAlarmTemperature
                 # -----------------------------------------------------------------
                 elif DataPageNumber == 221 and SubPageNumber == 0x03:
-                    dataHandled = True
                     self.__AlarmStatus, Temperature, Powerback = \
                         ant.msgUnpage221_03_TacxGeniusAlarmTemperature(info)
 
                     if debug.on(debug.Function):
                         logfile.Write('Genius Page=%d/%#x (IN)  Alarm=%d Temperature=%d Powerback=%d' %
                                       (DataPageNumber, SubPageNumber, self.__AlarmStatus, Temperature, Powerback))
+
+                # -------------------------------------------------------------------
+                # Data page 221 (0x04) msgUnpage221_04_TacxGeniusAlarmCalibrationInfo
+                # -------------------------------------------------------------------
+                elif DataPageNumber == 221 and SubPageNumber == 0x04:
+                    calibrationState, calibrationValue = \
+                        ant.msgUnpage221_04_TacxGeniusCalibrationInfo(info)
+
+                    if self.__State == GeniusState.Running:
+                        # ignore if no calibration pending
+                        pass
+                    elif self.__State == GeniusState.RequestCalibrationInfo:
+                        if calibrationState == ant.GNS_Calibration_State_Calibrated:
+                            # already calibrated, start training
+                            self.__Calibrated = True
+                            self.__SetState(GeniusState.Running)
+                        elif self.clv.calibrate:
+                            # uncalibrated, initiate calibration
+                            self.__ResetTimeout()
+                            self.__SetState(GeniusState.RequestCalibration)
+                        else:
+                            # start training without calibration
+                            self.__Calibrated = False
+                            self.__SetState(GeniusState.Running)
+                    elif self.__State == GeniusState.RequestCalibration:
+                        if calibrationState == ant.GNS_Calibration_State_Started:
+                            # calibration initiated
+                            self.__SetState(GeniusState.CalibrationStarted)
+                            self.__ResetTimeout()
+                    else: # calibration started or running
+                        if calibrationState >= ant.GNS_Calibration_State_Value_Error:
+                            # error, calibration failed
+                            self.__SetState(GeniusState.CalibrationFailed)
+                            self.__Calibrated = False
+
+                        elif calibrationState == ant.GNS_Calibration_State_Running:
+                            # calibration is running
+                            self.__SetState(GeniusState.CalibrationRunning)
+                            self.__ResetTimeout()
+                        elif calibrationState == ant.GNS_Calibration_State_Calibrated:
+                            # calibration completed
+                            self.__SetState(GeniusState.CalibrationDone)
+                            self.__Calibrated = True
+                            self.__CalibrationValue = calibrationValue
+
+                    if debug.on(debug.Function):
+                        logfile.Write('Genius Page=%d/%#x (IN)  CalibrationState=%d CalibrationValue=%d' %
+                                      (DataPageNumber, SubPageNumber, calibrationState, calibrationValue))
 
             #-------------------------------------------------------------------
             # ChannelID - the info that a master on the network is paired
@@ -1509,9 +1660,10 @@ class clsTacxAntGeniusTrainer(clsTacxTrainer):
                     ant.unmsg51_ChannelID(info)
 
                 if DeviceTypeID == ant.DeviceTypeID_GNS:
-                    dataHandled = True
-                    self.__AntGNSpaired    = True
                     self.__DeviceNumberGNS = DeviceNumber
+
+                    # check calibration state after pairing
+                    self.__SetState(GeniusState.RequestCalibrationInfo)
 
             #-------------------------------------------------------------------
             # Outer loop does not need to handle channel_GNS messages

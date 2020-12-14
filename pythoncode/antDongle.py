@@ -138,6 +138,27 @@ GNS_Mode_Power      = 0x01
 GNS_Mode_Heartrate  = 0x02
 
 #---------------------------------------------------------------------------
+# Tacx Genius calibration actions
+#---------------------------------------------------------------------------
+GNS_Calibration_Action_Stop         = 0x00
+GNS_Calibration_Action_Start        = 0x01
+GNS_Calibration_Action_Request_Info = 0x02
+
+#---------------------------------------------------------------------------
+# Tacx Genius calibration status
+#---------------------------------------------------------------------------
+GNS_Calibration_State_Stopped       = 0x00
+GNS_Calibration_State_Started       = 0x01
+GNS_Calibration_State_Running       = 0x02
+GNS_Calibration_State_Calibrated    = 0x03
+GNS_Calibration_State_Uncalibrated  = 0x04
+GNS_Calibration_State_Value_Error   = 0x81
+GNS_Calibration_State_Cadence_Error = 0x82
+GNS_Calibration_State_Speed_Error   = 0x83
+GNS_Calibration_State_Timeout       = 0x83
+GNS_Calibration_State_Torque_Error  = 0x83
+
+#---------------------------------------------------------------------------
 # Tacx Genius alarm bits
 #---------------------------------------------------------------------------
 GNS_Alarm_Overtemperature       = 0x10001
@@ -1761,6 +1782,24 @@ def msgPage220_02_TacxGeniusWindResistance (Channel, WindResistance, WindSpeed):
 
     return info
 
+# ------------------------------------------------------------------------------
+# P a g e 2 2 0  ( 0 x 0 4 )  T a c x G e n i u s C a l i b r a t i o n
+# ------------------------------------------------------------------------------
+def msgPage220_04_TacxGeniusCalibration (Channel, Action):
+    DataPageNumber      = 220
+    SubPageNumber       = 0x04
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char
+    fAction             = sc.unsigned_char  # Calibration action
+    fPadding            = sc.pad * 5
+
+    format = sc.big_endian +     fChannel + fDataPageNumber + fSubPageNumber + fAction + fPadding
+    info   = struct.pack (format, Channel,   DataPageNumber,   SubPageNumber,   Action)
+
+    return info
+
 # -------------------------------------------------------------------------------------
 # P a g e 2 2 1  ( 0 x 0 1 )  T a c x G e n i u s S p e e d / P o w e r / C a d e n c e
 # -------------------------------------------------------------------------------------
@@ -1825,6 +1864,26 @@ def msgUnpage221_03_TacxGeniusAlarmTemperature (info):
     tuple = struct.unpack(format, info)
 
     return tuple[nAlarm], tuple[nTemperature], tuple[nPowerback]
+
+# -------------------------------------------------------------------------------------
+# P a g e 2 2 1  ( 0 x 0 4 )  T a c x G e n i u s C a l i b r a t i o n I n f o
+# -------------------------------------------------------------------------------------
+def msgUnpage221_04_TacxGeniusCalibrationInfo (info):
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char  # == 0x04
+
+    fCalibrationState   = sc.unsigned_char  # calibration status
+    nCalibrationState   = 3
+    fCalibrationValue   = sc.unsigned_short  # brake temperature (°C ?)
+    nCalibrationValue   = 4
+    fPadding            = 3 * sc.pad
+
+    format = sc.big_endian + fChannel + fDataPageNumber + fSubPageNumber + \
+             fCalibrationState + fCalibrationValue + fPadding
+    tuple = struct.unpack(format, info)
+
+    return tuple[nCalibrationState], tuple[nCalibrationValue]
 
 # ------------------------------------------------------------------------------
 # P a g e 1 6   G e n e r a l   F E   i n f o
