@@ -907,14 +907,18 @@ def Tacx2DongleSub(self, Restart):
             
                 for m in ble_response:
                     logfile.Write(f"message: {m}")
-                    if "wind_speed" in m and "wind_resistance_coefficient" in m:
-                        TacxTrainer.SetWind(m["wind_resistance_coefficient"], m["wind_speed"], 1) # draftingfactor set to 1
-                
-                    if "grade" in m:
-                        TacxTrainer.SetGrade(m["grade"])
 
-                    if "rolling_resistance_coefficient" in m:
-                        TacxTrainer.SetRollingResistance(m["rolling_resistance_coefficient"])
+                    if "target_power" in m:
+                        TacxTrainer.SetPower(m["target_power"])
+                    else:
+                        if "wind_speed" in m and "wind_resistance_coefficient" in m:
+                            TacxTrainer.SetWind(m["wind_resistance_coefficient"], m["wind_speed"], 1) # draftingfactor set to 1
+                    
+                        if "grade" in m:
+                            TacxTrainer.SetGrade(m["grade"])
+
+                        if "rolling_resistance_coefficient" in m:
+                            TacxTrainer.SetRollingResistance(m["rolling_resistance_coefficient"])
             
             #-------------------------------------------------------------------
             # Broadcast and receive ANT+ responses
