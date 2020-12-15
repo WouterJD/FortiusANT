@@ -18,21 +18,34 @@ Communication between FortiusANT and the BLE server happens internally via a loc
 
 Since BLE support in FortiusANT depends on the bleno library, hardware support is also limited to what bleno supports.
 
-For Windows, there is a limited set of supported hardware, see [node-bluetooth-hci-socket](https://github.com/noble/node-bluetooth-hci-socket#windows).
+On macOS, on-board bluetooth is used, no need for an external dongle.
+
+On Windows a bluetooth dongle is required, there is a limited set of supported hardware. It is important that your bluetooth dongle has one of the supported chipsets. See [node-bluetooth-hci-socket](https://github.com/noble/node-bluetooth-hci-socket#windows).
 
 ## Installation
 
 ### macOS
 
 1. Install Xcode: [App Store](https://apps.apple.com/nl/app/xcode/id497799835?l=en&mt=12)
-2. Install NodeJS: `brew install node`
-3. Install dependencies: `cd node && npm install`
+1. Install NodeJS: `brew install node`
+1. Install dependencies: `cd node && npm install`
 
 ### Windows
-1. Follow steps in [this](https://youtu.be/mL9B8wuEdms?t=80) youtube video to install:
-    1. NodeJS
-    2. Replace Bluetooth driver using Zadig tool
-2. Install dependencies: `cd node && npm install`
+1. Install Git for Windows (https://git-scm.com/downloads)
+    * Only needed if not installed yet.
+1. Install NodeJS LTS version (https://nodejs.org)
+    * During installation, **check the box which installs the necessary tools for native modules**.
+    * After NodeJS installation completes, a command prompt will appear which will install the necessary tools
+1. Install Zadig (https://zadig.akeo.ie)
+1. Replace the driver for your bluetooth dongle using Zadig
+    * Note that you cannot use the bluetooth dongle for windows itself when you perform this step. Using the exact same steps as mentioned below you can restore the old driver if you want.
+    1. Start Zadig
+    1. Select the bluetooth dongle
+    1. Remember the current driver, in case you want to restore the driver later on.
+    1. Check if WinUSB driver is set as target driver, this should be the default. (Choose the old driver when reverting)
+    1. press Replace Driver
+
+5. Install dependencies: `cd node && npm install`
 
 ### Linux
 TODO
