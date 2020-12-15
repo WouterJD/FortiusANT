@@ -4,6 +4,7 @@ const trace = debug('fortiusant:fmcpc');
 
 const RequestControl = 0x00;
 const Reset = 0x01;
+const SetTargetPower = 0x05;
 const StartOrResume = 0x07;
 const StopOrPause = 0x08;
 const SetIndoorBikeSimulation = 0x11;
@@ -103,6 +104,27 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
         if (this.hasControl) {
           trace('Control reset');
           this.hasControl = false;
+          response = this.result(code, Success);
+        }
+        else {
+          trace('Error: no control');
+          response = this.result(code, ControlNotPermitted);
+        }
+        break;
+      case SetTargetPower:
+        trace('[FitnessMachineControlPointCharacteristic] onWriteRequest: Set target power');
+        if (this.hasControl) {
+          let targetPower = data.readInt16LE(1);
+
+          trace('Target Power(W): ' + targetPower);
+
+          let message = {
+            "target_power": targetPower
+          }
+          
+          // Put in message fifo so FortiusANT can read it
+          this.messages.push(message);
+
           response = this.result(code, Success);
         }
         else {
