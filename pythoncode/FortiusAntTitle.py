@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v4.1.a #121"                # Double quotes, see below!
+WindowTitle = "Fortius Antifier v4.1.b #121"                # Double quotes, see below!
 # 2020-12-14    Version 4.1     Implementation of ANT+ Remote control
 # 2020-12-11    Version 4.0     Implementation of Magnetic Brake on "USB"
 # 2020-11-19    Version 3.8
