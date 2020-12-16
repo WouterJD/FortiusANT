@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-14"
+__version__ = "2020-12-15"
+# 2020-12-15    added: -R for Runoff procedure
+#               Command line variables are all printed when debugging
+#               Some command line handling code improvements
 # 2020-12-14    added: -C for ANT+ Control device
 # 2020-12-10    GradeAdjust defined as integer%
 #               float (-p and -c); decimal-comma is replaced by decimal-point.
@@ -78,6 +81,28 @@ class CommandLineVariables(object):
     Tacx_iVortex    = False
 
     #---------------------------------------------------------------------------
+    # Runoff, as defined by @cyclingflow
+    # Max Speed: I prefer a lower max speed. 40kph requires gearing up to largest
+    #   blade on my triple (26inch wheel), which i like to avoid.
+    #   30 is the original tacx maximum. Currently I use 36.
+    #
+    # Over the years i have regularly find myself wondering, did I cleanly stop
+    # pedaling in time? I propose a change such that after reaching the max speed,
+    # the program signals STOP PEDALLING, and then after a slight further dip
+    # say 2kph (40-2=38kph), the programs starts measuring and tells you so.
+    #
+    # Minimum speed. I have noticed several times that the behavior of the wheel
+    # just before stopping is inconsistent (may be smudge or something), which
+    # made be start wondering if stopping measuring slightly above zero speed
+    # would be better.
+    #---------------------------------------------------------------------------
+    RunoffMaxSpeed  =  40        # introduced 2020-12-15; #147 Improve runoff procedure
+    RunoffDip       =   2
+    RunoffMinSpeed  =   1
+    RunoffTime      =   7
+    RunoffPower     = 100
+
+    #---------------------------------------------------------------------------
     # Deprecated
     #---------------------------------------------------------------------------
     # __tyre__        = 2.096
@@ -123,6 +148,7 @@ class CommandLineVariables(object):
                                                                                                             required=False, action='store_true')
         parser.add_argument('-r','--Resistance',help='Target Resistance = Target Power (to create power curve)',
                                                                                                             required=False, action='store_true')
+        parser.add_argument('-R','--Runoff',    help='maxSpeed/dip/minSpeed/targetTime/power',              required=False, default=False)
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
         parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
@@ -157,6 +183,8 @@ class CommandLineVariables(object):
 
         #-----------------------------------------------------------------------
         # Get calibration of Rolling Resistance
+        # Not limitted to a range here, because can be different for different
+        #       types of brakes, although initially only used for Magnetic Brake
         #-----------------------------------------------------------------------
         if args.CalibrateRR:
             try:
@@ -165,29 +193,20 @@ class CommandLineVariables(object):
                 logfile.Console('Command line error; -c incorrect calibration of Rolling Resistance=%s' % args.CalibrateRR)
 
         #-----------------------------------------------------------------------
-        # Get CtrlCommand = #1/#2
+        # Get CtrlCommand = Serial#1/Serial#2
         #-----------------------------------------------------------------------
         if args.CtrlCommand:
             s = args.CtrlCommand.split("/")
-            #-------------------------------------------------------------------
-            # First serial#
-            #-------------------------------------------------------------------
-            if len(s) >= 1:
-                try:
-                    self.CTRL_SerialL = int(s[0])
-                    assert(self.CTRL_SerialL >= 0)
-                except:
-                    logfile.Console('Command line error; -C incorrect SerialNumber in %s' % args.CtrlCommand)
+            try:
+                assert(len(s) <= 2)
 
-            #-------------------------------------------------------------------
-            # Second serial#
-            #-------------------------------------------------------------------
-            if len(s) >= 2:
-                try:
-                    self.CTRL_SerialR = int(s[1])
-                    assert(self.CTRL_SerialR >= 0)
-                except:
-                    logfile.Console('Command line error; -C incorrect SerialNumber in %s' % args.CtrlCommand)
+                if len(s) >= 1: self.CTRL_SerialL = int( s[0] )
+                if len(s) >= 2: self.CTRL_SerialR = int( s[1] )
+
+                assert(self.CTRL_SerialL >= 0)
+                assert(self.CTRL_SerialR >= 0)
+            except:
+                logfile.Console('Command line error; -C incorrect SerialNumber in %s' % args.CtrlCommand)
 
         #-----------------------------------------------------------------------
         # Get debug-flags, used in debug module
@@ -239,7 +258,7 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         if args.factor:
             try:
-                self.PowerFactor = int(args.factor)/100
+                self.PowerFactor = max(0.9, min(1.1, int(args.factor)/100 ))
             except:
                 logfile.Console('Command line error; -f incorrect power factor=%s' % args.factor)
 
@@ -254,44 +273,41 @@ class CommandLineVariables(object):
             #-------------------------------------------------------------------
             # parameter1: factor (default = 1, allowed = 0...100%)
             # The target slope is divided by this number.
-            # Factor = 5 means: requested slope = 20% --> 4%
-            #-------------------------------------------------------------------
-            if len(s) >= 1:
-                try:
-                    self.GradeFactor = int(s[0]) / 100
-                    self.GradeFactor = max( 0, self.GradeFactor)
-                    self.GradeFactor = min( 1, self.GradeFactor)
-                except:
-                    logfile.Console('Command line error; -G incorrect Grade Adjust=%s' % args.GradeAdjust)
-                    self.GradeAdjust = 0
-
+            # Factor = 50 means: requested slope = 20% --> 10%
             #-------------------------------------------------------------------
             # parameter2: factor (default = 1, allowed = 0...100%)
-            # The target slope is divided by this number.
-            # Factor = 5 means: requested slope = 20% --> 4%
-            #-------------------------------------------------------------------
-            if len(s) >= 2:
-                try:
-                    self.GradeFactorDH = int(s[1]) / 100
-                    self.GradeFactorDH = max( 0, self.GradeFactorDH)
-                    self.GradeFactorDH = min( 1, self.GradeFactorDH)
-                except:
-                    logfile.Console('Command line error; -G incorrect Grade Adjust=%s' % args.GradeAdjust)
-                    self.GradeAdjust = 0
-
+            # The target slope is divided by this number (if negative).
+            # Factor = 50 means: requested slope = -20% --> -10%
             #-------------------------------------------------------------------
             # parameter3: shift percentage (default = 0, allowed = 0...20)
             # The target slope is incremented by this number.
             # Shift = 10 means: requested slope = -10% --> 0%
             #-------------------------------------------------------------------
-            if len(s) >= 3:
-                try:
-                    self.GradeShift = int(s[2])
-                    self.GradeShift = max( 0, self.GradeShift)
-                    self.GradeShift = min(20, self.GradeShift)
-                except:
-                    logfile.Console('Command line error; -G incorrect Grade Adjust=%s' % args.GradeAdjust)
-                    self.GradeAdjust = 0
+            try:
+                assert( len(s) <= 3 )
+                if len(s) >= 1 and s[0]: self.GradeFactor   = max(0, min( 1, int( s[0] ) / 100 ))
+                if len(s) >= 2 and s[1]: self.GradeFactorDH = max(0, min( 1, int( s[1] ) / 100 ))
+                if len(s) >= 3 and s[2]: self.GradeShift    = max(0, min(20, int( s[2] )       ))
+            except:
+                logfile.Console('Command line error; -G incorrect Grade Adjust=%s' % args.GradeAdjust)
+                self.GradeAdjust = 0
+
+        #-----------------------------------------------------------------------
+        # Get RunOff definition
+        # All defined as int (float seems not useful) with exception of Time
+        #-----------------------------------------------------------------------
+        if args.Runoff:
+            s = args.Runoff.split("/")
+            try:
+                assert( len(s) <= 5 )
+                if len(s) >= 1 and s[0]: self.RunoffMaxSpeed = max(20, min( 50, int  ( s[0] ) )) # km/hr
+                if len(s) >= 2 and s[1]: self.RunoffDip      = max( 0, min(  5, int  ( s[1] ) )) # km/hr
+                if len(s) >= 3 and s[2]: self.RunoffMinSpeed = max( 0, min( 10, int  ( s[2] ) )) # km/hr
+                if len(s) >= 4 and s[3]: self.RunoffTime     = max( 0, min( 10, float( s[3] ) )) # seconds
+                if len(s) >= 5 and s[4]: self.RunoffPower    = max( 0, min(500, int  ( s[4] ) )) # Watt
+                assert(self.RunoffMinSpeed <= self.RunoffMaxSpeed - self.RunoffDip * 2 )
+            except:
+                logfile.Console('Command line error; -R incorrect Runoff definition %s' % args.Runoff)                
 
         #-----------------------------------------------------------------------
         # Get TacxType
@@ -346,7 +362,7 @@ class CommandLineVariables(object):
 
     def print(self):
         try:
-            v = debug.on(debug.Any)     # Verbose: print all command-line variables with values
+            v = self.debug                          # Verbose: print all command-line variables with values
             if      self.autostart:          logfile.Console("-a")
             if      self.PedalStrokeAnalysis:logfile.Console("-A")
             if v or self.args.CalibrateRR:   logfile.Console("-c %s" % self.CalibrateRR )
@@ -369,6 +385,8 @@ class CommandLineVariables(object):
             if v or self.args.factor:        logfile.Console("-p %s" % self.PowerFactor )
             if      self.args.PowerMode:     logfile.Console("-P")
             if      self.args.Resistance:    logfile.Console("-r")
+            if v or self.args.Runoff:        logfile.Console("-R defines Runoff: maxSpeed=%s dip=%s minSpeed=%s targetTime=%s power=%s" % \
+                        (self.RunoffMaxSpeed, self.RunoffDip, self.RunoffMinSpeed, self.RunoffTime, self.RunoffPower) )
             if      self.args.simulate:      logfile.Console("-s")
 #scs        if v or self.args.scs:           logfile.Console("-S %s" % self.scs )
             if v or self.args.TacxType:      logfile.Console("-t %s" % self.TacxType)

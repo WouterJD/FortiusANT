@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-18"
+__version__ = "2020-12-16"
+# 2020-12-16    Stopping the program is no longer possible from the head unit
+#                   (#164 - to restart you have to get off your bike)
 # 2020-11-18    Logfile shows what version is started; windows exe or python
 # 2020-11-13    Logfile was not closed on end
 # 2020-11-05    New files added, githubWindowTitle() used
@@ -134,7 +136,7 @@ class frmFortiusAnt(gui.frmFortiusAntGui):
         if   Buttons == usbTrainer.EnterButton: self.Navigate_Enter()
         elif Buttons == usbTrainer.DownButton:  self.Navigate_Down()
         elif Buttons == usbTrainer.UpButton:    self.Navigate_Up()
-        elif Buttons == usbTrainer.CancelButton:self.Navigate_Back()
+        elif Buttons == usbTrainer.CancelButton:pass    # self.Navigate_Back()
         else:                                   pass
         return True
 
@@ -284,7 +286,7 @@ class frmFortiusAntChild(gui.frmFortiusAntGui):
         if   Buttons == usbTrainer.EnterButton: self.Navigate_Enter()
         elif Buttons == usbTrainer.DownButton:  self.Navigate_Down()
         elif Buttons == usbTrainer.UpButton:    self.Navigate_Up()
-        elif Buttons == usbTrainer.CancelButton:self.Navigate_Back()
+        elif Buttons == usbTrainer.CancelButton:pass    # self.Navigate_Back()
         else:                                   pass
         return True
 

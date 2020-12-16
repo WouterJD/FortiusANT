@@ -1,8 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-14"
+__version__ = "2020-12-16"
 # 2020-12-14    ANT+ Control command implemented
+#               Runoff procedure improved
 # 2020-12-10    GradeShift/GradeFactor are multipliers
 #               antDeviceID specified on command-line
 # 2020-12-08    GradeAdjust is split into GradeShift/GradeFactor
@@ -306,12 +307,27 @@ def LocateHW(self):
 # ------------------------------------------------------------------------------
 # input:        devTrainer
 #
+#               clv.RunoffMaxSpeed  = 30  km/hr
+#               clv.RunoffDip       = 2   km/hr
+#               clv.RunoffMinSpeed  = 1   km/hr
+#               clv.RunoffTime      = 7   seconds
+#               clv.RunoffPower     = 100 Watt
+#
 # Description:  run trainer untill 40km/h reached then untill stopped.
 #               Initially, target power is 100Watt, which may be influenced
 #               with the up/down buttons on the headunit of the trainer.
 #
 #               Note, that there is no ANT+ loop active here!
 #               - ANT+ Controller cannot be used here
+#
+#               The runoff process is:
+#               - Warm-up for two minutes
+#               - Increase speed until 30 km/hr is met
+#               - Stop pedalling and let wheel rundown
+#               - The time from stop pedalling -> wheel stopped is measured
+#                   That time is aimed to be 7.2 seconds
+#
+# Thanks:       antifier, cycleflow
 #
 # Output:       none
 #
@@ -323,9 +339,14 @@ def Runoff(self):
         logfile.Console('Runoff not implemented for Simulated trainer or Tacx i-Vortex')
         return False
 
-    TacxTrainer.SetPower(100)
+    #---------------------------------------------------------------------------
+    # Initialize
+    #---------------------------------------------------------------------------
+    TacxTrainer.SetPower(clv.RunoffPower)
     rolldown        = False
     rolldown_time   = 0
+    ShortMessage    = TacxTrainer.Message + " | Runoff - "
+    ShortMessage    = "Tacx Trainer Runoff - "
 
     #---------------------------------------------------------------------------
     # Pedal stroke Analysis
@@ -337,13 +358,6 @@ def Runoff(self):
     PowerCount      = 0
     PowerEqual      = 0
 
-    #self.InstructionsVariable.set('''
-    #CALIBRATION TIPS: 
-    #1. Tyre pressure 100psi (unloaded and cold) aim for 7.2s rolloff
-    #2. Warm up for 2 mins, then cycle 30kph-40kph for 30s 
-    #3. SpeedKmh up to above 40kph then stop pedaling and freewheel
-    #4. Rolldown timer will start automatically when you hit 40kph, so stop pedaling quickly!
-    #''')
     if clv.PedalStrokeAnalysis:
         CycleTime = CycleTimeFast   # Quick poll to get more info
         if debug.on(debug.Any):
@@ -370,30 +384,38 @@ def Runoff(self):
                             TacxTrainer.TargetPower,      TacxTrainer.TargetGrade, \
                             TacxTrainer.TargetResistance, TacxTrainer.HeartRate, \
                             0)
-            if not rolldown or rolldown_time == 0:
-                self.SetMessages(Tacx=TacxTrainer.Message + " - Cycle to above 40kph (then stop)")
-            else:
-                self.SetMessages(Tacx=TacxTrainer.Message + \
-                                    " - Rolldown timer %s - STOP pedaling!" % \
-                                    ( round((time.time() - rolldown_time),1) ) \
-                                )
-          
             #---------------------------------------------------------------------
-            # SpeedKmh up to 40 km/h and then rolldown
+            # SpeedKmh up to 40 km/h and then let wheel rolldown
             #---------------------------------------------------------------------
-            if TacxTrainer.SpeedKmh > 40:      # SpeedKmh above 40, start rolldown
-                rolldown = True
-        
-            if rolldown and TacxTrainer.SpeedKmh <=40 and rolldown_time == 0:
-                # rolldown timer starts when dips below 40
-                rolldown_time = time.time()
+            if not rolldown:
+                self.SetMessages(Tacx=ShortMessage + "Warm-up for some minutes, then cycle to above {}km/hr" \
+                                                    .format(clv.RunoffMaxSpeed))
           
-            if rolldown and TacxTrainer.SpeedKmh < 0.1 :    # wheel stopped
-                self.RunningSwitch = False                  # break loop
-                self.SetMessages(Tacx=TacxTrainer.Message + \
-                                    " - Rolldown time = %s seconds (aim 7s)" % \
-                                    round((time.time() - rolldown_time),1) \
-                                )
+                if TacxTrainer.SpeedKmh > clv.RunoffMaxSpeed:      # SpeedKmh above 40, start rolldown
+                    self.SetMessages(Tacx=ShortMessage + "STOP PEDALLING")                
+                    rolldown = True
+
+            #---------------------------------------------------------------------
+            # Measure time from MaxSpeed-Dip --> MinSpeed
+            #---------------------------------------------------------------------
+            else:        
+                if TacxTrainer.SpeedKmh <= clv.RunoffMaxSpeed - clv.RunoffDip:
+                    # rolldown timer starts when dips below 38
+                    if rolldown_time == 0:
+                        rolldown_time = time.time()
+                    self.SetMessages(Tacx=ShortMessage + \
+                                        "KEEP STILL, Rolldown timer %s seconds" % \
+                                        ( round((time.time() - rolldown_time),1) ) \
+                                    )
+          
+                if TacxTrainer.SpeedKmh < clv.RunoffMinSpeed :  # wheel almost stopped
+                    self.SetMessages(Tacx=ShortMessage + \
+                                        "Rolldown time = %s seconds (aim %s s)" % \
+                                        (round((time.time() - rolldown_time),1), clv.RunoffTime) \
+                                    )
+
+                if TacxTrainer.SpeedKmh < 0.1 :                 # wheel stopped
+                    self.RunningSwitch = False                  # break loop
 
         #-------------------------------------------------------------------------
         # #48 Frequency of data capture - sufficient for pedal stroke analysis?
@@ -459,7 +481,7 @@ def Runoff(self):
     #---------------------------------------------------------------------------
     # Finalize
     #---------------------------------------------------------------------------
-    self.SetValues( 0, 0, 0,TacxTrainer.TargetMode, 0, 0, 0, 0, 0)
+    self.SetValues( 0, 0, 0, TacxTrainer.TargetMode, 0, 0, 0, 0, 0 )
     if not rolldown:
         self.SetMessages(Tacx=TacxTrainer.Message)
     if debug.on(debug.Any) and PowerCount > 0:

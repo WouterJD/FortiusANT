@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-04"
+__version__ = "2020-11-16"
+# 2020-12-16    Force refresh when main inputs zero
 # 2020-11-04    WindowTitle separated into FortiusAntTitle.py
 # 2020-10-01    Version 3.2.2:
 #               - Enable manual mode withoout ANT dongle
@@ -703,6 +704,13 @@ class frmFortiusAntGui(wx.Frame):
         self.PowerArray = numpy.append(self.PowerArray, iPower)     # Add new value to array
         self.PowerArray = numpy.delete(self.PowerArray, 0)          # Remove oldest from array
         iPowerMean = int(numpy.mean(self.PowerArray))               # Calculate average
+
+        # ----------------------------------------------------------------------
+        # Force refresh to avoid ghost values at end-of-loop
+        # ----------------------------------------------------------------------
+        if fSpeed == 0 and iRevs == 0 and iPower == 0:
+            iPowerMean      = 0 # Avoid that meter remains > 0
+            self.LastFields = 0 # Force refresh
 
         # ----------------------------------------------------------------------
         # Values are needed on OnPaint() event
