@@ -1,0 +1,38 @@
+name: Build FortiusANT
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+      with:
+        python-version: 3.7
+    - name: Get libusb
+      shell: cmd
+      run: |
+        bitsadmin /transfer downloadJob /download /priority foreground https://sourceforge.net/projects/libusb-win32/files/libusb-win32-releases/1.2.6.0/libusb-win32-bin-1.2.6.0.zip %cd%\libusb-win32-bin-1.2.6.0.zip
+        tar -xf %cd%\libusb-win32-bin-1.2.6.0.zip
+        copy %cd%\libusb-win32-bin-1.2.6.0\bin\amd64\libusb0.dll C:\Windows\System32\libusb0.dll
+    - name: Install dependencies
+      run: |
+        cd pythoncode
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        pip install -r requirements.txt
+    - name: Build ExplorANT
+      run: |
+        cd pythoncode
+        pyinstaller --clean MakeExplorANT.spec
+    - name: Build FortiusANT
+      run: |
+        cd pythoncode
+        pyinstaller --clean MakeFortiusANT.spec
+    - uses: actions/upload-artifact@v2
+      with:
+        name: Artifacts
+        path: |
+          pythoncode\dist\FortiusANT.exe
+          pythoncode\dist\ExplorANT.exe
