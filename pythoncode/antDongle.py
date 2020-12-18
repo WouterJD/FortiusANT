@@ -86,6 +86,7 @@ import re
 if platform.system() == 'False':
     import serial                   # pylint: disable=import-error
 import struct
+from usb.backend import libusb0
 import usb.core
 import time
 
@@ -121,14 +122,25 @@ channel_VHU_s       = 5           # ANT+ Channel for Tacx i-Vortex Headunit
                                   # slave=Cycle Training Program
 channel_GNS_s       = channel_VHU_s # ANT+ Channel for Tacx Genius
 
+channel_BHU_s       = channel_VHU_s # ANT+ Channel for Tacx Buhsido Headunit
+
 #---------------------------------------------------------------------------
-# i-Vortex Headunit modes
+# Vortex Headunit modes
 #---------------------------------------------------------------------------
-VHU_Normal          = 0        # Headunit commands the i-Vortex trainer
-VHU_SpecialMode     = 2        # Headunit controls the i-Vortex and 
+VHU_Normal          = 0        # Headunit commands the Vortex trainer
+VHU_SpecialMode     = 2        # Headunit controls the Vortex and
                                #        FortiusANT TargetPower seems ignored.
 VHU_PCmode          = 4        # Headunit only sends buttons to slave (FortiusANT)
 
+#---------------------------------------------------------------------------
+# Vortex head unit buttons
+#---------------------------------------------------------------------------
+VHU_Button_None  = 0x0
+VHU_Button_Left  = 0x1
+VHU_Button_Up    = 0x2
+VHU_Button_Enter = 0x3
+VHU_Button_Down  = 0x4
+VHU_Button_Right = 0x5
 
 #---------------------------------------------------------------------------
 # Tacx Genius brake modes
@@ -169,6 +181,21 @@ GNS_Alarm_SpeedTooHigh          = 0x10080
 GNS_Alarm_Undervoltage          = 0x10100
 GNS_Alarm_DownhillLimited       = 0x14000
 GNS_Alarm_CommunicationError    = 0x18000
+
+#---------------------------------------------------------------------------
+# Tacx Bushido head unit alarm bits
+#---------------------------------------------------------------------------
+BHU_Alarm_Temperature_1      = 0x50001
+BHU_Alarm_Temperature_2      = 0x50002
+BHU_Alarm_Temperature_3      = 0x50003
+BHU_Alarm_Temperature_4      = 0x50004
+BHU_Alarm_Temperature_5      = 0x50005
+BHU_Alarm_Overvoltage        = 0x50008
+BHU_Alarm_Overcurrent_1      = 0x50010
+BHU_Alarm_Overcurrent_2      = 0x50020
+BHU_Alarm_SpeedTooHigh       = 0x50080
+BHU_Alarm_Undervoltage       = 0x50100
+BHU_Alarm_CommunicationError = 0x50100
 
 
 DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
@@ -228,6 +255,7 @@ msgID_Capabilities                      = 0x54
 msgID_UnassignChannel                   = 0x41
 msgID_AssignChannel                     = 0x42
 msgID_ChannelPeriod                     = 0x43
+msgID_ChannelSearchTimeout              = 0x44
 msgID_ChannelRfFrequency                = 0x45
 msgID_SetNetworkKey                     = 0x46
 msgID_ResetSystem                       = 0x4a
@@ -279,6 +307,7 @@ DeviceTypeID_PWR        = DeviceTypeID_bike_power
 DeviceTypeID_SCS        = DeviceTypeID_bike_speed_cadence
 DeviceTypeID_VTX        = 61            # Tacx i-Vortex
 DeviceTypeID_GNS        = 83            # Tacx Genius
+DeviceTypeID_BHU        = 82            # Tacx Bushido head unit
 # 0x3d  according TotalReverse
 DeviceTypeID_VHU        = 0x3e          # Thanks again to TotalReverse
 # https://github.com/WouterJD/FortiusANT/issues/46#issuecomment-616838329
@@ -359,7 +388,8 @@ class clsAntDongle():
                 # Note: filter on idVendor=0x0fcf is removed
                 #-----------------------------------------------------------
                 self.Message = "No (free) ANT-dongle found"
-                devAntDongles = usb.core.find(find_all=True, idProduct=ant_pid)
+                devAntDongles = usb.core.find(find_all=True, idProduct=ant_pid,
+                                              backend=libusb0.get_backend())
             except Exception as e:
                 logfile.Console("GetDongle - Exception: %s" % e)
                 if "AttributeError" in str(e):
@@ -812,7 +842,7 @@ class clsAntDongle():
 
     def VTX_ChannelConfig(self):                         # Pretend to be a Tacx i-Vortex
         if self.OK:
-            logfile.Console ('FortiusANT broadcasts data as an ANT+ Tacx i-Vortex (VTX), id=%s' % DeviceNumber_VTX)
+            logfile.Console ('FortiusANT broadcasts data as an ANT Tacx i-Vortex (VTX), id=%s' % DeviceNumber_VTX)
             if debug.on(debug.Data1): logfile.Write ("VTX_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VTX, ChannelType_BidirectionalTransmit, NetworkNumber=0x01),
@@ -829,7 +859,7 @@ class clsAntDongle():
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         if self.OK:
-            logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Vortex (VTX Controller)' + s)
+            logfile.Console ('FortiusANT receives data from an ANT Tacx i-Vortex (VTX Controller)' + s)
             if debug.on(debug.Data1): logfile.Write ("SlaveVTX_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
@@ -845,14 +875,32 @@ class clsAntDongle():
     def SlaveGNS_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx Genius
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
-        logfile.Console ('FortiusANT receives data from an ANT+ Tacx Genius (GNS Brake)' + s)
+        logfile.Console ('FortiusANT receives data from an ANT Tacx Genius (GNS Brake)' + s)
         if debug.on(debug.Data1): logfile.Write ("SlaveGNS_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_GNS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
             msg51_ChannelID             (channel_GNS_s, DeviceNumber, DeviceTypeID_GNS, TransmissionType_IC),
             msg45_ChannelRfFrequency    (channel_GNS_s, RfFrequency_2460Mhz),
             msg43_ChannelPeriod         (channel_GNS_s, ChannelPeriod=0x1000),
+            msg44_ChannelSearchTimeout  (channel_GNS_s, 255),
             msg60_ChannelTransmitPower  (channel_GNS_s, TransmitPower_0dBm),
+            msg4B_OpenChannel           (channel_GNS_s),
+            msg4D_RequestMessage        (channel_GNS_s, msgID_ChannelID)
+        ]
+        self.Write(messages)
+
+    def SlaveBHU_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx Genius
+        if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
+        else:                s = ", any device"
+        logfile.Console ('FortiusANT receives data from an ANT Tacx Bushido head unit (BHU Controller)' + s)
+        if debug.on(debug.Data1): logfile.Write ("SlaveBHU_ChannelConfig()")
+        messages=[
+            msg42_AssignChannel         (channel_GNS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
+            msg51_ChannelID             (channel_GNS_s, DeviceNumber, DeviceTypeID_BHU, TransmissionType_IC),
+            msg45_ChannelRfFrequency    (channel_GNS_s, RfFrequency_2460Mhz),
+            msg43_ChannelPeriod         (channel_GNS_s, ChannelPeriod=0x1000),
+            msg60_ChannelTransmitPower  (channel_GNS_s, TransmitPower_0dBm),
+            msg44_ChannelSearchTimeout  (channel_GNS_s, 255),
             msg4B_OpenChannel           (channel_GNS_s),
             msg4D_RequestMessage        (channel_GNS_s, msgID_ChannelID)
         ]
@@ -864,7 +912,7 @@ class clsAntDongle():
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         if self.OK:
-            logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Vortex Headunit (VHU Controller)' + s)
+            logfile.Console ('FortiusANT receives data from an ANT Tacx i-Vortex Headunit (VHU Controller)' + s)
             if debug.on(debug.Data1): logfile.Write ("SlaveVHU_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VHU_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
@@ -903,7 +951,7 @@ class clsAntDongle():
 #-------------------------------------------------------------------------------
 def EnumerateAll():
     logfile.Console("Dongles in the system:")
-    devices = usb.core.find(find_all=True)
+    devices = usb.core.find(find_all=True, backend=libusb0.get_backend())
     for device in devices:
 #       print (device)
         s = "manufacturer=%7s, product=%15s, vendor=%6s, product=%6s(%s)" %\
@@ -1032,6 +1080,7 @@ def DongleDebugMessage(text, d):
         elif id == msgID_UnassignChannel        : id_ = 'Unassign Channel'
         elif id == msgID_AssignChannel          : id_ = 'Assign Channel'
         elif id == msgID_ChannelPeriod          : id_ = 'Channel Period'
+        elif id == msgID_ChannelSearchTimeout   : id_ = 'Channel Search Timeout'
         elif id == msgID_ChannelRfFrequency     : id_ = 'Channel RfFrequency'
         elif id == msgID_SetNetworkKey          : id_ = 'Set NetworkKey'
         elif id == msgID_ResetSystem            : id_ = 'Reset System'
@@ -1152,6 +1201,15 @@ def msg43_ChannelPeriod(ChannelNumber, ChannelPeriod):
     format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_short
     info    = struct.pack(format,  ChannelNumber,     ChannelPeriod)
     msg     = ComposeMessage (0x43, info)
+    return msg
+
+# ------------------------------------------------------------------------------
+# A N T   M e s s a g e   44   C h a n n e l S e a r c h T i m e o u t
+# ------------------------------------------------------------------------------
+def msg44_ChannelSearchTimeout(ChannelNumber, SearchTimeout):
+    format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_short
+    info    = struct.pack(format,  ChannelNumber,     SearchTimeout)
+    msg     = ComposeMessage (0x44, info)
     return msg
 
 # ------------------------------------------------------------------------------
@@ -1750,8 +1808,8 @@ def msgPage220_01_TacxGeniusSetTarget (Channel, Mode, Target, Weight):
 def msgPage220_02_TacxGeniusWindResistance (Channel, WindResistance, WindSpeed):
     DataPageNumber      = 220
     SubPageNumber       = 0x02
-    WindResistance      = int(0.5 * WindResistance * 1000)
-    WindSpeed           = int(-250 * WindSpeed / 3.6)
+    WindResistance      = int(WindResistance)
+    WindSpeed           = int(WindSpeed)
 
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
@@ -1867,6 +1925,24 @@ def msgUnpage221_04_TacxGeniusCalibrationInfo (info):
     tuple = struct.unpack(format, info)
 
     return tuple[nCalibrationState], tuple[nCalibrationValue]
+
+# -------------------------------------------------------------------------------------
+# P a g e 1 7 3  ( 0 x 0 3 )  T a c x B u s h i d o C u r r e n t M o d e
+# -------------------------------------------------------------------------------------
+def msgUnpage173_03_TacxBushidoCurrentMode (info):
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char  # == 0x04
+
+    fMode               = sc.unsigned_char  # calibration status
+    nMode               = 3
+    fPadding            = 5 * sc.pad
+
+    format = sc.big_endian + fChannel + fDataPageNumber + fSubPageNumber + \
+             fMode + fPadding
+    tuple = struct.unpack(format, info)
+
+    return tuple[nMode]
 
 # ------------------------------------------------------------------------------
 # P a g e 1 6   G e n e r a l   F E   i n f o

@@ -22,7 +22,7 @@ __version__ = "2020-12-10"
 # 2020-09-29    If NO ANTdongle present; users want to be able to test
 #               FortiusANT to evaluate the software before bying dongles.
 #               Therefore in manual mode, no ANTdongle required.
-#               Of course for USB-trainers only (==> not clv.Tacx_iVortex)
+#               Of course for USB-trainers only (==> not clv.Tacx_Vortex)
 #               Typo's corrected (thanks RogerPleijers)
 # 2020-06-12    Added: BikePowerProfile and SpeedAndCadenceSensor final
 # 2020-06-11    Added: BikePowerProfile (master)
@@ -268,7 +268,7 @@ def LocateHW(self):
         pass
     else:
         AntDongle = ant.clsAntDongle(clv.antDeviceID)
-        if AntDongle.OK or not clv.Tacx_iVortex or clv.Tacx_iGenius:                    # 2020-09-29
+        if AntDongle.OK or not (clv.Tacx_Vortex or clv.Tacx_Genius or clv.Tacx_Bushido):       # 2020-09-29
              if clv.manual:      AntDongle.Message += ' (manual power)'
              if clv.manualGrade: AntDongle.Message += ' (manual grade)'
         self.SetMessages(Dongle=AntDongle.Message)
@@ -296,7 +296,8 @@ def LocateHW(self):
     #---------------------------------------------------------------------------
     if debug.on(debug.Application): logfile.Write ("Scan for hardware - end")
                                                                     # 2020-09-29
-    return ((AntDongle.OK or (not (clv.Tacx_iVortex or clv.Tacx_iGenius) and (clv.manual or clv.manualGrade))) \
+    return ((AntDongle.OK or (not (clv.Tacx_Vortex or clv.Tacx_Genius or clv.Tacx_Bushido)
+                              and (clv.manual or clv.manualGrade))) \
             and TacxTrainer.OK)
     
 # ------------------------------------------------------------------------------
@@ -314,8 +315,8 @@ def LocateHW(self):
 # ------------------------------------------------------------------------------
 def Runoff(self):
     global clv, AntDongle, TacxTrainer
-    if clv.SimulateTrainer or clv.Tacx_iVortex or clv.Tacx_iGenius:
-        logfile.Console('Runoff not implemented for Simulated trainer or Tacx i-Vortex')
+    if clv.SimulateTrainer or clv.Tacx_Vortex or clv.Tacx_Genius or clv.Tacx_Bushido:
+        logfile.Console('Runoff not implemented for Simulated trainer or Tacx Vortex/Genius/Bushido')
         return False
 
     TacxTrainer.SetPower(100)
@@ -557,9 +558,9 @@ def Tacx2DongleSub(self, Restart):
         # msg = ant.msg4D_RequestMessage(ant.channel_HRM_s, ant.msgID_ChannelID)
         # AntDongle.Write([msg], False, False)
 
-    if clv.Tacx_iVortex:
+    if clv.Tacx_Vortex:
         #-------------------------------------------------------------------
-        # Create ANT+ slave channel for VTX
+        # Create ANT slave channel for VTX
         # No pairing-loop: VTX perhaps not yet active and avoid delay
         #-------------------------------------------------------------------
         AntDongle.SlaveVTX_ChannelConfig(0)
@@ -568,7 +569,7 @@ def Tacx2DongleSub(self, Restart):
         # AntDongle.Write([msg], False, False)
 
         #-------------------------------------------------------------------
-        # Create ANT+ slave channel for VHU
+        # Create ANT slave channel for VHU
         #
         # We create this channel right away. At some stage the VTX-channel
         # sends the Page03_TacxVortexDataCalibration which provides the
@@ -578,12 +579,19 @@ def Tacx2DongleSub(self, Restart):
         #-------------------------------------------------------------------
         AntDongle.SlaveVHU_ChannelConfig(0)
 
-    if clv.Tacx_iGenius:
+    if clv.Tacx_Genius:
         #-------------------------------------------------------------------
-        # Create ANT+ slave channel for GNS
+        # Create ANT slave channel for GNS
         # No pairing-loop: GNS perhaps not yet active and avoid delay
         #-------------------------------------------------------------------
         AntDongle.SlaveGNS_ChannelConfig(0)
+
+    if clv.Tacx_Bushido:
+        #-------------------------------------------------------------------
+        # Create ANT slave channel for BHU
+        # No pairing-loop: GNS perhaps not yet active and avoid delay
+        #-------------------------------------------------------------------
+        AntDongle.SlaveBHU_ChannelConfig(0)
 
     if True:
         #-------------------------------------------------------------------
@@ -913,14 +921,15 @@ def Tacx2DongleSub(self, Restart):
                 synch, length, id, info, checksum, _rest, Channel, DataPageNumber = ant.DecomposeMessage(d)
                 error = False
 
-                if (clv.Tacx_iVortex or clv.Tacx_iGenius) and TacxTrainer.HandleANTmessage(d):
-                    pass                    # Message is handled or ignored
+                if clv.Tacx_Vortex or clv.Tacx_Genius or clv.Tacx_Bushido:
+                    if TacxTrainer.HandleANTmessage(d):
+                        continue                    # Message is handled or ignored
 
                 #---------------------------------------------------------------
                 # AcknowledgedData = Slave -> Master
                 #       channel_FE = From CTP (Trainer Road, Zwift) --> Tacx 
                 #---------------------------------------------------------------
-                elif id == ant.msgID_AcknowledgedData:
+                if id == ant.msgID_AcknowledgedData:
                     #-----------------------------------------------------------
                     # Fitness Equipment Channel inputs
                     #-----------------------------------------------------------

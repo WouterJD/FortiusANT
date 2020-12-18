@@ -72,8 +72,9 @@ class CommandLineVariables(object):
     PowerFactor     = 1.00
     SimulateTrainer = False
     TacxType        = False
-    Tacx_iVortex    = False
-    Tacx_iGenius    = False
+    Tacx_Vortex    = False
+    Tacx_Genius    = False
+    Tacx_Bushido   = False
 
     #---------------------------------------------------------------------------
     # Deprecated
@@ -122,13 +123,12 @@ class CommandLineVariables(object):
         parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
 
-        ant_tacx_models = ['Vortex', 'Genius']
+        ant_tacx_models = ['Vortex', 'Genius', 'Bushido']
         ant_tacx_help = 'Specify Tacx Type; e.g. i-Vortex, default=autodetect.' \
                       + 'Allowed values are: %s' % ', '.join(ant_tacx_models)
         parser.add_argument('-t', '--TacxType', help=ant_tacx_help, metavar='',                             required=False, default=False, \
                 choices=ant_tacx_models + ['i-Vortex']) # i-Vortex is still allowed for compatibility
 
-        parser.add_argument('-u','--uphill',    help='Uphill only; negative grade is ignored',              required=False, action='store_true')
         parser.add_argument('-x','--exportTCX', help='Export TCX file',                                     required=False, action='store_true')
 
         #-----------------------------------------------------------------------
@@ -277,9 +277,11 @@ class CommandLineVariables(object):
         if args.TacxType:
             self.TacxType = args.TacxType
             if 'Vortex' in self.TacxType:
-                self.Tacx_iVortex = True
+                self.Tacx_Vortex = True
             elif 'Genius' in  self.TacxType:
-                self.Tacx_iGenius = True
+                self.Tacx_Genius = True
+            elif 'Bushido' in self.TacxType:
+                self.Tacx_Bushido = True
             else:
                 logfile.Console('Command line error; -t incorrect value=%s' % args.TacxType)
                 args.TacxType = False
@@ -287,7 +289,8 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         # Check pedal stroke analysis
         #-----------------------------------------------------------------------
-        if args.PedalStrokeAnalysis and (not args.gui or self.Tacx_iVortex or self.Tacx_iGenius):
+        if args.PedalStrokeAnalysis and (not args.gui or self.Tacx_Vortex or
+                                         self.Tacx_Genius or self.Tacx_Bushido):
             logfile.Console("Pedal stroke analysis is not possible in console mode or this Tacx type")
             self.PedalStrokeAnalysis = False
 
@@ -302,7 +305,7 @@ class CommandLineVariables(object):
             print('You have started FortiusANT without command-line parameters.')
             print(' ')
             print('Therefore we start with a best-practice setting:')
-            print('     %s -a -g -H0 -A' % pgm)
+            print('     %s -a -g -H0 -t Buhshido -d 127' % pgm)
             print(' ')
             print('If you want to start without the graphical user interface:')
             print('     %s -a' % pgm)
@@ -322,7 +325,9 @@ class CommandLineVariables(object):
             self.autostart              = True
             self.gui                    = True      # Show gui
             self.hrm                    = 0         # Pair with HRM
-            self.PedalStrokeAnalysis    = True      # Show it
+            self.TacxType               = "Bushido"
+            self.Tacx_Bushido           = True
+            self.debug                  = 127
 
 
     def print(self):
