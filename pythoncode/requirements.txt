@@ -1,5 +1,5 @@
 keyboard
-numpy
+numpy != 1.19.4
 pyinstaller
 pyusb
 pygame
