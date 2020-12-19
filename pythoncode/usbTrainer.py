@@ -1940,10 +1940,23 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
 
         if Channel == self.Channel:
 
+            if id == ant.msgID_AcknowledgedData:
+                # -------------------------------------------------------------------
+                # Data page 221 (0x10) msgUnpage221_TacxVortexHU_ButtonPressed
+                # -------------------------------------------------------------------
+                if DataPageNumber == 221 and SubPageNumber == 0x10:
+                    self.__Buttons = ant.msgUnpage221_TacxVortexHU_ButtonPressed(info)
+
+                    if debug.on(debug.Function):
+                        logfile.Write('Bushido Page=%d/%#x (IN)  Keycode=%d' %
+                                      (DataPageNumber, SubPageNumber, self.__Buttons))
+
+                    dataHandled = True
+
             # -------------------------------------------------------------------
             # BroadcastData - info received from the master device
             # -------------------------------------------------------------------
-            if id == ant.msgID_BroadcastData:
+            elif id == ant.msgID_BroadcastData:
                 # ---------------------------------------------------------------
                 # Ask what device is paired
                 # ---------------------------------------------------------------
@@ -1993,18 +2006,6 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
                             # unpause the training
                             self.__ModeRequested = ant.VHU_Training
                             self.__SetState(BushidoState.RequestMode)
-
-                # -------------------------------------------------------------------
-                # Data page 221 (0x10) msgUnpage221_TacxVortexHU_ButtonPressed
-                # -------------------------------------------------------------------
-                if DataPageNumber == 221 and SubPageNumber == 0x10:
-                    self.__Buttons = ant.msgUnpage221_TacxVortexHU_ButtonPressed(info)
-
-                    if debug.on(debug.Function):
-                        logfile.Write('Bushido Page=%d/%#x (IN)  Keycode=%d' %
-                                      (DataPageNumber, SubPageNumber, self.__Buttons))
-
-                    dataHandled = True
 
             # -------------------------------------------------------------------
             # ChannelID - the info that a master on the network is paired
