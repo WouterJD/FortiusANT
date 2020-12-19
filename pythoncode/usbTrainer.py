@@ -1971,9 +1971,28 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
                                 self.__ModeRequested = ant.VHU_TrainingPause
                             elif Mode == ant.VHU_TrainingPause:
                                 # entered training mode, start training
+                                self.__ModeRequested = ant.VHU_Training
+                            elif Mode == ant.VHU_Training:
                                 self.__SetState(BushidoState.Running)
 
                         dataHandled = True
+
+                elif self.__State == BushidoState.Running:
+                    # -------------------------------------------------------------------
+                    # Data page 173 (0x01) msgUnpage173_01_TacxBushidoSerialMode
+                    # -------------------------------------------------------------------
+                    if DataPageNumber == 173 and SubPageNumber == 0x01:
+                        Mode, Year, DeviceNumber = ant.msgUnpage173_01_TacxBushidoSerialMode(info)
+
+                        if debug.on(debug.Function):
+                            logfile.Write('Bushido Page=%d/%#x (IN)  Mode=%d Year=%d DeviceNumber=%d' %
+                                          (DataPageNumber, SubPageNumber, Mode,
+                                           Year, DeviceNumber))
+
+                        if Mode == ant.VHU_TrainingPause:
+                            # unpause the training
+                            self.__ModeRequested = ant.VHU_Training
+                            self.__SetState(BushidoState.RequestMode)
 
                 # -------------------------------------------------------------------
                 # Data page 221 (0x10) msgUnpage221_TacxVortexHU_ButtonPressed
