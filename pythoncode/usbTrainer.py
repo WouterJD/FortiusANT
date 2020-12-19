@@ -1812,6 +1812,7 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
     def _ResetTrainer(self):
         super()._ResetTrainer()
         self.__State            = BushidoState.Pairing
+        self.__ModeRequested    = ant.VHU_PCmode
         self.__KeepAliveTime    = time.time()
         self.__Buttons          = ant.VHU_Button_None
 
@@ -1841,6 +1842,8 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
         # ----------------------------------------------------------------------
         if self._DeviceNumber:
             msg = "Tacx Bushido paired: %d" % self._DeviceNumber
+            if self.__State == BushidoState.RequestMode:
+                msg += " - Configuring head unit"
             if self._AlarmStatus & ant.BHU_Alarm_Temperature_5:
                 msg += " TEMPERATURE TOO HIGH!"
             if self._AlarmStatus & ant.BHU_Alarm_Overvoltage:
@@ -1904,14 +1907,14 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
         # Request PC mode (repeat until response received)
         # ---------------------------------------------------------------
         elif self.__State == BushidoState.RequestMode and QuarterSecond:
-            info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode(self.Channel, ant.VHU_PCmode)
+            info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode(self.Channel, self.__ModeRequested)
             msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
             messages.append(msg)
 
             if debug.on(debug.Function):
                 logfile.Write(
                     "Bushido page 172/0x03 (OUT)  Mode=%d" % \
-                    ant.VHU_PCmode)
+                    self.__ModeRequested)
 
         # ---------------------------------------------------------------
         # Handle normal training commands in base class
@@ -1952,18 +1955,23 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
                 # ---------------------------------------------------------------
                 elif self.__State == BushidoState.RequestMode:
                     # -------------------------------------------------------------------
-                    # Data page 173 (0x03) msgUnpage173_03_TacxBushidoCurrentMode
+                    # Data page 173 (0x01) msgUnpage173_01_TacxBushidoSerialMode
                     # -------------------------------------------------------------------
-                    if DataPageNumber == 173 and SubPageNumber == 0x03:
-                        Mode = ant.msgUnpage173_03_TacxBushidoCurrentMode(info)
+                    if DataPageNumber == 173 and SubPageNumber == 0x01:
+                        Mode, Year, DeviceNumber = ant.msgUnpage173_01_TacxBushidoSerialMode(info)
 
                         if debug.on(debug.Function):
-                            logfile.Write('Bushido Page=%d/%#x (IN)  Mode=%d' %
-                                          (DataPageNumber, SubPageNumber, Mode))
+                            logfile.Write('Bushido Page=%d/%#x (IN)  Mode=%d Year=%d DeviceNumber=%d' %
+                                          (DataPageNumber, SubPageNumber, Mode,
+                                           Year, DeviceNumber))
 
-                        if Mode == ant.VHU_PCmode:
-                            # mode switch successful, start training
-                            self.__SetState(BushidoState.Running)
+                        if Mode == self.__ModeRequested:
+                            if Mode == ant.VHU_PCmode:
+                                # PC connection active, go to training mode
+                                self.__ModeRequested = ant.VHU_TrainingPause
+                            elif Mode == ant.VHU_TrainingPause:
+                                # entered training mode, start training
+                                self.__SetState(BushidoState.Running)
 
                         dataHandled = True
 

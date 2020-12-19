@@ -128,8 +128,10 @@ channel_BHU_s       = channel_VHU_s # ANT+ Channel for Tacx Buhsido Headunit
 # Vortex Headunit modes
 #---------------------------------------------------------------------------
 VHU_Normal          = 0        # Headunit commands the Vortex trainer
-VHU_SpecialMode     = 2        # Headunit controls the Vortex and
+VHU_ResetDistance   = 1        # Reset odometer on HU
+VHU_Training        = 2        # Headunit controls the Vortex and
                                #        FortiusANT TargetPower seems ignored.
+VHU_TrainingPause   = 3        # Displays "start cycling"
 VHU_PCmode          = 4        # Headunit only sends buttons to slave (FortiusANT)
 
 #---------------------------------------------------------------------------
@@ -1927,22 +1929,25 @@ def msgUnpage221_04_TacxGeniusCalibrationInfo (info):
     return tuple[nCalibrationState], tuple[nCalibrationValue]
 
 # -------------------------------------------------------------------------------------
-# P a g e 1 7 3  ( 0 x 0 3 )  T a c x B u s h i d o C u r r e n t M o d e
+# P a g e 1 7 3  ( 0 x 0 1 )  T a c x B u s h i d o S e r i a l M o d e
 # -------------------------------------------------------------------------------------
-def msgUnpage173_03_TacxBushidoCurrentMode (info):
+def msgUnpage173_01_TacxBushidoSerialMode (info):
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
-    fSubPageNumber      = sc.unsigned_char  # == 0x04
+    fSubPageNumber      = sc.unsigned_char  # == 0x01
 
-    fMode               = sc.unsigned_char  # calibration status
+    fMode               = sc.unsigned_char  # head unit mode
     nMode               = 3
-    fPadding            = 5 * sc.pad
+    fYear               = sc.unsigned_char  # production year
+    nYear               = 4
+    fDeviceNumber       = sc.int            # device number
+    nDeviceNumber       = 5
 
     format = sc.big_endian + fChannel + fDataPageNumber + fSubPageNumber + \
-             fMode + fPadding
+             fMode + fYear + fDeviceNumber
     tuple = struct.unpack(format, info)
 
-    return tuple[nMode]
+    return tuple[nMode], tuple[nYear], tuple[nDeviceNumber]
 
 # ------------------------------------------------------------------------------
 # P a g e 1 6   G e n e r a l   F E   i n f o
