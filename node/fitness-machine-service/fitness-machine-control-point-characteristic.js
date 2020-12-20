@@ -199,10 +199,10 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
         }
         break;
       default:
-        // Unsupported opcode
-        trace('len: ' + data.length);
+        trace('Unsupported OPCODE:' + code);
+
         let d = new Buffer.from(data);
-        trace(d);
+        trace('Data: ' + d);
         response = this.result(code, OpCodeNotSupported);
         break;
     }
