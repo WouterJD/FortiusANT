@@ -5,6 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 import atexit
+import os
 
 class Singleton(type):
   instances = {}
@@ -44,7 +45,9 @@ class BleInterface(metaclass=Singleton):
       ]
       self.logfile = open('ble.log', 'w')
       directory = Path.cwd().parent / "node"
-      self.interface = subprocess.Popen(command, cwd=directory, stdout=self.logfile, stderr=self.logfile)
+      env = os.environ.copy()
+      env['DEBUG'] = '*'
+      self.interface = subprocess.Popen(command, cwd=directory, stdout=self.logfile, stderr=self.logfile, env=env)
 
       def cleanup():
         if self.interface:
