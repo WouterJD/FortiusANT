@@ -11,7 +11,7 @@ class VirtualTrainer extends events {
     trace('[VirtualTrainer] constructor');
     super();
 
-    this.name = 'VirtualTrainer';
+    this.name = 'FortiusANT Trainer';
     process.env['BLENO_DEVICE_NAME'] = this.name;
     
     this.messages = [];
