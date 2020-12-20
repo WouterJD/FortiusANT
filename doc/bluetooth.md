@@ -52,4 +52,4 @@ TODO
 
 ## Run FortiusANT with BLE support
 
-To use BLE support in FortiusANT it should be started from the command line with the `-b` option.
+To use BLE support in FortiusANT it should be started from the command line with the `-b` option. After FortiusANT has detected the Tacx trainer it will start the BLE interface. FortiusANT will start advertising as 'FortiusANT Trainer' on Windows and Linux systems. On macOS, it will start advertising as your computer name.
