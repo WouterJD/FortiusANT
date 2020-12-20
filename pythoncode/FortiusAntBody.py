@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-16"
+__version__ = "2020-12-20"
+# 2020-12-20    Constants used from constants.py
+#               bleCTP device implemented
 # 2020-12-14    ANT+ Control command implemented
 #               Runoff procedure improved
 # 2020-12-10    GradeShift/GradeFactor are multipliers
@@ -199,11 +201,13 @@ import antHRM            as hrm
 import antPWR            as pwr
 import antSCS            as scs
 import antCTRL           as ctrl
+from   constants                    import mode_Power, mode_Grade, UseBluetooth, UseGui
 import debug
-from   FortiusAntGui                import mode_Power, mode_Grade
 import logfile
 import TCXexport
 import usbTrainer
+
+import bleDongle
 
 PrintWarnings = False   # Print warnings even when logging = off
 CycleTimeFast = 0.02    # TRAINER- SHOULD WRITE THEN READ 70MS LATER REALLY
@@ -212,13 +216,13 @@ CycleTimeANT  = 0.25
 # Initialize globals
 # ------------------------------------------------------------------------------
 def Initialize(pclv):
-    global clv, AntDongle, TacxTrainer, tcx
+    global clv, AntDongle, TacxTrainer, tcx, bleCTP
     clv         = pclv
     AntDongle   = None
     TacxTrainer = None
     tcx         = None
     if clv.exportTCX: tcx = TCXexport.clsTcxExport()
-
+    bleCTP = bleDongle.clsBleCTP(clv)
     
 # ==============================================================================
 # Here we go, this is the real work what's all about!
@@ -260,8 +264,12 @@ def IdleFunction(self):
 # Returns:      True if TRAINER and DONGLE found
 # ------------------------------------------------------------------------------
 def LocateHW(self):
-    global clv, AntDongle, TacxTrainer
+    global clv, AntDongle, TacxTrainer, bleCTP
     if debug.on(debug.Application): logfile.Write ("Scan for hardware")
+
+    #---------------------------------------------------------------------------
+    # No actions needed for Bluetooth dongle
+    #---------------------------------------------------------------------------
 
     #---------------------------------------------------------------------------
     # Get ANT dongle
@@ -274,7 +282,7 @@ def LocateHW(self):
         if AntDongle.OK or not clv.Tacx_iVortex:                    # 2020-09-29
              if clv.manual:      AntDongle.Message += ' (manual power)'
              if clv.manualGrade: AntDongle.Message += ' (manual grade)'
-        self.SetMessages(Dongle=AntDongle.Message)
+        self.SetMessages(Dongle=AntDongle.Message + bleCTP.Message)
 
     #---------------------------------------------------------------------------
     # Get Trainer and find trainer model for Windows and Linux
@@ -345,7 +353,7 @@ def Runoff(self):
     TacxTrainer.SetPower(clv.RunoffPower)
     rolldown        = False
     rolldown_time   = 0
-    ShortMessage    = TacxTrainer.Message + " | Runoff - "
+    #ShortMessage   = TacxTrainer.Message + " | Runoff - "
     ShortMessage    = "Tacx Trainer Runoff - "
 
     #---------------------------------------------------------------------------
@@ -508,12 +516,12 @@ def Runoff(self):
 # Returns:      True
 # ------------------------------------------------------------------------------
 def Tacx2Dongle(self):
-    global clv, AntDongle, TacxTrainer
+    global clv, AntDongle, TacxTrainer, bleCTP
     Restart = False
     while True:
         rtn = Tacx2DongleSub(self, Restart)
         if AntDongle.DongleReconnected:
-            self.SetMessages(Dongle=AntDongle.Message)
+            self.SetMessages(Dongle=AntDongle.Message + bleCTP.Message)
             AntDongle.ApplicationRestart()
             Restart = True
         else:
@@ -521,10 +529,11 @@ def Tacx2Dongle(self):
     return rtn
 
 def Tacx2DongleSub(self, Restart):
-    global clv, AntDongle, TacxTrainer, tcx
+    global clv, AntDongle, TacxTrainer, tcx, bleCTP
 
     assert(AntDongle)                       # The class must be created
     assert(TacxTrainer)                     # The class must be created
+    assert(bleCTP)                          # The class must be created
 
     AntHRMpaired = False
 
@@ -756,6 +765,9 @@ def Tacx2DongleSub(self, Restart):
     if not Restart:
         if clv.exportTCX:
             tcx.Start()                     # Start TCX export
+        if clv.ble:
+            bleCTP.Open()                   # Open connection with Bluetooth CTP
+            self.SetMessages(Dongle=AntDongle.Message + bleCTP.Message)
         if clv.manualGrade:
             TacxTrainer.SetGrade(0)
         else:
@@ -930,7 +942,7 @@ def Tacx2DongleSub(self, Restart):
                 else:                                                   pass
 
             #-------------------------------------------------------------------
-            # Do ANT work every 1/4 second
+            # Do ANT/BLE work every 1/4 second
             #-------------------------------------------------------------------
             messages = []       # messages to be sent to ANT
             data = []           # responses received from ANT
@@ -973,7 +985,39 @@ def Tacx2DongleSub(self, Restart):
                 # print('fe.BroadcastTrainerDataMessage', Cadence, CurrentPower, SpeedKmh, HeartRate)
                 messages.append(fe.BroadcastTrainerDataMessage (TacxTrainer.Cadence, \
                     TacxTrainer.CurrentPower, TacxTrainer.SpeedKmh, TacxTrainer.HeartRate))
-                    
+
+                #---------------------------------------------------------------
+                # Send/receive to Bluetooth interface
+                #
+                # When data is received, TacxTrainer parameters are copied from
+                # the bleCTP object.
+                #---------------------------------------------------------------
+                if clv.ble:
+                    bleCTP.SetAthleteData(HeartRate)
+                    bleCTP.SetTrainerData(TacxTrainer.SpeedKmh, \
+                                    TacxTrainer.Cadence, TacxTrainer.CurrentPower)
+                    if bleCTP.Refresh():
+                        if bleCTP.TargetMode == mode_Power:
+                            TargetPowerTime = time.time()
+                            TacxTrainer.SetPower(bleCTP.TargetPower)
+
+                        if bleCTP.TargetMode == mode_Grade:
+                            if clv.PowerMode and (time.time() - TargetPowerTime) < 30:
+                                pass
+                            else:
+                                Grade  = bleCTP.TargetGrade
+                                Grade += clv.GradeShift
+                                Grade *= clv.GradeFactor
+                                if Grade < 0: Grade *= clv.GradeFactorDH
+
+                                TacxTrainer.SetGrade(bleCTP.TargetGrade)
+
+                        if bleCTP.WindResistance and bleCTP.WindSpeed and bleCTP.DraftingFactor:
+                            TacxTrainer.SetWind(bleCTP.WindResistance, bleCTP.WindSpeed, bleCTP.DraftingFactor)
+                        
+                        if bleCTP.RollingResistance:
+                            TacxTrainer.SetRollingResistance(bleCTP.RollingResistance)
+
             #-------------------------------------------------------------------
             # Broadcast and receive ANT+ responses
             #-------------------------------------------------------------------
@@ -1377,14 +1421,20 @@ def Tacx2DongleSub(self, Restart):
     except KeyboardInterrupt:
         logfile.Console ("Stopped")
     #---------------------------------------------------------------------------
-    # Create TCXexport
+    # Stop devices, if not reconnecting ANT
+    # - Create TCXexport
+    # - Close  connection with bluetooth CTP
+    # - Stop the Tacx trainer
     #---------------------------------------------------------------------------
-    if not AntDongle.DongleReconnected and clv.exportTCX:
-        tcx.Stop()
+    if not AntDongle.DongleReconnected:
+        if clv.exportTCX: tcx.Stop()
+        if clv.ble:       bleCTP.Close()
+        self.SetMessages(Dongle=AntDongle.Message + bleCTP.Message)
+        TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
+
     #---------------------------------------------------------------------------
     # Stop devices
     #---------------------------------------------------------------------------
     AntDongle.ResetDongle()
-    TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
 
     return True

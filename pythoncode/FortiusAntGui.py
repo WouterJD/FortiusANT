@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-16"
+__version__ = "2020-12-20"
+# 2020-12-20    Constants moved to constants.py
 # 2020-12-16    Force refresh when main inputs zero
 # 2020-11-04    WindowTitle separated into FortiusAntTitle.py
 # 2020-10-01    Version 3.2.2:
@@ -57,6 +58,7 @@ import time
 import wx
 import wx.lib.agw.speedmeter as SM
 
+from   constants                    import mode_Power, mode_Grade
 import debug
 import logfile
 import FortiusAntCommand     as cmd
@@ -67,10 +69,6 @@ import RadarGraph
 # constants
 #-------------------------------------------------------------------------------
 LargeTexts          = True  # 2020-02-07
-
-mode_Basic          = 0     # Basic Resistance
-mode_Power          = 1     # Target Power
-mode_Grade          = 2     # Target Resistance
 
 bg                  = wx.Colour(220,220,220) # Background colour [for self.Speedometers]
 colorTacxFortius    = wx.Colour(120,148,227)

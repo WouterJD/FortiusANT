@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-10"
+__version__ = "2020-12-20"
+# 2020-12-20    Constants used from constants.py
 # 2020-12-10    Removed: -u uphill
 # 2020-12-03    For Magnetic brake -r uses the resistance table [0...13]
 #               introduced: Resistance2PowerMB(), under investigation!!
@@ -117,10 +118,10 @@ import sys
 import time
 
 import antDongle         as ant
+from   constants                    import mode_Power, mode_Grade
 import debug
 import logfile
 import structConstants   as sc
-from   FortiusAntGui                import mode_Power, mode_Grade
 import FortiusAntCommand as cmd
 import fxload
 

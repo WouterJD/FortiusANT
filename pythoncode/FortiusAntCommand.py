@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-15"
+__version__ = "2020-12-18"
+# 2020-12-18    added: -b for Bluetooth support
+#               used:  UseBluetooth and UseGui
 # 2020-12-15    added: -R for Runoff procedure
 #               Command line variables are all printed when debugging
 #               Some command line handling code improvements
@@ -42,6 +44,8 @@ import time
 import debug
 import logfile
 
+from   constants                    import UseBluetooth, UseGui
+
 #-------------------------------------------------------------------------------
 # Realize clv to be program-global, by accessing through this function.
 #-------------------------------------------------------------------------------
@@ -57,6 +61,7 @@ class CommandLineVariables(object):
 
     antDeviceID     = None       # introduced 2020-12-10; Use this usb antDongle type only
     autostart       = False
+    ble             = False      # introduced 2020-12-18; Bluetooth support
     calibrate       = True
     CTRL_SerialL    = 0          # introduced 2020-12-14; ANT+ Control command (Left/Right)
     CTRL_SerialR    = 0
@@ -128,31 +133,34 @@ class CommandLineVariables(object):
         # Define and process command line
         #-----------------------------------------------------------------------
         parser = argparse.ArgumentParser(description='Program to broadcast data from USB Tacx Fortius trainer, and to receive resistance data for the trainer')
-        parser.add_argument('-a','--autostart', help='Automatically start',                                 required=False, action='store_true')
-        parser.add_argument('-A','--PedalStrokeAnalysis', help='Pedal Stroke Analysis',                     required=False, action='store_true')
-        parser.add_argument('-c','--CalibrateRR',help='calibrate Rolling Resistance for Magnetic Brake',    required=False, default=False)
-#       parser.add_argument('-C','--CtrlCommand',help='ANT+ Control Command (#1/#2)',                       required=False, default=False)
-        parser.add_argument('-C','--CtrlCommand',help=argparse.SUPPRESS,                                    required=False, default=False)
-        parser.add_argument('-d','--debug',     help='Show debugging data',                                 required=False, default=False)
-        parser.add_argument('-D','--antDeviceID',help='Use this antDongle type only',                       required=False, default=False)
-        parser.add_argument('-g','--gui',       help='Run with graphical user interface',                   required=False, action='store_true')
-        parser.add_argument('-G','--GradeAdjust',help='Adjust slope%% in GradeMode (factor/factorDownhill)',required=False, default=False)
-        parser.add_argument('-H','--hrm',       help='Pair this ANT+ Heart Rate Monitor (0: any, -1: none); Tacx HRM is used if not specified',
+        parser.add_argument   ('-a','--autostart', help='Automatically start',                                 required=False, action='store_true')
+        parser.add_argument   ('-A','--PedalStrokeAnalysis', help='Pedal Stroke Analysis',                     required=False, action='store_true')
+        if UseBluetooth:
+           parser.add_argument('-b','--ble',       help='(EXPERIMENTAL) Use Bluetooth LE instead of ANT+',     required=False, action='store_true')
+        parser.add_argument   ('-c','--CalibrateRR',help='calibrate Rolling Resistance for Magnetic Brake',    required=False, default=False)
+#       parser.add_argument   ('-C','--CtrlCommand',help='ANT+ Control Command (#1/#2)',                       required=False, default=False)
+        parser.add_argument   ('-C','--CtrlCommand',help=argparse.SUPPRESS,                                    required=False, default=False)
+        parser.add_argument   ('-d','--debug',     help='Show debugging data',                                 required=False, default=False)
+        parser.add_argument   ('-D','--antDeviceID',help='Use this antDongle type only',                       required=False, default=False)
+        if UseGui:
+           parser.add_argument('-g','--gui',       help='Run with graphical user interface',                   required=False, action='store_true')
+        parser.add_argument   ('-G','--GradeAdjust',help='Adjust slope%% in GradeMode (factor/factorDownhill)',required=False, default=False)
+        parser.add_argument   ('-H','--hrm',       help='Pair this ANT+ Heart Rate Monitor (0: any, -1: none); Tacx HRM is used if not specified',
                                                                                                             required=False, default=False)
-        parser.add_argument('-m','--manual',    help='Run manual power (ignore target from ANT+ Dongle)',   required=False, action='store_true')
-        parser.add_argument('-M','--manualGrade',help='Run manual grade (ignore target from ANT+ Dongle)',  required=False, action='store_true')
-        parser.add_argument('-n','--calibrate', help='Do not calibrate before start',                       required=False, action='store_false')
-        parser.add_argument('-p','--factor',    help='Adjust target Power by multiplying by this factor for static calibration',
+        parser.add_argument   ('-m','--manual',    help='Run manual power (ignore target from ANT+ Dongle)',   required=False, action='store_true')
+        parser.add_argument   ('-M','--manualGrade',help='Run manual grade (ignore target from ANT+ Dongle)',  required=False, action='store_true')
+        parser.add_argument   ('-n','--calibrate', help='Do not calibrate before start',                       required=False, action='store_false')
+        parser.add_argument   ('-p','--factor',    help='Adjust target Power by multiplying by this factor for static calibration',
                                                                                                             required=False, default=False)
-        parser.add_argument('-P','--PowerMode', help='Power mode has preference over Resistance mode (for 30 seconds)',
+        parser.add_argument   ('-P','--PowerMode', help='Power mode has preference over Resistance mode (for 30 seconds)',
                                                                                                             required=False, action='store_true')
-        parser.add_argument('-r','--Resistance',help='Target Resistance = Target Power (to create power curve)',
+        parser.add_argument   ('-r','--Resistance',help='Target Resistance = Target Power (to create power curve)',
                                                                                                             required=False, action='store_true')
-        parser.add_argument('-R','--Runoff',    help='maxSpeed/dip/minSpeed/targetTime/power',              required=False, default=False)
-        parser.add_argument('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
-#scs    parser.add_argument('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
-        parser.add_argument('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
-        parser.add_argument('-x','--exportTCX', help='Export TCX file',                                     required=False, action='store_true')
+        parser.add_argument   ('-R','--Runoff',    help='maxSpeed/dip/minSpeed/targetTime/power',              required=False, default=False)
+        parser.add_argument   ('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
+#scs    parser.add_argument   ('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
+        parser.add_argument   ('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
+        parser.add_argument   ('-x','--exportTCX', help='Export TCX file',                                     required=False, action='store_true')
 
         #-----------------------------------------------------------------------
         # Parse
@@ -164,7 +172,10 @@ class CommandLineVariables(object):
         # Booleans; either True or False
         #-----------------------------------------------------------------------
         self.autostart              = args.autostart
-        self.gui                    = args.gui
+        if UseBluetooth:
+            self.ble                = args.ble
+        if UseGui:
+            self.gui                = args.gui
         self.manual                 = args.manual
         self.manualGrade            = args.manualGrade
         self.calibrate              = args.calibrate
@@ -356,7 +367,7 @@ class CommandLineVariables(object):
             print('Just for the fun of knowing where we are training.')
             print('---------------------------------------------------------------')
             self.autostart              = True
-            self.gui                    = True      # Show gui
+            self.gui                    = UseGui    # Show gui
             self.hrm                    = 0         # Pair with HRM
             self.PedalStrokeAnalysis    = True      # Show it
 
@@ -365,6 +376,7 @@ class CommandLineVariables(object):
             v = self.debug                          # Verbose: print all command-line variables with values
             if      self.autostart:          logfile.Console("-a")
             if      self.PedalStrokeAnalysis:logfile.Console("-A")
+            if UseBluetooth and self.ble:    logfile.Console("-b")
             if v or self.args.CalibrateRR:   logfile.Console("-c %s" % self.CalibrateRR )
             if v or self.CTRL_SerialL or self.CTRL_SerialR:
                 logfile.Console("-C %s/%s" % (self.CTRL_SerialL, self.CTRL_SerialR ) )
@@ -377,7 +389,7 @@ class CommandLineVariables(object):
                                                     % (self.GradeFactor, self.GradeFactorDH) )
                 if self.GradeAdjust == 3: logfile.Console("-G defines Grade = (antGrade - %s) * %s [* %s (downhill)]" \
                                                     % (self.GradeShift, self.GradeFactor, self.GradeFactorDH) )
-            if      self.gui:                logfile.Console("-g")
+            if UseGui and self.gui:          logfile.Console("-g")
             if v or self.args.hrm:           logfile.Console("-H %s" % self.hrm )
             if      self.manual:             logfile.Console("-m")
             if      self.manualGrade:        logfile.Console("-M")
