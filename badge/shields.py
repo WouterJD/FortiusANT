@@ -4,10 +4,7 @@ endpoint = {
   "schemaVersion": 1,
   "label": "Strava",
   "message": "1234",
-  "color": "orange",
-  "logoSvg": "Strava",
-  "logoColor": "orange",
-  "style": "flat-square"
+  "color": "orange"
 }
 class StravaShield(Resource):
   def __init__(self, **kwargs):
