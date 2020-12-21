@@ -4,6 +4,7 @@ const debug = require('debug')('fortiusant:vt');
 
 const FitnessMachineService = require('./fitness-machine-service/fitness-machine-service');
 const HeartRateService = require('./heart-rate-service/heart-rate-service');
+const SteeringService = require('./steering-service/steering-service');
 
 class VirtualTrainer extends events {
   constructor() {
@@ -16,6 +17,7 @@ class VirtualTrainer extends events {
     this.messages = [];
     this.ftms = new FitnessMachineService(this.messages);
     this.hrs = new HeartRateService();
+    this.ss = new SteeringService();
     this.stopTimer = null;
     
     bleno.on('stateChange', (state) => {
@@ -24,7 +26,8 @@ class VirtualTrainer extends events {
       if (state === 'poweredOn') {
         bleno.startAdvertising(this.name, [
           this.ftms.uuid,
-          this.hrs.uuid
+          this.hrs.uuid,
+          this.ss.uuid
         ]);
       }
       else {
@@ -39,7 +42,8 @@ class VirtualTrainer extends events {
       if (!error) {
         bleno.setServices([
           this.ftms,
-          this.hrs
+          this.hrs,
+          this.ss
         ],
         (error) => {
           debug(`[${this.name}] setServices: ${(error ? 'error ' + error : 'success')}`);
@@ -88,6 +92,7 @@ class VirtualTrainer extends events {
 
     this.ftms.notify(event);
     this.hrs.notify(event);
+    this.ss.notify(event);
 
     if (!('stop' in event)) {
       this.stopTimer = setTimeout(() => {
