@@ -1,6 +1,5 @@
 const bleno = require('bleno');
-const debug = require('debug');
-const trace = debug('fortiusant:fmfc');
+const debug = require('debug')('fortiusant:fmfc');
 
 function bit(nr) {
   return (1 << nr);
@@ -17,7 +16,7 @@ const FitnessMachineFeature = '2ACC';
 
 class FitnessMachineFeatureCharacteristic extends  bleno.Characteristic {
   constructor() {
-    trace('[FitnessMachineFeatureCharacteristic] constructor');
+    debug('[FitnessMachineFeatureCharacteristic] constructor');
     let flags = new Buffer.alloc(8);
     flags.writeUInt32LE(CadenceSupported | HeartRateMeasurementSupported | PowerMeasurementSupported);
     flags.writeUInt32LE(IndoorBikeSimulationParametersSupported, 4);

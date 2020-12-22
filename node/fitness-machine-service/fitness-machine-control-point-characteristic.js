@@ -1,6 +1,5 @@
 const bleno = require('bleno');
-const debug = require('debug');
-const trace = debug('fortiusant:fmcpc');
+const debug = require('debug')('fortiusant:fmcpc');
 
 const RequestControl = 0x00;
 const Reset = 0x01;
@@ -23,7 +22,7 @@ const FitnessMachineControlPoint = '2AD9';
 
 class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
   constructor(messages) {
-    trace('[FitnessMachineControlPointCharacteristic] constructor')
+    debug('[FitnessMachineControlPointCharacteristic] constructor')
     super({
       uuid: FitnessMachineControlPoint,
       properties: ['write', 'indicate'],
@@ -55,28 +54,28 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
     buffer.writeUInt8(ResponseCode);
     buffer.writeUInt8(opcode, 1);
     buffer.writeUInt8(result, 2);
-    trace(buffer);
+    debug(buffer);
     return buffer;
   }
 
   onSubscribe(maxValueSize, updateValueCallback) {
-    trace('[FitnessMachineControlPointCharacteristic] onSubscribe');
+    debug('[FitnessMachineControlPointCharacteristic] onSubscribe');
     this.indicate = updateValueCallback;
     return this.RESULT_SUCCESS;
   };
 
   onUnsubscribe() {
-    trace('[FitnessMachineControlPointCharacteristic] onUnsubscribe');
+    debug('[FitnessMachineControlPointCharacteristic] onUnsubscribe');
     this.indicate = null;
     return this.RESULT_UNLIKELY_ERROR;
   };
 
   onIndicate() {
-    trace('[FitnessMachineControlPointCharacteristic] onIndicate');
+    debug('[FitnessMachineControlPointCharacteristic] onIndicate');
   }
 
   onWriteRequest(data, offset, withoutResponse, callback) {
-    trace('[FitnessMachineControlPointCharacteristic] onWriteRequest');
+    debug('[FitnessMachineControlPointCharacteristic] onWriteRequest');
 
     // first byte indicates opcode
     let code = data.readUInt8(0);
@@ -88,35 +87,35 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
 
     switch(code){
       case RequestControl:
-        trace('[FitnessMachineControlPointCharacteristic] onWriteRequest: RequestControl');
+        debug('[FitnessMachineControlPointCharacteristic] onWriteRequest: RequestControl');
         if (this.hasControl) {
-          trace('Error: already has control');
+          debug('Error: already has control');
           response = this.result(code, ControlNotPermitted);
         }
         else {
-          trace('Given control');
+          debug('Given control');
           this.hasControl = true;
           response = this.result(code, Success);
         }
         break;
       case Reset:
-        trace('[FitnessMachineControlPointCharacteristic] onWriteRequest: Reset');
+        debug('[FitnessMachineControlPointCharacteristic] onWriteRequest: Reset');
         if (this.hasControl) {
-          trace('Control reset');
+          debug('Control reset');
           this.hasControl = false;
           response = this.result(code, Success);
         }
         else {
-          trace('Error: no control');
+          debug('Error: no control');
           response = this.result(code, ControlNotPermitted);
         }
         break;
       case SetTargetPower:
-        trace('[FitnessMachineControlPointCharacteristic] onWriteRequest: Set target power');
+        debug('[FitnessMachineControlPointCharacteristic] onWriteRequest: Set target power');
         if (this.hasControl) {
           let targetPower = data.readInt16LE(1);
 
-          trace('Target Power(W): ' + targetPower);
+          debug('Target Power(W): ' + targetPower);
 
           let message = {
             "target_power": targetPower
@@ -128,58 +127,58 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
           response = this.result(code, Success);
         }
         else {
-          trace('Error: no control');
+          debug('Error: no control');
           response = this.result(code, ControlNotPermitted);
         }
         break;
       case StartOrResume:
-        trace('[FitnessMachineControlPointCharacteristic] onWriteRequest: Start or Resume');
+        debug('[FitnessMachineControlPointCharacteristic] onWriteRequest: Start or Resume');
         if (this.hasControl) {
           if (this.isStarted) {
-            trace('Error: already started/resumed');
+            debug('Error: already started/resumed');
             response = this.result(code, OperationFailed);
           }
           else {
-            trace('started/resumed');
+            debug('started/resumed');
             this.isStarted = true;
             response = this.result(code, Success);
           }
         }
         else {
-          trace('Error: no control');
+          debug('Error: no control');
           response = this.result(code, ControlNotPermitted);
         }
         break;
       case StopOrPause:
-        trace('[FitnessMachineControlPointCharacteristic] onWriteRequest: Stop or Pause');
+        debug('[FitnessMachineControlPointCharacteristic] onWriteRequest: Stop or Pause');
         if (this.hasControl) {
           if (this.isStarted) {
-            trace('stopped');
+            debug('stopped');
             this.isStarted = false;
             response = this.result(code, Success);
           }
           else {
-            trace('Error: already stopped/paused');
+            debug('Error: already stopped/paused');
             response = this.result(code, OperationFailed);
           }
         }
         else {
-          trace('Error: no control');
+          debug('Error: no control');
           response = this.result(code, ControlNotPermitted);
         }
         break;
       case SetIndoorBikeSimulation:
-        trace('[FitnessMachineControlPointCharacteristic] onWriteRequest: Set indoor bike simulation');
+        debug('[FitnessMachineControlPointCharacteristic] onWriteRequest: Set indoor bike simulation');
         if (this.hasControl) {
           let windSpeed = data.readInt16LE(1) * 0.001;
           let grade = data.readInt16LE(3) * 0.01;
           let crr = data.readUInt8(5) * 0.0001;
           let cw = data.readUInt8(6) * 0.01;
 
-          trace('Wind speed(mps): ' + windSpeed);
-          trace('Grade(%): ' + grade);
-          trace('crr: ' + crr);
-          trace('cw(Kg/m): ' + cw);
+          debug('Wind speed(mps): ' + windSpeed);
+          debug('Grade(%): ' + grade);
+          debug('crr: ' + crr);
+          debug('cw(Kg/m): ' + cw);
 
           let message = {
             "wind_speed": windSpeed,
@@ -194,15 +193,15 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
           response = this.result(code, Success);
         }
         else {
-          trace('Error: no control');
+          debug('Error: no control');
           response = this.result(code, ControlNotPermitted);
         }
         break;
       default:
-        trace('Unsupported OPCODE:' + code);
+        debug('Unsupported OPCODE:' + code);
 
         let d = new Buffer.from(data);
-        trace('Data: ' + d);
+        debug('Data: ' + d);
         response = this.result(code, OpCodeNotSupported);
         break;
     }

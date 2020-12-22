@@ -1,14 +1,13 @@
 const bleno = require('bleno');
 const events = require('events');
-const debug = require('debug');
-const trace = debug('fortiusant:vt');
+const debug = require('debug')('fortiusant:vt');
 
 const FitnessMachineService = require('./fitness-machine-service/fitness-machine-service');
 const HeartRateService = require('./heart-rate-service/heart-rate-service');
 
 class VirtualTrainer extends events {
   constructor() {
-    trace('[VirtualTrainer] constructor');
+    debug('[VirtualTrainer] constructor');
     super();
 
     this.name = 'FortiusANT Trainer';
@@ -20,7 +19,7 @@ class VirtualTrainer extends events {
     this.stopTimer = null;
     
     bleno.on('stateChange', (state) => {
-      trace(`[${this.name}] stateChange: ${state}`);
+      debug(`[${this.name}] stateChange: ${state}`);
       
       if (state === 'poweredOn') {
         bleno.startAdvertising(this.name, [
@@ -29,13 +28,13 @@ class VirtualTrainer extends events {
         ]);
       }
       else {
-        trace(`[${this.name}] Stopping...`);
+        debug(`[${this.name}] Stopping...`);
         bleno.stopAdvertising();
       }
     });
 
     bleno.on('advertisingStart', (error) => {
-      trace(`[${this.name}] advertisingStart: ${(error ? 'error ' + error : 'success')}`);
+      debug(`[${this.name}] advertisingStart: ${(error ? 'error ' + error : 'success')}`);
 
       if (!error) {
         bleno.setServices([
@@ -43,45 +42,45 @@ class VirtualTrainer extends events {
           this.hrs
         ],
         (error) => {
-          trace(`[${this.name}] setServices: ${(error ? 'error ' + error : 'success')}`);
+          debug(`[${this.name}] setServices: ${(error ? 'error ' + error : 'success')}`);
         });
       }
     });
 
     bleno.on('advertisingStartError', () => {
-      trace(`[${this.name}] advertisingStartError: advertising stopped`);
+      debug(`[${this.name}] advertisingStartError: advertising stopped`);
     });
 
     bleno.on('advertisingStop', error => {
-      trace(`[${this.name}] advertisingStop: ${(error ? 'error ' + error : 'success')}`);
+      debug(`[${this.name}] advertisingStop: ${(error ? 'error ' + error : 'success')}`);
     });
 
     bleno.on('servicesSet', error => {
-      trace(`[${this.name}] servicesSet: ${(error ? 'error ' + error : 'success')}`);
+      debug(`[${this.name}] servicesSet: ${(error ? 'error ' + error : 'success')}`);
     });
 
     bleno.on('accept', (clientAddress) => {
-      trace(`[${this.name}] accept: client ${clientAddress}`);
+      debug(`[${this.name}] accept: client ${clientAddress}`);
       bleno.updateRssi();
     });
 
     bleno.on('rssiUpdate', (rssi) => {
-      trace(`[${this.name}] rssiUpdate: ${rssi}')}`);
+      debug(`[${this.name}] rssiUpdate: ${rssi}')}`);
     });
   }
 
   get() {
-    trace(`[${this.name}] get')}`);
+    debug(`[${this.name}] get')}`);
     data = this.messages.shift();
     if (data === 'undefined') {
-      trace(`[${this.name}] get: no messages in queue')}`);
+      debug(`[${this.name}] get: no messages in queue')}`);
       data = {};
     }
     return data;
   }
 
   update(event) {
-    trace(`[${this.name}] update: ${JSON.stringify(event)}`);
+    debug(`[${this.name}] update: ${JSON.stringify(event)}`);
     
     if (this.stopTimer) {
       clearTimeout(this.stopTimer);
@@ -92,7 +91,7 @@ class VirtualTrainer extends events {
 
     if (!('stop' in event)) {
       this.stopTimer = setTimeout(() => {
-        trace(`[${this.name}] send stop`);
+        debug(`[${this.name}] send stop`);
         this.update({
           'watts': 0,
           'cadence': 0,

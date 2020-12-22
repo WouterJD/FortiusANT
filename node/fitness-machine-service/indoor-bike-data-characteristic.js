@@ -1,6 +1,5 @@
 const bleno = require('bleno');
-const debug = require('debug');
-const trace = debug('fortiusant:ibdc');
+const debug = require('debug')('fortiusant:ibdc');
 
 const CharacteristicUserDescription = '2901';
 const ClientCharacteristicConfiguration = '2902';
@@ -17,7 +16,7 @@ const HeartRatePresent = bit(9);
 
 class IndoorBikeDataCharacteristic extends  bleno.Characteristic {
   constructor() {
-    trace('[IndoorBikeDataCharacteristic] constructor')
+    debug('[IndoorBikeDataCharacteristic] constructor')
     super({
       uuid: IndoorBikeData,
       properties: ['notify'],
@@ -40,19 +39,19 @@ class IndoorBikeDataCharacteristic extends  bleno.Characteristic {
   }
 
   onSubscribe(maxValueSize, updateValueCallback) {
-    trace('[IndoorBikeDataCharacteristic] onSubscribe');
+    debug('[IndoorBikeDataCharacteristic] onSubscribe');
     this.updateValueCallback = updateValueCallback;
     return this.RESULT_SUCCESS;
   };
 
   onUnsubscribe() {
-    trace('[IndoorBikeDataCharacteristic] onUnsubscribe');
+    debug('[IndoorBikeDataCharacteristic] onUnsubscribe');
     this.updateValueCallback = null;
     return this.RESULT_UNLIKELY_ERROR;
   };
 
   notify(event) {
-    trace('[IndoorBikeDataCharacteristic] notify');
+    debug('[IndoorBikeDataCharacteristic] notify');
 
     let flags = 0;
     let offset = 0;
@@ -68,7 +67,7 @@ class IndoorBikeDataCharacteristic extends  bleno.Characteristic {
       flags |= InstantaneousCadencePresent;
       // cadence is in 0.5rpm resolution but is supplied in 1rpm resolution, multiply by 2 for ble.
       let cadence = event.cadence * 2
-      trace('[IndoorBikeDataCharacteristic] cadence(rpm): ' + cadence + ' (' + event.cadence + ')');
+      debug('[IndoorBikeDataCharacteristic] cadence(rpm): ' + cadence + ' (' + event.cadence + ')');
       buffer.writeUInt16LE(cadence, offset);
       offset += 2;
     }
@@ -76,7 +75,7 @@ class IndoorBikeDataCharacteristic extends  bleno.Characteristic {
     if ('watts' in event) {
       flags |= InstantaneousPowerPresent;
       let watts = event.watts;
-      trace('[IndoorBikeDataCharacteristic] power(W): ' + watts);
+      debug('[IndoorBikeDataCharacteristic] power(W): ' + watts);
       buffer.writeInt16LE(watts, offset);
       offset += 2;
     }
@@ -87,7 +86,7 @@ class IndoorBikeDataCharacteristic extends  bleno.Characteristic {
     // if ('heart_rate' in event) {
     //   flags |= HeartRatePresent;
     //   let heart_rate = event.heart_rate;
-    //   trace('[IndoorBikeDataCharacteristic] heart rate(bpm): ' + heart_rate);
+    //   debug('[IndoorBikeDataCharacteristic] heart rate(bpm): ' + heart_rate);
     //   buffer.writeUInt16LE(heart_rate, offset);
     //   offset += 2;
     // }
@@ -96,7 +95,7 @@ class IndoorBikeDataCharacteristic extends  bleno.Characteristic {
     flagField.writeUInt16LE(flags);
 
     let finalbuffer = buffer.slice(0, offset);
-    trace(finalbuffer);
+    debug(finalbuffer);
 
     if (this.updateValueCallback) {
       this.updateValueCallback(finalbuffer);
