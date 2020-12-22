@@ -2,8 +2,6 @@ const bleno = require('bleno');
 const debug = require('debug')('fortiusant:ibdc');
 
 const CharacteristicUserDescription = '2901';
-const ClientCharacteristicConfiguration = '2902';
-const ServerCharacteristicConfiguration = '2903';
 const IndoorBikeData = '2AD2';
 
 function bit(nr) {
@@ -24,14 +22,6 @@ class IndoorBikeDataCharacteristic extends  bleno.Characteristic {
         new bleno.Descriptor({
           uuid: CharacteristicUserDescription,
           value: 'Indoor Bike Data'
-        }),
-        new bleno.Descriptor({
-          uuid: ClientCharacteristicConfiguration,
-          value: Buffer.alloc(2)
-        }),
-        new bleno.Descriptor({
-          uuid: ServerCharacteristicConfiguration,
-          value: Buffer.alloc(2)
         })
       ]
     });

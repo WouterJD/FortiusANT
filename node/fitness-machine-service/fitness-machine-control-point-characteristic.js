@@ -16,8 +16,6 @@ const OperationFailed = 0x04;
 const ControlNotPermitted = 0x05;
 
 const CharacteristicUserDescription = '2901';
-const ClientCharacteristicConfiguration = '2902';
-const ServerCharacteristicConfiguration = '2903';
 const FitnessMachineControlPoint = '2AD9';
 
 class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
@@ -30,14 +28,6 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
         new bleno.Descriptor({
           uuid: CharacteristicUserDescription,
           value: 'Fitness Machine Control Point'
-        }),
-        new bleno.Descriptor({
-          uuid: ClientCharacteristicConfiguration,
-          value: Buffer.alloc(2)
-        }),
-        new bleno.Descriptor({
-          uuid: ServerCharacteristicConfiguration,
-          value: Buffer.alloc(2)
         })
       ]
     });

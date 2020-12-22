@@ -3,7 +3,6 @@ const bleno = require('bleno');
 
 const HeartRateMeasurement = '2A37';
 const CharacteristicUserDescription = '2901';
-const ClientCharacteristicConfiguration = '2902';
 
 function bit(nr) {
   return (1 << nr);
@@ -22,10 +21,6 @@ class HeartRateMeasurementCharacteristic extends  bleno.Characteristic {
         new bleno.Descriptor({
           uuid: CharacteristicUserDescription,
           value: 'Heart Rate Measurement'
-        }),
-        new bleno.Descriptor({
-          uuid: ClientCharacteristicConfiguration,
-          value: Buffer.alloc(2)
         })
       ]
     });
