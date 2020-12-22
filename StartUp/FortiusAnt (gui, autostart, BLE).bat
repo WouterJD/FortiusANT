@@ -1,2 +1,2 @@
-..\pythoncode\FortiusAnt.py -g -A -H0 -a -b -n -s
+..\pythoncode\FortiusAnt.py -a -b -g -A -H0
 pause

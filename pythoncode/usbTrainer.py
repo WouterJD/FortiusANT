@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-20"
+__version__ = "2020-12-21"
+# 2020-12-21    #173 T1946 was not detected as motor brake.
 # 2020-12-20    Constants used from constants.py
 # 2020-12-10    Removed: -u uphill
 # 2020-12-03    For Magnetic brake -r uses the resistance table [0...13]
@@ -1712,6 +1713,12 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         self.Refresh(True, modeStop)
         time.sleep(0.1)                            # Allow head unit time to process
 
+        #---------------------------------------------------------------------------
+        # Only headunit T1932 supports Magnetic brake; all others Motor Brake only
+        #---------------------------------------------------------------------------
+        if self.Headunit != hu1932:
+            self.MotorBrake = True
+
         if True:
             #-----------------------------------------------------------------------
             # Check motor brake version
@@ -2170,10 +2177,16 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             self.MotorBrakeUnitSerial = d                       # remaining
 
             #-----------------------------------------------------------------------
-            # If T1942 or T1942 motorbrake, then calibration is supported
-            # e.g. Headunit T1932 does not return a value for T1901
+            # If T1941 or T1946 motorbrake, then calibration is supported AND
+            #       a different PowerCurve is used.
+            #
+            # Note that Headunit T1932 does not return a value for T1901
+            #       Note that, only the T1932 controls a magnetic brake.
+            #
+            # #173 The possible motor brakes are T1941 (230V) and T1946 (110V)
+            #       Controlled by T1932 and T1942 headunits.
             #-----------------------------------------------------------------------
-            if self.MotorBrakeUnitType in (41, 42):
+            if self.MotorBrakeUnitType in (41, 46):
                 self.MotorBrake = True
 
             if False:

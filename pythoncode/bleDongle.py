@@ -2,7 +2,7 @@
 # Version info
 #---------------------------------------------------------------------------
 __version__ = "2020-12-18"
-# 2020-12-18        First version, obtained from MarcoVeeneman
+# 2020-12-18        First version, obtained from @MarcoVeeneman
 #---------------------------------------------------------------------------
 from   constants                    import mode_Power, mode_Grade, UseBluetooth
 
@@ -193,6 +193,7 @@ class clsBleCTP(clsBleInterface):
     # Athlete data
     #-----------------------------------------------------------------------
     HeartRate           = 0
+
     #-----------------------------------------------------------------------
     # Trainer data
     #-----------------------------------------------------------------------
@@ -200,16 +201,17 @@ class clsBleCTP(clsBleInterface):
     Cadence             = 0
     CurrentPower        = 0
 
-    WindResistance      = None
-    WindSpeed           = None
-    DraftingFactor      = 1         # Default since not supplied
-    RollingResistance   = None
     #-----------------------------------------------------------------------
     # CTP data
     #-----------------------------------------------------------------------
     TargetMode          = None      # No target received
     TargetGrade         = 0
     TargetPower         = 0
+
+    WindResistance      = None
+    WindSpeed           = None
+    DraftingFactor      = 1         # Default since not supplied
+    RollingResistance   = None
 
     def SetAthleteData(self, HeartRate):
         self.HeartRate      = HeartRate
