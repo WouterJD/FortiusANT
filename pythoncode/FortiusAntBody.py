@@ -879,7 +879,7 @@ def Tacx2DongleSub(self, Restart):
                 # print('fe.BroadcastTrainerDataMessage', Cadence, CurrentPower, SpeedKmh, HeartRate)
                 messages.append(fe.BroadcastTrainerDataMessage (TacxTrainer.Cadence, \
                     TacxTrainer.CurrentPower, TacxTrainer.SpeedKmh, TacxTrainer.HeartRate))
-
+                    
             #-------------------------------------------------------------------
             # Broadcast and receive ANT+ responses
             #-------------------------------------------------------------------
