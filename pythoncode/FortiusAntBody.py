@@ -212,7 +212,7 @@ def Initialize(pclv):
     tcx         = None
     if clv.exportTCX: tcx = TCXexport.clsTcxExport()
 
-
+    
 # ==============================================================================
 # Here we go, this is the real work what's all about!
 # ==============================================================================
@@ -879,7 +879,7 @@ def Tacx2DongleSub(self, Restart):
                 # print('fe.BroadcastTrainerDataMessage', Cadence, CurrentPower, SpeedKmh, HeartRate)
                 messages.append(fe.BroadcastTrainerDataMessage (TacxTrainer.Cadence, \
                     TacxTrainer.CurrentPower, TacxTrainer.SpeedKmh, TacxTrainer.HeartRate))
-                    
+
             #-------------------------------------------------------------------
             # Broadcast and receive ANT+ responses
             #-------------------------------------------------------------------
