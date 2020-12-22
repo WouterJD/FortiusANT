@@ -9,6 +9,7 @@ const CadenceSupported = bit(1);
 const HeartRateMeasurementSupported = bit(10);
 const PowerMeasurementSupported = bit(14);
 
+const PowerTargetSettingSupported = bit(3);
 const IndoorBikeSimulationParametersSupported = bit(13);
 
 const CharacteristicUserDescription = '2901';
@@ -17,13 +18,8 @@ const FitnessMachineFeature = '2ACC';
 class FitnessMachineFeatureCharacteristic extends  bleno.Characteristic {
   constructor() {
     debug('[FitnessMachineFeatureCharacteristic] constructor');
-    let flags = new Buffer.alloc(8);
-    flags.writeUInt32LE(CadenceSupported | HeartRateMeasurementSupported | PowerMeasurementSupported);
-    flags.writeUInt32LE(IndoorBikeSimulationParametersSupported, 4);
-
     super({
       uuid: FitnessMachineFeature,
-      value: flags,
       properties: ['read'],
       descriptors: [
         new bleno.Descriptor({
@@ -32,6 +28,14 @@ class FitnessMachineFeatureCharacteristic extends  bleno.Characteristic {
         })
       ],
     });
+  }
+
+  onReadRequest(offset, callback) {
+    debug('[FitnessMachineFeatureCharacteristic] onReadRequest');
+    let flags = new Buffer.alloc(8);
+    flags.writeUInt32LE(CadenceSupported | PowerMeasurementSupported);
+    flags.writeUInt32LE(IndoorBikeSimulationParametersSupported | PowerTargetSettingSupported, 4);
+    callback(this.RESULT_SUCCESS, flags);
   }
 }
 
