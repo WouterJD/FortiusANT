@@ -1,7 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-19"
+__version__ = "2020-12-10"
+# 2020-12-10    GradeShift/GradeFactor are multipliers
+#               antDeviceID specified on command-line
+# 2020-12-08    GradeAdjust is split into GradeShift/GradeFactor
+# 2020-12-07    Slope grade as received from CTP is reduced with self.clv.GradeAdjust
 # 2020-11-19    QuarterSecond calculation code modified (functionally unchanged)
 # 2020-11-18    Same as 2020-09-30 In idle mode, modeCalibrate was used instead
 #                   of modeStop.
@@ -263,7 +267,7 @@ def LocateHW(self):
     if AntDongle and AntDongle.OK:
         pass
     else:
-        AntDongle = ant.clsAntDongle()
+        AntDongle = ant.clsAntDongle(clv.antDeviceID)
         if AntDongle.OK or not clv.Tacx_iVortex:                    # 2020-09-29
              if clv.manual:      AntDongle.Message += ' (manual power)'
              if clv.manualGrade: AntDongle.Message += ' (manual grade)'
@@ -611,7 +615,7 @@ def Tacx2DongleSub(self, Restart):
     Counter         = 0
 
     if TacxTrainer.CalibrateSupported():
-        self.SetMessages(Tacx="* * * * S T A R T   P E D A L L I N G * * * *")
+        self.SetMessages(Tacx="* * * * G I V E   A   P E D A L   K I C K   T O   S T A R T   C A L I B R A T I O N * * * *")
         if debug.on(debug.Function):
             logfile.Write('Tacx2Dongle; start pedaling for calibration')
     try:
@@ -650,7 +654,7 @@ def Tacx2DongleSub(self, Restart):
                 # The message must be given once for the console-mode (no GUI)
                 #---------------------------------------------------------------
                 if StartPedaling:
-                    self.SetMessages(Tacx="* * * * C A L I B R A T I N G * * * *")
+                    self.SetMessages(Tacx="* * * * C A L I B R A T I N G   (Do not pedal) * * * *")
                     if debug.on(debug.Function):
                         logfile.Write('Tacx2Dongle; start calibration')
                     StartPedaling = False
@@ -926,7 +930,15 @@ def Tacx2DongleSub(self, Restart):
 
                             # 2020-11-04 as requested in issue 119
                             # The percentage is used to calculate grade 0...20%
-                            TacxTrainer.SetGrade(ant.msgUnpage48_BasicResistance(info) * 20)
+                            Grade = ant.msgUnpage48_BasicResistance(info) * 20
+
+                            # Implemented for Magnetic Brake:
+                            # - grade is NOT shifted with GradeShift (here never negative)
+                            # - but is reduced with factor
+                            # - and is NOT reduced with factorDH since never negative
+                            Grade *= clv.GradeFactor
+
+                            TacxTrainer.SetGrade(Grade)
                             TacxTrainer.SetRollingResistance(0.004)
                             TacxTrainer.SetWind(0.51, 0.0, 1.0)
 
@@ -990,6 +1002,23 @@ def Tacx2DongleSub(self, Restart):
                                 pass
                             else:
                                 Grade, RollingResistance = ant.msgUnpage51_TrackResistance(info)
+
+                                #-----------------------------------------------
+                                # Implemented when implementing Magnetic Brake:
+                                # [-] grade is shifted with GradeShift (-10% --> 0) ]
+                                # - then reduced with factor (can be re-adjusted with Virtual Gearbox)
+                                # - and reduced with factorDH (for downhill only)
+                                #
+                                # GradeAdjust is valid for all configurations!
+                                #
+                                # GradeShift is not expected to be used anymore,
+                                # and only left from earliest implementations
+                                # to avoid it has to be re-introduced in future again.
+                                #-----------------------------------------------
+                                Grade += clv.GradeShift
+                                Grade *= clv.GradeFactor
+                                if Grade < 0: Grade *= clv.GradeFactorDH
+
                                 TacxTrainer.SetGrade(Grade)
                                 TacxTrainer.SetRollingResistance(RollingResistance)
                                 PowerModeActive       = ''
