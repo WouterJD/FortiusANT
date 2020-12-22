@@ -197,7 +197,6 @@ from   FortiusAntGui                import mode_Power, mode_Grade
 import logfile
 import TCXexport
 import usbTrainer
-from bleDongle import BleDongle
 
 PrintWarnings = False   # Print warnings even when logging = off
 CycleTimeFast = 0.02    # TRAINER- SHOULD WRITE THEN READ 70MS LATER REALLY
@@ -206,7 +205,7 @@ CycleTimeANT  = 0.25
 # Initialize globals
 # ------------------------------------------------------------------------------
 def Initialize(pclv):
-    global clv, AntDongle, TacxTrainer, tcx, BleInterface
+    global clv, AntDongle, TacxTrainer, tcx
     clv         = pclv
     AntDongle   = None
     TacxTrainer = None
@@ -253,7 +252,7 @@ def IdleFunction(self):
 # Returns:      True if TRAINER and DONGLE found
 # ------------------------------------------------------------------------------
 def LocateHW(self):
-    global clv, AntDongle, TacxTrainer, BleInterface
+    global clv, AntDongle, TacxTrainer
     if debug.on(debug.Application): logfile.Write ("Scan for hardware")
 
     #---------------------------------------------------------------------------
@@ -263,9 +262,6 @@ def LocateHW(self):
     if AntDongle and AntDongle.OK:
         pass
     else:
-        if clv.ble:
-            BleInterface = BleDongle()
-
         AntDongle = ant.clsAntDongle()
         if AntDongle.OK or not clv.Tacx_iVortex:                    # 2020-09-29
              if clv.manual:      AntDongle.Message += ' (manual power)'
@@ -295,7 +291,7 @@ def LocateHW(self):
     #---------------------------------------------------------------------------
     if debug.on(debug.Application): logfile.Write ("Scan for hardware - end")
                                                                     # 2020-09-29
-    return (((AntDongle.OK or (BleInterface and BleInterface.OK)) or (not clv.Tacx_iVortex and (clv.manual or clv.manualGrade))) \
+    return ((AntDongle.OK or (not clv.Tacx_iVortex and (clv.manual or clv.manualGrade))) \
             and TacxTrainer.OK)
     
 # ------------------------------------------------------------------------------
@@ -849,8 +845,6 @@ def Tacx2DongleSub(self, Restart):
             #-------------------------------------------------------------------
             messages = []       # messages to be sent to ANT
             data = []           # responses received from ANT
-            ble_data = {}       # data sent to BLE
-            ble_response = []
             if QuarterSecond:
                 # LastANTtime = time.time()         # 2020-11-13 removed since duplicate
                 #---------------------------------------------------------------
@@ -869,8 +863,6 @@ def Tacx2DongleSub(self, Restart):
                 if True:
                     messages.append(pwr.BroadcastMessage( \
                         TacxTrainer.CurrentPower, TacxTrainer.Cadence))
-                    ble_data['watts'] = TacxTrainer.CurrentPower
-                    ble_data['cadence'] = TacxTrainer.Cadence
 
                 #---------------------------------------------------------------
                 # Broadcast Speed and Cadence Sensor message
@@ -886,40 +878,7 @@ def Tacx2DongleSub(self, Restart):
                 # print('fe.BroadcastTrainerDataMessage', Cadence, CurrentPower, SpeedKmh, HeartRate)
                 messages.append(fe.BroadcastTrainerDataMessage (TacxTrainer.Cadence, \
                     TacxTrainer.CurrentPower, TacxTrainer.SpeedKmh, TacxTrainer.HeartRate))
-            
-            #-------------------------------------------------------------------
-            # Fill BLE data
-            #-------------------------------------------------------------------
-
-            if clv.hrm == None and TacxTrainer.HeartRate > 0:
-                ble_data['heart_rate'] = HeartRate
-
-            ble_data['watts'] = TacxTrainer.CurrentPower
-            ble_data['cadence'] = TacxTrainer.Cadence
-
-            #-------------------------------------------------------------------
-            # Broadcast and receive BLE responses
-            #-------------------------------------------------------------------
-            if clv.ble:
-                ble_response = BleInterface.Write(ble_data)
-                if len(ble_response):
-                    logfile.Write(f"Read {len(ble_response)} BLE messages")
-            
-                for m in ble_response:
-                    logfile.Write(f"message: {m}")
-
-                    if "target_power" in m:
-                        TacxTrainer.SetPower(m["target_power"])
-                    else:
-                        if "wind_speed" in m and "wind_resistance_coefficient" in m:
-                            TacxTrainer.SetWind(m["wind_resistance_coefficient"], m["wind_speed"], 1) # draftingfactor set to 1
-                    
-                        if "grade" in m:
-                            TacxTrainer.SetGrade(m["grade"])
-
-                        if "rolling_resistance_coefficient" in m:
-                            TacxTrainer.SetRollingResistance(m["rolling_resistance_coefficient"])
-            
+        
             #-------------------------------------------------------------------
             # Broadcast and receive ANT+ responses
             #-------------------------------------------------------------------
