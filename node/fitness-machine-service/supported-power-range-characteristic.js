@@ -24,11 +24,11 @@ class SupportedPowerRangeCharacteristic extends  bleno.Characteristic {
     let buffer = new Buffer.alloc(6);
     let at = 0;
 
-    let minimumPower = 50;
+    let minimumPower = 0;
     buffer.writeInt16LE(minimumPower, at);
     at += 2;
 
-    let maximumPower = 1000;  // What is the real maximum power?
+    let maximumPower = 1000;
     buffer.writeInt16LE(maximumPower, at);
     at += 2;
 
