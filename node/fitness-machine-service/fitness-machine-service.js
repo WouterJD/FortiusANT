@@ -4,6 +4,7 @@ const debug = require('debug')('fortiusant:fms');
 const FitnessMachineFeatureCharacteristic = require('./fitness-machine-feature-characteristic');
 const IndoorBikeDataCharacteristic = require('./indoor-bike-data-characteristic');
 const FitnessMachineControlPointCharacteristic = require('./fitness-machine-control-point-characteristic');
+const SupportedPowerRangeCharacteristic = require('./supported-power-range-characteristic');
 
 const FitnessMachine = '1826'
 
@@ -13,18 +14,21 @@ class FitnessMachineService extends bleno.PrimaryService {
     let fmfc = new FitnessMachineFeatureCharacteristic();
     let ibdc = new IndoorBikeDataCharacteristic();
     let fmcpc = new FitnessMachineControlPointCharacteristic(messages);
+    let sprc = new SupportedPowerRangeCharacteristic();
     super({
       uuid: FitnessMachine,
       characteristics: [
         fmfc,
         ibdc,
-        fmcpc
+        fmcpc,
+        sprc
       ]
     });
 
     this.fmfc = fmfc;
     this.ibdc = ibdc;
     this.fmcpc = fmcpc;
+    this.sprc = sprc;
   }
 
   notify(event) {
