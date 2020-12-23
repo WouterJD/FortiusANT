@@ -3,6 +3,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const debug = require('debug');
 const trace = debug('fortiusant:server');
+const version = require('./version');
 
 let trainer = new VirtualTrainer();
 let server = express();
@@ -25,3 +26,9 @@ server.get('/ant', function(req, res) {
   debug(`[Server] get: /ant : ${JSON.stringify(data)}`);
   res.send(data)
 });
+
+server.get('/version', function(req, res) {
+  data = {'version': version}
+  debug(`[Server] get: /version : ${JSON.stringify(data)}`);
+  res.send(data)
+})
