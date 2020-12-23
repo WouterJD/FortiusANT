@@ -23,12 +23,7 @@ server.post('/ant', function(req, res) {
 
 server.get('/ant', function(req, res) {
   data = trainer.get();
+  data.version = version;
   debug(`[Server] get: /ant : ${JSON.stringify(data)}`);
   res.send(data)
 });
-
-server.get('/version', function(req, res) {
-  data = {'version': version}
-  debug(`[Server] get: /version : ${JSON.stringify(data)}`);
-  res.send(data)
-})
