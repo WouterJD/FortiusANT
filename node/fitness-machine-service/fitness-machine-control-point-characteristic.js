@@ -19,7 +19,7 @@ const CharacteristicUserDescription = '2901';
 const FitnessMachineControlPoint = '2AD9';
 
 class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
-  constructor(messages) {
+  constructor(messages, fmsc) {
     debug('[FitnessMachineControlPointCharacteristic] constructor')
     super({
       uuid: FitnessMachineControlPoint,
@@ -33,6 +33,7 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
     });
 
     this.messages = messages;
+    this.fmsc = fmsc;
     this.indicate = null;
 
     this.hasControl = false;
@@ -94,6 +95,9 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
           debug('Control reset');
           this.hasControl = false;
           response = this.result(code, Success);
+
+          // Notify all connected clients that control has been reset
+          this.fmsc.notifyReset();
         }
         else {
           debug('Error: no control');
@@ -115,6 +119,9 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
           this.messages.push(message);
 
           response = this.result(code, Success);
+
+          // Notify all connected clients about the new values
+          this.fmsc.notifySetTargetPower(targetPower);
         }
         else {
           debug('Error: no control');
@@ -132,6 +139,9 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
             debug('started/resumed');
             this.isStarted = true;
             response = this.result(code, Success);
+
+            // Notify all connected clients about the new state
+            this.fmsc.notifyStartOrResume();
           }
         }
         else {
@@ -146,6 +156,9 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
             debug('stopped');
             this.isStarted = false;
             response = this.result(code, Success);
+
+            // Notify all connected clients about the new state
+            this.fmsc.notifyStopOrPause();
           }
           else {
             debug('Error: already stopped/paused');
@@ -181,6 +194,9 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
           this.messages.push(message);
 
           response = this.result(code, Success);
+
+          // Notify all connected clients about the new values
+          this.fmsc.notifySetIndoorBikeSimulation(windSpeed, grade, crr, cw);
         }
         else {
           debug('Error: no control');

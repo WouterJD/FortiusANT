@@ -5,6 +5,7 @@ const FitnessMachineFeatureCharacteristic = require('./fitness-machine-feature-c
 const IndoorBikeDataCharacteristic = require('./indoor-bike-data-characteristic');
 const FitnessMachineControlPointCharacteristic = require('./fitness-machine-control-point-characteristic');
 const SupportedPowerRangeCharacteristic = require('./supported-power-range-characteristic');
+const FitnessMachineStatusCharacteristic = require('./fitness-machine-status-characteristic');
 
 const FitnessMachine = '1826'
 
@@ -13,13 +14,15 @@ class FitnessMachineService extends bleno.PrimaryService {
     debug('[FitnessMachineService] constructor');
     let fmfc = new FitnessMachineFeatureCharacteristic();
     let ibdc = new IndoorBikeDataCharacteristic();
-    let fmcpc = new FitnessMachineControlPointCharacteristic(messages);
+    let fmsc = new FitnessMachineStatusCharacteristic();
+    let fmcpc = new FitnessMachineControlPointCharacteristic(messages, fmsc);
     let sprc = new SupportedPowerRangeCharacteristic();
     super({
       uuid: FitnessMachine,
       characteristics: [
         fmfc,
         ibdc,
+        fmsc,
         fmcpc,
         sprc
       ]
@@ -27,6 +30,7 @@ class FitnessMachineService extends bleno.PrimaryService {
 
     this.fmfc = fmfc;
     this.ibdc = ibdc;
+    this.fmsc = fmsc;
     this.fmcpc = fmcpc;
     this.sprc = sprc;
   }
