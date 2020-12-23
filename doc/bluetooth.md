@@ -35,21 +35,34 @@ On Windows a bluetooth dongle is required, there is a limited set of supported h
     * Only needed if not installed yet.
 1. Install NodeJS LTS version (https://nodejs.org)
     * During installation, **check the box which installs the necessary tools for native modules**.
-    * After NodeJS installation completes, a command prompt will appear which will install the necessary tools
+    * After NodeJS installation completes, a command prompt will appear which will install the necessary tools. This will take a while, grab a drink in the mean time.
 1. Install Zadig (https://zadig.akeo.ie)
+1. Insert the bluetooth dongle
 1. Replace the driver for your bluetooth dongle using Zadig
     * Note that you cannot use the bluetooth dongle for windows itself when you perform this step. Using the exact same steps as mentioned below you can restore the old driver if you want.
     1. Start Zadig
+    1. Select options, list all devices
     1. Select the bluetooth dongle
+        * Note: It may be difficult to know which device is the correct BLE dongle in case your machine also has BLE on-board. Disable the on-board BLE device before inserting the BLE dongle so Zadig will see only one.
     1. Remember the current driver, in case you want to restore the driver later on.
     1. Check if WinUSB driver is set as target driver, this should be the default. (Choose the old driver when reverting)
     1. press Replace Driver
 
-5. Install dependencies: `cd node && npm install`
+1. Install dependencies
+    1. Start the windows command prompt
+        1. Click start
+        1. Type: `cmd`
+        1. Press enter
+    1. Go to the FortiusANT folder
+        1. Type: `cd <FortiusANT location>\node`
+            * `<FortiusANT location>` is the location where you downloaded FortiusANT to.
+        1. Press enter
+    1. Type: `npm install`
+    1. Press enter
 
 ### Linux
 TODO
 
 ## Run FortiusANT with BLE support
 
-To use BLE support in FortiusANT it should be started from the command line with the `-b` option. After FortiusANT has detected the Tacx trainer it will start the BLE interface. FortiusANT will start advertising as 'FortiusANT Trainer' on Windows and Linux systems. On macOS, it will start advertising as your computer name.
+To use BLE support in FortiusANT it should be started from the command line with the `-b` option. When [Start] is pressed the BLE interface will be started until [Stop] is pressed. FortiusANT will start advertising as 'FortiusANT Trainer' on Windows and Linux systems. On macOS, it will start advertising as your computer name.
