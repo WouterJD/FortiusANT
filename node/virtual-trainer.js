@@ -72,7 +72,7 @@ class VirtualTrainer extends events {
   get() {
     debug(`[${this.name}] get')}`);
     data = this.messages.shift();
-    if (data === 'undefined') {
+    if (typeof data === 'undefined') {
       debug(`[${this.name}] get: no messages in queue')}`);
       data = {};
     }
