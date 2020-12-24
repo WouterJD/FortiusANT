@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-20"
+__version__ = "2020-12-24"
+# 2020-12-24    usage of UseGui implemented
 # 2020-12-20    Constants used from constants.py
 # 2020-11-18    Logfile shows what version is started; windows exe or python
 # 2020-12-16    Stopping the program is no longer possible from the head unit
@@ -131,28 +132,29 @@ def Tacx2Dongle(self):
 # Called:       IdleFunction, LocateHW(), Runoff() and Tacx2Dongle() are called
 #                    to provide the required functionality.
 # ==============================================================================
-class frmFortiusAnt(gui.frmFortiusAntGui):
-    def callIdleFunction(self):
-        Buttons = IdleFunction(self)
-        # ----------------------------------------------------------------------
-        # IdleFunction checks trainer for headunit button press
-        # Since the GUI does not know the usbTrainer, we do this here
-        # ----------------------------------------------------------------------
-        if   Buttons == usbTrainer.EnterButton: self.Navigate_Enter()
-        elif Buttons == usbTrainer.DownButton:  self.Navigate_Down()
-        elif Buttons == usbTrainer.UpButton:    self.Navigate_Up()
-        elif Buttons == usbTrainer.CancelButton:pass    # self.Navigate_Back()
-        else:                                   pass
-        return True
+if UseGui:
+    class frmFortiusAnt(gui.frmFortiusAntGui):
+        def callIdleFunction(self):
+            Buttons = IdleFunction(self)
+            # ----------------------------------------------------------------------
+            # IdleFunction checks trainer for headunit button press
+            # Since the GUI does not know the usbTrainer, we do this here
+            # ----------------------------------------------------------------------
+            if   Buttons == usbTrainer.EnterButton: self.Navigate_Enter()
+            elif Buttons == usbTrainer.DownButton:  self.Navigate_Down()
+            elif Buttons == usbTrainer.UpButton:    self.Navigate_Up()
+            elif Buttons == usbTrainer.CancelButton:pass    # self.Navigate_Back()
+            else:                                   pass
+            return True
 
-    def callLocateHW(self):
-        return LocateHW(self)
+        def callLocateHW(self):
+            return LocateHW(self)
 
-    def callRunoff(self):
-        return Runoff(self)
+        def callRunoff(self):
+            return Runoff(self)
 
-    def callTacx2Dongle(self):
-        return Tacx2Dongle(self)
+        def callTacx2Dongle(self):
+            return Tacx2Dongle(self)
 
 # ==============================================================================
 # Class to create a Console-GUI
@@ -218,103 +220,104 @@ class clsFortiusAntConsole:
 #
 # Functions:    For this purpose, GuiMessageToMain() is available.
 # ==============================================================================
-class frmFortiusAntChild(gui.frmFortiusAntGui):
-    # --------------------------------------------------------------------------
-    # gui_conn is the child-connection to the parent process
-    # --------------------------------------------------------------------------
-    def __init__(self, parent, conn, pclv):
-        self.gui_conn = conn
-        super(frmFortiusAntChild, self).__init__(parent, pclv)
+if UseGui:
+    class frmFortiusAntChild(gui.frmFortiusAntGui):
+        # --------------------------------------------------------------------------
+        # gui_conn is the child-connection to the parent process
+        # --------------------------------------------------------------------------
+        def __init__(self, parent, conn, pclv):
+            self.gui_conn = conn
+            super(frmFortiusAntChild, self).__init__(parent, pclv)
 
-    def GuiMessageToMain(self, command, wait=True):
-        # ----------------------------------------------------------------------
-        # Step 1. GUI sends a command to main
-        # ----------------------------------------------------------------------
-        if debug.on(debug.MultiProcessing) and not (command == cmd_Idle):
-            logfile.Write ("mp-GuiMessageToMain(conn, %s, %s)" % (command, wait))
-        self.gui_conn.send(command)
+        def GuiMessageToMain(self, command, wait=True):
+            # ----------------------------------------------------------------------
+            # Step 1. GUI sends a command to main
+            # ----------------------------------------------------------------------
+            if debug.on(debug.MultiProcessing) and not (command == cmd_Idle):
+                logfile.Write ("mp-GuiMessageToMain(conn, %s, %s)" % (command, wait))
+            self.gui_conn.send(command)
 
-        rtn = True
-        while wait:
-            # ------------------------------------------------------------------
-            # Check if requested command is ended
-            # OR that information is received from Main
-            # ------------------------------------------------------------------
-            # Will be more efficient than self.gui_conn.poll() / sleep loop...
-            # ------------------------------------------------------------------
-            # Step 4. GUI receives the response (command, rtn)
-            # ------------------------------------------------------------------
-            msg = self.gui_conn.recv()
-            cmd = msg[0]
-            rtn = msg[1]
-            if debug.on(debug.MultiProcessing) and not (command == cmd_Idle and rtn == 0):
-                logfile.Write ("mp-GuiAnswerFromMain(conn) returns (%s, %s)" % (cmd, rtn))
+            rtn = True
+            while wait:
+                # ------------------------------------------------------------------
+                # Check if requested command is ended
+                # OR that information is received from Main
+                # ------------------------------------------------------------------
+                # Will be more efficient than self.gui_conn.poll() / sleep loop...
+                # ------------------------------------------------------------------
+                # Step 4. GUI receives the response (command, rtn)
+                # ------------------------------------------------------------------
+                msg = self.gui_conn.recv()
+                cmd = msg[0]
+                rtn = msg[1]
+                if debug.on(debug.MultiProcessing) and not (command == cmd_Idle and rtn == 0):
+                    logfile.Write ("mp-GuiAnswerFromMain(conn) returns (%s, %s)" % (cmd, rtn))
 
-            # ------------------------------------------------------------------
-            # We wait for the response on the command
-            # and in the meantime receive data to displayed
-            #
-            # cmd_StopButton is treated differently, since that command is sent
-            # while we are waiting for the response on cmd_Runoff or cmd_Tacx2Dongle
-            # we ignore the response here and cmd_StopButton does not start wait-loop
-            # to avoid some sort of nesting or so.
-            # ------------------------------------------------------------------
-            if cmd == command:
-                break                   # command is ready
-            elif cmd == cmd_StopButton:
-                pass
-            elif cmd == cmd_SetValues:
-                self.SetValues(rtn[0], rtn[1], rtn[2], rtn[3], rtn[4], rtn[5], rtn[6], rtn[7], rtn[8])# rtn is tuple
-            elif cmd == cmd_SetMessages:
-                self.SetMessages(rtn[0], rtn[1], rtn[2])# rtn is (Tacx, Dongle, HRM) tuple
-            elif cmd == cmd_PedalStrokeAnalysis:
-                self.PedalStrokeAnalysis(rtn[0], rtn[1])# rtn is (info, Cadence) tuple
-                pass
-            else:
-                logfile.Console('%s active but unknown response received (%s, %s); the message is ignored.' % (command, cmd, rtn))
-                break
-        return rtn
+                # ------------------------------------------------------------------
+                # We wait for the response on the command
+                # and in the meantime receive data to displayed
+                #
+                # cmd_StopButton is treated differently, since that command is sent
+                # while we are waiting for the response on cmd_Runoff or cmd_Tacx2Dongle
+                # we ignore the response here and cmd_StopButton does not start wait-loop
+                # to avoid some sort of nesting or so.
+                # ------------------------------------------------------------------
+                if cmd == command:
+                    break                   # command is ready
+                elif cmd == cmd_StopButton:
+                    pass
+                elif cmd == cmd_SetValues:
+                    self.SetValues(rtn[0], rtn[1], rtn[2], rtn[3], rtn[4], rtn[5], rtn[6], rtn[7], rtn[8])# rtn is tuple
+                elif cmd == cmd_SetMessages:
+                    self.SetMessages(rtn[0], rtn[1], rtn[2])# rtn is (Tacx, Dongle, HRM) tuple
+                elif cmd == cmd_PedalStrokeAnalysis:
+                    self.PedalStrokeAnalysis(rtn[0], rtn[1])# rtn is (info, Cadence) tuple
+                    pass
+                else:
+                    logfile.Console('%s active but unknown response received (%s, %s); the message is ignored.' % (command, cmd, rtn))
+                    break
+            return rtn
 
-    # --------------------------------------------------------------------------
-    # Multiprocessing;
-    #       a command is sent to the parent process and the function waits for
-    #       a response.
-    #       Idle/LocateHW:      the only response expected is the answer from the function
-    #       Runoff/Tacx2Dongle: the main process can also send information to be displayed!
-    # --------------------------------------------------------------------------
-    def callIdleFunction(self):
-        Buttons = self.GuiMessageToMain(cmd_Idle)     # Send command and wait response
-        # ----------------------------------------------------------------------
-        # IdleFunction checks trainer for headunit button press
-        # Since the GUI does not know the usbTrainer, we do this here
-        # ----------------------------------------------------------------------
-        if   Buttons == usbTrainer.EnterButton: self.Navigate_Enter()
-        elif Buttons == usbTrainer.DownButton:  self.Navigate_Down()
-        elif Buttons == usbTrainer.UpButton:    self.Navigate_Up()
-        elif Buttons == usbTrainer.CancelButton:pass    # self.Navigate_Back()
-        else:                                   pass
-        return True
+        # --------------------------------------------------------------------------
+        # Multiprocessing;
+        #       a command is sent to the parent process and the function waits for
+        #       a response.
+        #       Idle/LocateHW:      the only response expected is the answer from the function
+        #       Runoff/Tacx2Dongle: the main process can also send information to be displayed!
+        # --------------------------------------------------------------------------
+        def callIdleFunction(self):
+            Buttons = self.GuiMessageToMain(cmd_Idle)     # Send command and wait response
+            # ----------------------------------------------------------------------
+            # IdleFunction checks trainer for headunit button press
+            # Since the GUI does not know the usbTrainer, we do this here
+            # ----------------------------------------------------------------------
+            if   Buttons == usbTrainer.EnterButton: self.Navigate_Enter()
+            elif Buttons == usbTrainer.DownButton:  self.Navigate_Down()
+            elif Buttons == usbTrainer.UpButton:    self.Navigate_Up()
+            elif Buttons == usbTrainer.CancelButton:pass    # self.Navigate_Back()
+            else:                                   pass
+            return True
 
-    def callLocateHW(self):
-        rtn = self.GuiMessageToMain(cmd_LocateHW) # Send command and wait response
-        return rtn
+        def callLocateHW(self):
+            rtn = self.GuiMessageToMain(cmd_LocateHW) # Send command and wait response
+            return rtn
 
-    def callRunoff(self):
-        rtn = self.GuiMessageToMain(cmd_Runoff)
-        return rtn
+        def callRunoff(self):
+            rtn = self.GuiMessageToMain(cmd_Runoff)
+            return rtn
 
-    def callTacx2Dongle(self):
-        rtn = self.GuiMessageToMain(cmd_Tacx2Dongle)
-        return rtn
+        def callTacx2Dongle(self):
+            rtn = self.GuiMessageToMain(cmd_Tacx2Dongle)
+            return rtn
 
-    def OnClick_btnStop(self, event=False):
-        gui.frmFortiusAntGui.OnClick_btnStop(self, event)
-        self.GuiMessageToMain(cmd_StopButton, False)
-
-    def OnClose(self, event):
-        if self.RunningSwitch == True:          # Thread is running
+        def OnClick_btnStop(self, event=False):
+            gui.frmFortiusAntGui.OnClick_btnStop(self, event)
             self.GuiMessageToMain(cmd_StopButton, False)
-        gui.frmFortiusAntGui.OnClose(self, event)
+
+        def OnClose(self, event):
+            if self.RunningSwitch == True:          # Thread is running
+                self.GuiMessageToMain(cmd_StopButton, False)
+            gui.frmFortiusAntGui.OnClose(self, event)
 
 # ==============================================================================
 # Class to create a parent-process
@@ -507,9 +510,11 @@ if __name__ == "__main__":
         logfile.Write(s % ('debug',                   debug.__version__ ))
         logfile.Write(s % ('FortiusAntBody', FortiusAntBody.__version__ ))
         logfile.Write(s % ('FortiusAntCommand',         cmd.__version__ ))
-        logfile.Write(s % ('FortiusAntGui',             gui.__version__ ))
+        if UseGui:
+            logfile.Write(s % ('FortiusAntGui',         gui.__version__ ))
         logfile.Write(s % ('logfile',               logfile.__version__ ))
-        logfile.Write(s % ('RadarGraph',         RadarGraph.__version__ ))
+        if UseGui:
+            logfile.Write(s % ('RadarGraph',     RadarGraph.__version__ ))
         logfile.Write(s % ('structConstants',            sc.__version__ ))
         logfile.Write(s % ('TCXexport',           TCXexport.__version__ ))
         logfile.Write(s % ('usbTrainer',         usbTrainer.__version__ ))
@@ -531,7 +536,8 @@ if __name__ == "__main__":
     #   logfile.Write(s % ('threading',           threading.__version__ ))
     #   logfile.Write(s % ('time',                     time.__version__ ))
         logfile.Write(s % ('usb',                       usb.__version__ ))
-        logfile.Write(s % ('wx',                         wx.__version__ ))
+        if UseGui:
+            logfile.Write(s % ('wx',                     wx.__version__ ))
 
         logfile.Write('FortiusANT code flags')
         logfile.Write(s % ('useMultiProcessing',            useMultiProcessing))
