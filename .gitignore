@@ -5,7 +5,7 @@
 *.json
 pythoncode/build/
 pythoncode/dist/
-pythoncode/help.txt
 Miscellaneous/
 node_modules
 package-lock.json
+pythoncode/help.txt

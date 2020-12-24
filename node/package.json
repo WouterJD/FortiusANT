@@ -1,0 +1,19 @@
+{
+  "name": "fortiusant",
+  "version": "0.0.1",
+  "description": "FortiusANT Bluetooth LE server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node ./server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": {
+    "name": "Marco Veeneman"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@abandonware/bleno": "^0.5.1-2",
+    "bleno": "abandonware/bleno",
+    "express": "^4.17.1"
+  }
+}
