@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-20"
+__version__ = "2020-12-24"
+# 2020-12-24    usage of UseGui implemented
+#               If -b is expected, antDongle is optional.
 # 2020-12-20    Constants used from constants.py
 #               bleCTP device implemented
 # 2020-12-14    ANT+ Control command implemented
@@ -178,6 +180,8 @@ __version__ = "2020-12-20"
 #               - test with Zwift; done 2019-12-24
 #               - calibration test; done 2020-01-07
 #-------------------------------------------------------------------------------
+from   constants                    import mode_Power, mode_Grade, UseBluetooth, UseGui
+
 import argparse
 import binascii
 import math
@@ -191,7 +195,8 @@ import struct
 import threading
 import time
 import usb.core
-import wx
+if UseGui:
+    import wx
 
 from   datetime                     import datetime
 
@@ -201,7 +206,6 @@ import antHRM            as hrm
 import antPWR            as pwr
 import antSCS            as scs
 import antCTRL           as ctrl
-from   constants                    import mode_Power, mode_Grade, UseBluetooth, UseGui
 import debug
 import logfile
 import TCXexport
@@ -307,7 +311,7 @@ def LocateHW(self):
     #---------------------------------------------------------------------------
     if debug.on(debug.Application): logfile.Write ("Scan for hardware - end")
                                                                     # 2020-09-29
-    return ((AntDongle.OK or (not clv.Tacx_iVortex and (clv.manual or clv.manualGrade))) \
+    return ((AntDongle.OK or clv.ble or (not clv.Tacx_iVortex and (clv.manual or clv.manualGrade))) \
             and TacxTrainer.OK)
     
 # ------------------------------------------------------------------------------
