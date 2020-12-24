@@ -122,7 +122,6 @@ channel_VHU_s       = 5           # ANT+ Channel for Tacx i-Vortex Headunit
                                   # slave=Cycle Training Program
 
 channel_CTRL        = 6           # ANT+ Channel for Remote Control
-
 #---------------------------------------------------------------------------
 # i-Vortex Headunit modes
 #---------------------------------------------------------------------------
@@ -140,7 +139,6 @@ DeviceNumber_VHU    = 57594    #
 DeviceNumber_SCS    = 57595    #
 DeviceNumber_PWR    = 57596    #
 DeviceNumber_CTRL   = 57597    #
-
 
 ModelNumber_FE      = 2875     # short antifier-value=0x8385, Tacx Neo=2875
 SerialNumber_FE     = 19590705 # int   1959-7-5

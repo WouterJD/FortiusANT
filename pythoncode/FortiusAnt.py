@@ -3,9 +3,9 @@
 #-------------------------------------------------------------------------------
 __version__ = "2020-12-20"
 # 2020-12-20    Constants used from constants.py
+# 2020-11-18    Logfile shows what version is started; windows exe or python
 # 2020-12-16    Stopping the program is no longer possible from the head unit
 #                   (#164 - to restart you have to get off your bike)
-# 2020-11-18    Logfile shows what version is started; windows exe or python
 # 2020-11-13    Logfile was not closed on end
 # 2020-11-05    New files added, githubWindowTitle() used
 # 2020-05-24    WindowTitle in logfile
