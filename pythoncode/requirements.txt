@@ -4,5 +4,6 @@ pyinstaller
 pyusb
 pygame
 pynput
+requests
 wxPython
 wheel
