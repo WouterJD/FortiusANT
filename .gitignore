@@ -3,6 +3,7 @@
 *.lnk
 *.tcx
 *.json
+Thumbs.db
 pythoncode/build/
 pythoncode/dist/
 Miscellaneous/
