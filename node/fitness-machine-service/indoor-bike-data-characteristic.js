@@ -81,14 +81,16 @@ class IndoorBikeDataCharacteristic extends  bleno.Characteristic {
     //   offset += 2;
     // }
 
-    // Write the flags
-    flagField.writeUInt16LE(flags);
+    if (flags) {
+      // Write the flags
+      flagField.writeUInt16LE(flags);
 
-    let finalbuffer = buffer.slice(0, offset);
-    debug(finalbuffer);
+      let finalbuffer = buffer.slice(0, offset);
+      debug(finalbuffer);
 
-    if (this.updateValueCallback) {
-      this.updateValueCallback(finalbuffer);
+      if (this.updateValueCallback) {
+        this.updateValueCallback(finalbuffer);
+      }
     }
 
     return this.RESULT_SUCCESS;
