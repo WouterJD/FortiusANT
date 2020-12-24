@@ -1,8 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-18"
+__version__ = "2020-12-20"
+# 2020-12-20    Constants used from constants.py
 # 2020-11-18    Logfile shows what version is started; windows exe or python
+# 2020-12-16    Stopping the program is no longer possible from the head unit
+#                   (#164 - to restart you have to get off your bike)
 # 2020-11-13    Logfile was not closed on end
 # 2020-11-05    New files added, githubWindowTitle() used
 # 2020-05-24    WindowTitle in logfile
@@ -10,6 +13,8 @@ __version__ = "2020-11-18"
 #               This module contains program startup, GUI-binding and
 #               multi-processing functionality only
 #-------------------------------------------------------------------------------
+from   constants                        import mode_Power, mode_Grade, UseGui
+
 import argparse
 from datetime                           import datetime
 import multiprocessing
@@ -23,7 +28,6 @@ import struct
 import threading
 import time
 import usb.core
-import wx
 
 import antDongle            as ant
 import antHRM               as hrm
@@ -33,12 +37,15 @@ import debug
 import logfile
 import FortiusAntBody
 import FortiusAntCommand    as cmd
-import FortiusAntGui        as gui
 from   FortiusAntTitle                  import githubWindowTitle
-import RadarGraph
 import structConstants      as sc
 import TCXexport
 import usbTrainer
+
+if UseGui:
+    import wx
+    import FortiusAntGui        as gui
+    import RadarGraph
 
 #-------------------------------------------------------------------------------
 # Directives for this module
@@ -134,7 +141,7 @@ class frmFortiusAnt(gui.frmFortiusAntGui):
         if   Buttons == usbTrainer.EnterButton: self.Navigate_Enter()
         elif Buttons == usbTrainer.DownButton:  self.Navigate_Down()
         elif Buttons == usbTrainer.UpButton:    self.Navigate_Up()
-        elif Buttons == usbTrainer.CancelButton:self.Navigate_Back()
+        elif Buttons == usbTrainer.CancelButton:pass    # self.Navigate_Back()
         else:                                   pass
         return True
 
@@ -176,9 +183,9 @@ class clsFortiusAntConsole:
         if delta >= 1 and (not clv.gui or debug.on(debug.Application)):
             self.LastTime = time.time()           # Time in seconds
 
-            if   iTargetMode == gui.mode_Power:
+            if   iTargetMode == mode_Power:
                 sTarget = "%3.0fW" % iTargetPower
-            elif iTargetMode == gui.mode_Grade:
+            elif iTargetMode == mode_Grade:
                 sTarget = "%3.1f%%" % fTargetGrade
                 if iTargetPower > 0:                         # 2020-01-22
                     sTarget += "(%iW)" % iTargetPower        # Target power added for reference
@@ -284,7 +291,7 @@ class frmFortiusAntChild(gui.frmFortiusAntGui):
         if   Buttons == usbTrainer.EnterButton: self.Navigate_Enter()
         elif Buttons == usbTrainer.DownButton:  self.Navigate_Down()
         elif Buttons == usbTrainer.UpButton:    self.Navigate_Up()
-        elif Buttons == usbTrainer.CancelButton:self.Navigate_Back()
+        elif Buttons == usbTrainer.CancelButton:pass    # self.Navigate_Back()
         else:                                   pass
         return True
 

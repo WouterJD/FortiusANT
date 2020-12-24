@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-04"
+__version__ = "2020-12-20"
+# 2020-12-20    Constants moved to constants.py
+# 2020-12-16    Force refresh when main inputs zero
 # 2020-11-04    WindowTitle separated into FortiusAntTitle.py
 # 2020-10-01    Version 3.2.2:
 #               - Enable manual mode withoout ANT dongle
@@ -56,6 +58,7 @@ import time
 import wx
 import wx.lib.agw.speedmeter as SM
 
+from   constants                    import mode_Power, mode_Grade
 import debug
 import logfile
 import FortiusAntCommand     as cmd
@@ -66,10 +69,6 @@ import RadarGraph
 # constants
 #-------------------------------------------------------------------------------
 LargeTexts          = True  # 2020-02-07
-
-mode_Basic          = 0     # Basic Resistance
-mode_Power          = 1     # Target Power
-mode_Grade          = 2     # Target Resistance
 
 bg                  = wx.Colour(220,220,220) # Background colour [for self.Speedometers]
 colorTacxFortius    = wx.Colour(120,148,227)
@@ -703,6 +702,13 @@ class frmFortiusAntGui(wx.Frame):
         self.PowerArray = numpy.append(self.PowerArray, iPower)     # Add new value to array
         self.PowerArray = numpy.delete(self.PowerArray, 0)          # Remove oldest from array
         iPowerMean = int(numpy.mean(self.PowerArray))               # Calculate average
+
+        # ----------------------------------------------------------------------
+        # Force refresh to avoid ghost values at end-of-loop
+        # ----------------------------------------------------------------------
+        if fSpeed == 0 and iRevs == 0 and iPower == 0:
+            iPowerMean      = 0 # Avoid that meter remains > 0
+            self.LastFields = 0 # Force refresh
 
         # ----------------------------------------------------------------------
         # Values are needed on OnPaint() event
