@@ -86,8 +86,8 @@ def BroadcastTrainerDataMessage (Cadence, CurrentPower, SpeedKmh, HeartRate):
         EventCount       += 1
         AccumulatedPower += CurrentPower
 
-        EventCount       &= 0xff    # roll-over at 255
-        AccumulatedPower &= 0xffff  # roll-over at 65535
+        EventCount        = int(EventCount)       & 0xff    # roll-over at 255
+        AccumulatedPower  = int(AccumulatedPower) & 0xffff  # roll-over at 65535
 
         #-----------------------------------------------------------------------
         # Send specific trainer data

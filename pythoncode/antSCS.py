@@ -55,10 +55,10 @@ def BroadcastMessage (_PedalEchoTime, PedalEchoCount, SpeedKmh, Cadence):
     #-------------------------------------------------------------------------
     # Rollover after 0xffff
     #-------------------------------------------------------------------------
-    CadenceEventTime  &= 0xffff  # roll-over at 65535 = 64 seconds
-    CadenceEventCount &= 0xffff  # roll-over at 65535
-    SpeedEventTime    &= 0xffff  # roll-over at 65535 = 64 seconds
-    SpeedEventCount   &= 0xffff  # roll-over at 65535
+    CadenceEventTime  = int(CadenceEventTime)  & 0xffff  # roll-over at 65535 = 64 seconds
+    CadenceEventCount = int(CadenceEventCount) & 0xffff  # roll-over at 65535
+    SpeedEventTime    = int(SpeedEventTime)    & 0xffff  # roll-over at 65535 = 64 seconds
+    SpeedEventCount   = int(SpeedEventCount)   & 0xffff  # roll-over at 65535
 
     #-------------------------------------------------------------------------
     # Prepare for next event

@@ -521,6 +521,14 @@ def Runoff(self):
 # ------------------------------------------------------------------------------
 def Tacx2Dongle(self):
     global clv, AntDongle, TacxTrainer, bleCTP
+    #---------------------------------------------------------------------------
+    # ANT devices are active from here
+    #---------------------------------------------------------------------------
+    logfile.Console ('---------- ANT-devices are activated ------------')
+
+    #---------------------------------------------------------------------------
+    # ANT loop
+    #---------------------------------------------------------------------------
     Restart = False
     while True:
         rtn = Tacx2DongleSub(self, Restart)
@@ -530,6 +538,12 @@ def Tacx2Dongle(self):
             Restart = True
         else:
             break
+
+    #---------------------------------------------------------------------------
+    # ANT devices are not active anymore
+    #---------------------------------------------------------------------------
+    logfile.Console ('---------- ANT-devices are deactivated ----------')
+
     return rtn
 
 def Tacx2DongleSub(self, Restart):

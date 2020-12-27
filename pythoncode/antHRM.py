@@ -77,8 +77,8 @@ def BroadcastHeartrateMessage (HeartRate):
     #-------------------------------------------------------------------------
     # Prepare for next event
     #-------------------------------------------------------------------------
-    Interleave += 1           # Increment and ...
-    Interleave &= 0xff        # maximize to 255
+    Interleave += 1                       # Increment and ...
+    Interleave  = int(Interleave) & 0xff  # maximize to 255
 
     #-------------------------------------------------------------------------
     # Return message to be sent
