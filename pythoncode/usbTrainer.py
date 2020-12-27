@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-21"
+__version__ = "2020-12-27"
+# 2020-12-27    #173 message < 40 received; retry implemented
 # 2020-12-21    #173 T1946 was not detected as motor brake.
 # 2020-12-20    Constants used from constants.py
 # 2020-12-10    Removed: -u uphill
@@ -1373,6 +1374,33 @@ class clsTacxUsbTrainer(clsTacxTrainer):
         return data
 
     #---------------------------------------------------------------------------
+    # U S B _ R e a d _ r e t r y 4 x 4 0
+    #---------------------------------------------------------------------------
+    # function  Same plus:
+    #           At least 40 bytes must be returned, retry 4 times
+    #---------------------------------------------------------------------------
+    def USB_Read_retry4x40(self):
+        retry = 4
+        data  = self.USB_Read()         # Try without a sleep first!
+        while retry and len(data) < 40:
+            if debug.on(debug.Any):
+                logfile.Write ('Retry because short buffer received')
+            time.sleep(0.1)             # 2020-09-29 short delay @RogerPleijers
+            data = self.USB_Read()
+            retry -= 1
+
+        if len(data) < 40:
+            # 2020-09-29 the buffer is ignored when too short (was processed before)
+            logfile.Console('Tacx returns insufficient data, len=%s' % len(data))
+            if self.clv.PedalStrokeAnalysis:
+                logfile.Console('To resolve, try to run without Pedal Stroke Analysis.')
+            else:
+                logfile.Console('To resolve, check all cabling for loose contacts.')
+
+        return data
+
+
+    #---------------------------------------------------------------------------
     # S e n d T o T r a i n e r
     #---------------------------------------------------------------------------
     # input     UsbDevice, TacxMode
@@ -1976,23 +2004,10 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         #   As said this SHOULD occur seldomly; if frequently it's bad behaviour
         #   at this location. It is logged so that we don't mis it.
         #-----------------------------------------------------------------------
-        retry = 4
-        data  = array.array('B', [])        # Empty Binary array
-        data  = self.USB_Read()             # Try without a sleep first!
-        while retry and len(data) < 40:
-            if debug.on(debug.Any):
-                logfile.Write ('Retry because short buffer received')
-            time.sleep(0.1)             # 2020-09-29 short delay @RogerPleijers
-            data = self.USB_Read()
-            retry -= 1
+        data  = self.USB_Read_retry4x40()
 
         if len(data) < 40:
-            # 2020-09-29 the buffer is ignored when too short (was processed before)
-            logfile.Console('Tacx returns insufficient data, len=%s' % len(data))
-            if self.clv.PedalStrokeAnalysis:
-                logfile.Console('To resolve, try to run without Pedal Stroke Analysis.')
-            else:
-                logfile.Console('To resolve, check all cabling for loose contacts.')
+            pass
         else:
             #-----------------------------------------------------------------------
             # Define buffer format
@@ -2119,8 +2134,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         #-----------------------------------------------------------------------
         # Read from trainer
         #-----------------------------------------------------------------------
-        data  = array.array('B', [])        # Empty Binary array
-        data  = self.USB_Read()
+        data  = self.USB_Read_retry4x40()
 
         if len(data) < 40:
             pass
