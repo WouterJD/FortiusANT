@@ -175,29 +175,29 @@ GNS_Calibration_State_Torque_Error  = 0x83
 #---------------------------------------------------------------------------
 # Tacx Genius alarm bits
 #---------------------------------------------------------------------------
-GNS_Alarm_Overtemperature       = 0x10001
-GNS_Alarm_Overvoltage           = 0x10004
-GNS_Alarm_GenericError          = 0x10008
-GNS_Alarm_Overcurrent           = 0x10020
-GNS_Alarm_SpeedTooHigh          = 0x10080
-GNS_Alarm_Undervoltage          = 0x10100
-GNS_Alarm_DownhillLimited       = 0x14000
-GNS_Alarm_CommunicationError    = 0x18000
+GNS_Alarm_Overtemperature       = 0x0001
+GNS_Alarm_Overvoltage           = 0x0004
+GNS_Alarm_GenericError          = 0x0008
+GNS_Alarm_Overcurrent           = 0x0020
+GNS_Alarm_SpeedTooHigh          = 0x0080
+GNS_Alarm_Undervoltage          = 0x0100
+GNS_Alarm_DownhillLimited       = 0x4000
+GNS_Alarm_CommunicationError    = 0x8000
 
 #---------------------------------------------------------------------------
 # Tacx Bushido head unit alarm bits
 #---------------------------------------------------------------------------
-BHU_Alarm_Temperature_1      = 0x50001
-BHU_Alarm_Temperature_2      = 0x50002
-BHU_Alarm_Temperature_3      = 0x50003
-BHU_Alarm_Temperature_4      = 0x50004
-BHU_Alarm_Temperature_5      = 0x50005
-BHU_Alarm_Overvoltage        = 0x50008
-BHU_Alarm_Overcurrent_1      = 0x50010
-BHU_Alarm_Overcurrent_2      = 0x50020
-BHU_Alarm_SpeedTooHigh       = 0x50080
-BHU_Alarm_Undervoltage       = 0x50100
-BHU_Alarm_CommunicationError = 0x50100
+BHU_Alarm_Temperature_1      = 0x0001
+BHU_Alarm_Temperature_2      = 0x0002
+BHU_Alarm_Temperature_3      = 0x0003
+BHU_Alarm_Temperature_4      = 0x0004
+BHU_Alarm_Temperature_5      = 0x0005
+BHU_Alarm_Overvoltage        = 0x0008
+BHU_Alarm_Overcurrent_1      = 0x0010
+BHU_Alarm_Overcurrent_2      = 0x0020
+BHU_Alarm_SpeedTooHigh       = 0x0080
+BHU_Alarm_Undervoltage       = 0x0100
+BHU_Alarm_CommunicationError = 0x8000
 
 
 DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT

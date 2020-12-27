@@ -1844,7 +1844,8 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
             msg = "Tacx Bushido paired: %d" % self._DeviceNumber
             if self.__State == BushidoState.RequestMode:
                 msg += " - Configuring head unit"
-            if self._AlarmStatus & ant.BHU_Alarm_Temperature_5:
+            if self._AlarmStatus & ant.BHU_Alarm_Temperature_5 \
+                    == ant.BHU_Alarm_Temperature_5:
                 msg += " TEMPERATURE TOO HIGH!"
             if self._AlarmStatus & ant.BHU_Alarm_Overvoltage:
                 msg += " OVERVOLTAGE!"
@@ -1864,7 +1865,7 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
         # ----------------------------------------------------------------------
         # Map head unit buttons
         # ----------------------------------------------------------------------
-        Keycode = self.__Buttons & 0x0F
+        Keycode = self.__Buttons & 0x0F     # ignore key press duration
         if   Keycode == ant.VHU_Button_None:  self.Buttons = 0
         elif Keycode == ant.VHU_Button_Left:  self.Buttons = CancelButton
         elif Keycode == ant.VHU_Button_Up:    self.Buttons = UpButton
@@ -1904,7 +1905,7 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
             self.__KeepAliveTime = time.time()
 
         # ---------------------------------------------------------------
-        # Request PC mode (repeat until response received)
+        # Request mode switch (repeat until response received)
         # ---------------------------------------------------------------
         elif self.__State == BushidoState.RequestMode and QuarterSecond:
             info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode(self.Channel, self.__ModeRequested)
