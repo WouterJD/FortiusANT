@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v4.1.1"              # Double quotes, see below!
+WindowTitle = "Fortius Antifier v4.2 test II"              # Double quotes, see below!
+# 2020-12-20    Version 4.2 II  #173 Version 4.0 Communicates Much Higher Power vs. 3.8
+#                               #184 Power in Rouvy issue
 # 2020-12-20    Version 4.1.1   #137 Improvements for Raspberry PI
 # 2020-12-20    Version 4.1.c   #103 Implement Bluetooth support
 # 2020-12-15    Version 4.1.b   #147 Improve run-off procedure
