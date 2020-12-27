@@ -75,8 +75,8 @@ def BroadcastTrainerDataMessage (Cadence, CurrentPower, SpeedKmh, HeartRate):
         Distance                = ElapsedTime * Speed     # meters
         DistanceTravelled      += Distance                # meters
 
-        AccumulatedTime        &= 0xff    # roll-over at 255 (64 seconds)
-        DistanceTravelled      &= 0xff    # roll-over at 255
+        AccumulatedTime        = int(AccumulatedTime)   & 0xff # roll-over at 255 (64 seconds)
+        DistanceTravelled      = int(DistanceTravelled) & 0xff # roll-over at 255
 
         # comment = "(General fe data)"
         info    = ant.msgPage16_GeneralFEdata (ant.channel_FE, AccumulatedTime, DistanceTravelled, Speed * 1000, HeartRate)
