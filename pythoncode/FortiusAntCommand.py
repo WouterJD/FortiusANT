@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-18"
+__version__ = "2020-12-30"
+# 2020-12-30    added: trainer types "Vortex", "Bushido" and "Genius" (-t option)
+#               "i-Vortex" is deprecated
+#               fix typo in power factor error message
 # 2020-12-18    added: -b for Bluetooth support
 #               used:  UseBluetooth and UseGui
 # 2020-12-15    added: -R for Runoff procedure
@@ -168,7 +171,7 @@ class CommandLineVariables(object):
         parser.add_argument('-t', '--TacxType', help=ant_tacx_help, metavar='',                             required=False, default=False, \
                 choices=ant_tacx_models + ['i-Vortex']) # i-Vortex is still allowed for compatibility
 
-        parser.add_argument('-x','--exportTCX', help='Export TCX file',                                     required=False, action='store_true')
+        parser.add_argument   ('-x','--exportTCX', help='Export TCX file',                                     required=False, action='store_true')
 
         #-----------------------------------------------------------------------
         # Parse

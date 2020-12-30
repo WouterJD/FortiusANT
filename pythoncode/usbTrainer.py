@@ -1,7 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-21"
+__version__ = "2020-12-30"
+# 2020-12-30    Added: clsTacxAntTrainer, clsTacxAntBushidoTrainer,
+#               clsTacxAntGeniusTrainer, GeniusState, BushidoState
+#               (support for Tacx Genius and Tacx Bushido trainers)
+#               Fix formula for wind resistance (with tail wind)
 # 2020-12-21    #173 T1946 was not detected as motor brake.
 # 2020-12-20    Constants used from constants.py
 # 2020-12-10    Removed: -u uphill

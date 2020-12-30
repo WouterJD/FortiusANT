@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-24"
+__version__ = "2020-12-30"
+# 2020-12-30    Tacx Genius and Bushido implemented
 # 2020-12-24    usage of UseGui implemented
 #               If -b is expected, antDongle is optional.
 # 2020-12-20    Constants used from constants.py

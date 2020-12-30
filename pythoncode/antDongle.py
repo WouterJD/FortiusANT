@@ -1,7 +1,10 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-12-14"
+__version__ = "2020-12-30"
+# 2020-12-30    Tacx Genius/Bushido data pages, constants and channel
+#               configuration implemented
+#               Added: msg44_ChannelSearchTimeout
 # 2020-12-14    ANT+ Control command implemented
 # 2020-11-18    Retry added when intiating USB dongle as suggested by @martin-vi
 # 2020-11-03    If there is no dongle, Write() and Read() become completely
@@ -909,7 +912,7 @@ class clsAntDongle():
             msg42_AssignChannel         (channel_GNS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
             msg51_ChannelID             (channel_GNS_s, DeviceNumber, DeviceTypeID_GNS, TransmissionType_IC),
             msg45_ChannelRfFrequency    (channel_GNS_s, RfFrequency_2460Mhz),
-            msg43_ChannelPeriod         (channel_GNS_s, ChannelPeriod=0x1000),
+            msg43_ChannelPeriod         (channel_GNS_s, ChannelPeriod=0x1000), # keep searching indefinitely
             msg44_ChannelSearchTimeout  (channel_GNS_s, 255),
             msg60_ChannelTransmitPower  (channel_GNS_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_GNS_s),
@@ -928,7 +931,7 @@ class clsAntDongle():
             msg45_ChannelRfFrequency    (channel_GNS_s, RfFrequency_2460Mhz),
             msg43_ChannelPeriod         (channel_GNS_s, ChannelPeriod=0x1000),
             msg60_ChannelTransmitPower  (channel_GNS_s, TransmitPower_0dBm),
-            msg44_ChannelSearchTimeout  (channel_GNS_s, 255),
+            msg44_ChannelSearchTimeout  (channel_GNS_s, 255),  # keep searching indefinitely
             msg4B_OpenChannel           (channel_GNS_s),
             msg4D_RequestMessage        (channel_GNS_s, msgID_ChannelID)
         ]
