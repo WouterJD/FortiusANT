@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-15"
+__version__ = "2020-12-20"
+# 2020-12-20    Constants used from constants.py
 # 2020-11-15    Distance added to produce a valid TCX
 # 2020-11-05    First version
 #-------------------------------------------------------------------------------
@@ -9,7 +10,7 @@ import time
 from   datetime         import datetime
 
 import logfile
-from   FortiusAntGui    import mode_Power, mode_Grade
+from   constants                    import mode_Power, mode_Grade
 #-------------------------------------------------------------------------------
 # TCX template
 #-------------------------------------------------------------------------------

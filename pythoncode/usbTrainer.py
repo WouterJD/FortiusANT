@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-10"
+__version__ = "2020-12-21"
+# 2020-12-21    #173 T1946 was not detected as motor brake.
+# 2020-12-20    Constants used from constants.py
 # 2020-12-10    Removed: -u uphill
 # 2020-12-03    For Magnetic brake -r uses the resistance table [0...13]
 #               introduced: Resistance2PowerMB(), under investigation!!
@@ -118,10 +120,10 @@ import sys
 import time
 
 import antDongle         as ant
+from   constants                    import mode_Power, mode_Grade
 import debug
 import logfile
 import structConstants   as sc
-from   FortiusAntGui                import mode_Power, mode_Grade
 import FortiusAntCommand as cmd
 import fxload
 
@@ -2058,7 +2060,7 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     #		factor 301 would be good (8-11-2019)
     #---------------------------------------------------------------------------
     # @switchable 2020-12-02:
-    # If you mean: is there some simple explanation why the factor 289.75 is?
+    # If you mean: is there some simple explanation why the factor 289.75 is? 
     # Unfortunately I did not find one. Maybe it is just related to the way the
     # speed was orignally measured on the Fortius and there isn't one.
     # What I did to calculate the factor was this: with a roll diameter of 29mm,
@@ -2068,7 +2070,7 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     # v and compared the value sent over USB.
     # I also compared the value calculated by TTS and it agreed well with the
     # theoretical one. This was repeated 60 times for different speeds, the factor
-    # calculated using linear regression. It may in fact be closer to 289.76,
+    # calculated using linear regression. It may in fact be closer to 289.76, 
     # but that ist irrelevant in practice.
     # It definitely isn't 280 or 300, at least on my unit.
     #---------------------------------------------------------------------------
@@ -2466,6 +2468,12 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         self.Refresh(True, modeStop)
         time.sleep(0.1)                            # Allow head unit time to process
 
+        #---------------------------------------------------------------------------
+        # Only headunit T1932 supports Magnetic brake; all others Motor Brake only
+        #---------------------------------------------------------------------------
+        if self.Headunit != hu1932:
+            self.MotorBrake = True
+
         if True:
             #-----------------------------------------------------------------------
             # Check motor brake version
@@ -2505,7 +2513,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     # Power formula for Magnetic brake; thanks to @swichabl and @cyclingflow
     #---------------------------------------------------------------------------
     # The formula used is this:
-    # power = speed * (scale factor * resistance *
+    # power = speed * (scale factor * resistance * 
     #                     speed / (speed + critical speed) + rolling resistance)
     # So there are just two parameters (scale factor and critical speed) that
     # would be the same for everyone + rolling resistance which should
@@ -2924,10 +2932,16 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             self.MotorBrakeUnitSerial = d                       # remaining
 
             #-----------------------------------------------------------------------
-            # If T1942 or T1942 motorbrake, then calibration is supported
-            # e.g. Headunit T1932 does not return a value for T1901
+            # If T1941 or T1946 motorbrake, then calibration is supported AND
+            #       a different PowerCurve is used.
+            #
+            # Note that Headunit T1932 does not return a value for T1901
+            #       Note that, only the T1932 controls a magnetic brake.
+            #
+            # #173 The possible motor brakes are T1941 (230V) and T1946 (110V)
+            #       Controlled by T1932 and T1942 headunits.
             #-----------------------------------------------------------------------
-            if self.MotorBrakeUnitType in (41, 42):
+            if self.MotorBrakeUnitType in (41, 46):
                 self.MotorBrake = True
 
             if False:

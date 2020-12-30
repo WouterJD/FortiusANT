@@ -1,8 +1,6 @@
-keyboard
-numpy != 1.19.4
+numpy
 pyinstaller
 pyusb
-pygame
-pynput
+requests
 wxPython
 wheel
