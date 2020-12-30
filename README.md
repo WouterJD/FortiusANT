@@ -4,10 +4,12 @@ FortiusANT enables a pre-smart Tacx trainer (usb- or ANT-connected) to communica
 FortiusANT is running on the computer (Windows, Linux or MacOS) where the trainer is connected and broadcasts the ANT+ signal, using a dongle, to another computer or tablet.
 You might also run TrainerRoad or Zwift on the same computer and then two ANT+ dongles on the same computer are required.
 
-## Supported tacx trainers
-USB: Tacx Flow, Fortius, i-Flow, i-Flow, i-Magic with T1902, T1904, T1932, T1942 head units
+## Supported Tacx trainers
+USB: Tacx Flow, Fortius, i-Flow, i-Magic with T1902, T1904, T1932, T1942 head units
 
-ANT: i-Vortex
+ANT: Tacx i-Vortex, Genius, Bushido (with T1982 head unit)
+
+Bushido support is still *experimental* at this time (please consider providing feedback in https://github.com/WouterJD/FortiusANT/issues/117).
 
 ## Communication with Trainer Road, Rouvy, Zwift and others
 Communication with a Cycling Training Program (CTP) can be done using an ANT- or BLE-dongle (BLE = Bluetooth Low Energy)
