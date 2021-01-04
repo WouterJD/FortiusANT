@@ -1,8 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-27"
+__version__ = "2020-12-28"
+# 2020-12-28    AccumulatedPower not negative
 # 2020-12-27    Interleave and EventCount more according specification
+#               see comment in antPWR.py for more info.
 # 2020-05-07    devAntDongle not needed, not used
 # 2020-05-07    pylint error free
 # 2020-02-18    First version, split-off from FortiusAnt.py
@@ -84,7 +86,7 @@ def BroadcastTrainerDataMessage (Cadence, CurrentPower, SpeedKmh, HeartRate):
 
     else:
         EventCount       += 1
-        AccumulatedPower += CurrentPower
+        AccumulatedPower += max(0, CurrentPower)            # No decrement allowed
 
         EventCount        = int(EventCount)       & 0xff    # roll-over at 255
         AccumulatedPower  = int(AccumulatedPower) & 0xffff  # roll-over at 65535

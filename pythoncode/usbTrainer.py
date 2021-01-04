@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-27"
+__version__ = "2021-01-04"
+# 2021-01-04    lib_programname used to get correct dirname
+# 2020-12-29    message < 40; error message extended (signal AND power)
 # 2020-12-27    #173 message < 40 received; retry implemented
 # 2020-12-21    #173 T1946 was not detected as motor brake.
 # 2020-12-20    Constants used from constants.py
@@ -112,6 +114,7 @@ __version__ = "2020-12-27"
 # 2019-12-25    Target grade implemented; modes defined
 #-------------------------------------------------------------------------------
 import array
+import lib_programname
 import usb.core
 import os
 import random
@@ -155,7 +158,9 @@ modeMotorBrake  = 10        # To distinguish from the previous real modes
 if getattr(sys, 'frozen', False):
     dirname = sys._MEIPASS                     # pylint: disable=maybe-no-member
 else:
-    dirname = os.path.dirname(__file__)
+    # dirname = os.path.dirname(__file__)      # not always desired result!!
+    dirname = str(lib_programname.get_path_executed_script())  # type: pathlib.Path
+    dirname = os.path.dirname(dirname)
 
 imagic_fw  = os.path.join(dirname, 'tacximagic_1902_firmware.hex')
 fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
@@ -1395,7 +1400,7 @@ class clsTacxUsbTrainer(clsTacxTrainer):
             if self.clv.PedalStrokeAnalysis:
                 logfile.Console('To resolve, try to run without Pedal Stroke Analysis.')
             else:
-                logfile.Console('To resolve, check all cabling for loose contacts.')
+                logfile.Console('To resolve, check all (signal AND power) cabling for loose contacts.')
 
         return data
 

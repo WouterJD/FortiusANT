@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-12-14"
+__version__ = "2020-12-28"
+# 2020-12-28    msgPage16_GeneralFEdata commented
 # 2020-12-14    ANT+ Control command implemented
 # 2020-11-18    Retry added when intiating USB dongle as suggested by @martin-vi
 # 2020-11-03    If there is no dongle, Write() and Read() become completely
@@ -1696,7 +1697,16 @@ def msgPage16_GeneralFEdata (Channel, ElapsedTime, DistanceTravelled, Speed, Hea
     DistanceTravelled   = int(min(  0xff, DistanceTravelled ))
     Speed               = int(min(0xffff, Speed             ))
     HeartRate           = int(min(  0xff, HeartRate         ))
-    Capabilities        = 0x30 | 0x03 | 0x00 | 0x00 # IN_USE | HRM | Distance | Speed
+
+    # Old: Capabilities = 0x30 | 0x03 | 0x00 | 0x00 # IN_USE | HRM | Distance | Speed
+    #               bit  7......0   #185 Rewritten as below for better documenting bit-pattern
+    HRM              = 0b00000011 # 0b____ __xx bits 0-1  3 = hand contact sensor    (2020-12-28: Unclear why this option chosen)
+    Distance         = 0b00000000 # 0b____ _x__ bit 2     0 = No distance in byte 3  (2020-12-28: Unclear why this option chosen)
+    VirtualSpeedFlag = 0b00000000 # 0b____ x___ bit 3     0 = Real speed in byte 4/5 (2020-12-28: Could be virtual speed)
+    FEstate          = 0b00110000 # 0b_xxx ____ bits 4-6  3 = IN USE
+    LapToggleBit     = 0b00000000 # 0bx___ ____ bit 7     0 = No lap toggle
+
+    Capabilities = HRM | Distance | VirtualSpeedFlag | FEstate | LapToggleBit
 
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)

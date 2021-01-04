@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-27"
+__version__ = "2020-12-28"
+# 2020-12-28    AccumulatedPower not negative
 # 2020-12-27    Interleave and EventCount improved according
 #               D00001086_ANT+Device_Profile-_Bicycle_Power_Rev_5.1.pdf
 #               Implementation fitted to the definitions in the profile:
@@ -19,6 +20,8 @@ __version__ = "2020-12-27"
 #                   The accumulated power field rolls over at 65.535kW
 #               Refer to (regarding roll over values):
 #                   D000001231_-_ANT+_Device_Profile_-_Fitness_Equipment_-_Rev_5.0_(6).pdf
+#                   9.1.1 Calculating accumulated values
+#                       NOTE: All accumulating message fields must use only positive values.
 #                   9.1.2 Receiving and Calculating Data from Accumulated Values
 #               Most important change: Interleave counting is separate from 
 #                   the AccumulatedPower related EventCount.
@@ -51,7 +54,7 @@ def BroadcastMessage (CurrentPower, Cadence):
 
     else:
         EventCount       += 1
-        AccumulatedPower += CurrentPower
+        AccumulatedPower += max(0, CurrentPower)            # No decrement allowed
 
         EventCount        = int(EventCount)       & 0xff    # roll-over at 255
         AccumulatedPower  = int(AccumulatedPower) & 0xffff  # roll-over at 65535

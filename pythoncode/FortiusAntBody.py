@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-24"
+__version__ = "2020-12-27"
+# 2020-12-27    Inform user of (de)activation of ANT/BLE devices
 # 2020-12-24    usage of UseGui implemented
 #               If -b is expected, antDongle is optional.
 # 2020-12-20    Constants used from constants.py
@@ -521,14 +522,6 @@ def Runoff(self):
 # ------------------------------------------------------------------------------
 def Tacx2Dongle(self):
     global clv, AntDongle, TacxTrainer, bleCTP
-    #---------------------------------------------------------------------------
-    # ANT devices are active from here
-    #---------------------------------------------------------------------------
-    logfile.Console ('---------- ANT-devices are activated ------------')
-
-    #---------------------------------------------------------------------------
-    # ANT loop
-    #---------------------------------------------------------------------------
     Restart = False
     while True:
         rtn = Tacx2DongleSub(self, Restart)
@@ -538,12 +531,6 @@ def Tacx2Dongle(self):
             Restart = True
         else:
             break
-
-    #---------------------------------------------------------------------------
-    # ANT devices are not active anymore
-    #---------------------------------------------------------------------------
-    logfile.Console ('---------- ANT-devices are deactivated ----------')
-
     return rtn
 
 def Tacx2DongleSub(self, Restart):
@@ -816,6 +803,18 @@ def Tacx2DongleSub(self, Restart):
         if debug.on(debug.Any): logfile.Console("Tacx2Dongle; Pedal Stroke Analysis active")
     else:
         CycleTime = CycleTimeANT    # Seconds, default = 0.25 (inspired by 4Hz ANT+)
+
+    #---------------------------------------------------------------------------
+    # ANT-, BLE- devices are active from here (after calibration!)
+    #---------------------------------------------------------------------------
+    s = ''
+    if AntDongle.OK: s = 'ANT-'
+    if clv.ble:
+        if s: s += ' and '
+        s += 'BLE-'
+    ActivationMsg = '---------- %sdevices are activated ----------' % s
+    if not Restart:
+        logfile.Console (ActivationMsg)
 
     #---------------------------------------------------------------------------
     # Our main loop!
@@ -1443,12 +1442,14 @@ def Tacx2DongleSub(self, Restart):
     # - Create TCXexport
     # - Close  connection with bluetooth CTP
     # - Stop the Tacx trainer
+    # - Inform user that ANT/BLE is deactivated
     #---------------------------------------------------------------------------
     if not AntDongle.DongleReconnected:
         if clv.exportTCX: tcx.Stop()
         if clv.ble:       bleCTP.Close()
         self.SetMessages(Dongle=AntDongle.Message + bleCTP.Message)
         TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
+        logfile.Console (ActivationMsg.replace('activated', 'deactivated'))
 
     #---------------------------------------------------------------------------
     # Stop devices

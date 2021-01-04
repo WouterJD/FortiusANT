@@ -1,4 +1,5 @@
 keyboard
+lib_programname
 numpy
 pyinstaller
 pyusb
