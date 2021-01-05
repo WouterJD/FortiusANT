@@ -1,7 +1,6 @@
-usage: FortiusAntCommand.py [-h] [-a] [-A] [-c CALIBRATERR] [-d DEBUG]
-                            [-D ANTDEVICEID] [-g] [-G GRADEADJUST] [-H HRM]
-                            [-m] [-M] [-n] [-p FACTOR] [-P] [-r] [-s]
-                            [-t TACXTYPE] [-x]
+usage: FortiusAnt.py [-h] [-a] [-A] [-b] [-c CALIBRATERR] [-d DEBUG]
+                     [-D ANTDEVICEID] [-g] [-G GRADEADJUST] [-H HRM] [-m] [-M]
+                     [-n] [-p FACTOR] [-P] [-r] [-R RUNOFF] [-s] [-t] [-x]
 
 Program to broadcast data from USB Tacx Fortius trainer, and to receive
 resistance data for the trainer
@@ -11,6 +10,7 @@ optional arguments:
   -a, --autostart       Automatically start
   -A, --PedalStrokeAnalysis
                         Pedal Stroke Analysis
+  -b, --ble             (EXPERIMENTAL) Use Bluetooth LE instead of ANT+
   -c CALIBRATERR, --CalibrateRR CALIBRATERR
                         calibrate Rolling Resistance for Magnetic Brake
   -d DEBUG, --debug DEBUG
@@ -32,7 +32,10 @@ optional arguments:
                         seconds)
   -r, --Resistance      Target Resistance = Target Power (to create power
                         curve)
+  -R RUNOFF, --Runoff RUNOFF
+                        maxSpeed/dip/minSpeed/targetTime/power
   -s, --simulate        Simulated trainer to test ANT+ connectivity
-  -t TACXTYPE, --TacxType TACXTYPE
-                        Specify Tacx Type; e.g. i-Vortex, default=autodetect
+  -t , --TacxType       Specify Tacx Type; e.g. Vortex,
+                        default=autodetect.Allowed values are: Vortex, Genius,
+                        Bushido
   -x, --exportTCX       Export TCX file

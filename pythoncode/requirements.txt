@@ -1,10 +1,7 @@
-keyboard
 lib_programname
-numpy
+numpy != 1.19.4
 pyinstaller
 pyusb
-pygame
-pynput
 requests
 wxPython
 wheel

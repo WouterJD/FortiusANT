@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-18"
+__version__ = "2020-12-30"
+# 2020-12-30    added: trainer types "Vortex", "Bushido" and "Genius" (-t option)
+#               "i-Vortex" is deprecated
+#               fix typo in power factor error message
 # 2020-12-18    added: -b for Bluetooth support
 #               used:  UseBluetooth and UseGui
 # 2020-12-15    added: -R for Runoff procedure
@@ -83,7 +86,9 @@ class CommandLineVariables(object):
     PowerFactor     = 1.00
     SimulateTrainer = False
     TacxType        = False
-    Tacx_iVortex    = False
+    Tacx_Vortex    = False
+    Tacx_Genius    = False
+    Tacx_Bushido   = False
 
     #---------------------------------------------------------------------------
     # Runoff, as defined by @cyclingflow
@@ -159,7 +164,13 @@ class CommandLineVariables(object):
         parser.add_argument   ('-R','--Runoff',    help='maxSpeed/dip/minSpeed/targetTime/power',              required=False, default=False)
         parser.add_argument   ('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument   ('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
-        parser.add_argument   ('-t','--TacxType',  help='Specify Tacx Type; e.g. i-Vortex, default=autodetect',required=False, default=False)
+
+        ant_tacx_models = ['Vortex', 'Genius', 'Bushido']
+        ant_tacx_help = 'Specify Tacx Type; e.g. Vortex, default=autodetect.' \
+                      + 'Allowed values are: %s' % ', '.join(ant_tacx_models)
+        parser.add_argument('-t', '--TacxType', help=ant_tacx_help, metavar='',                             required=False, default=False, \
+                choices=ant_tacx_models + ['i-Vortex']) # i-Vortex is still allowed for compatibility
+
         parser.add_argument   ('-x','--exportTCX', help='Export TCX file',                                     required=False, action='store_true')
 
         #-----------------------------------------------------------------------
@@ -271,7 +282,7 @@ class CommandLineVariables(object):
             try:
                 self.PowerFactor = max(0.9, min(1.1, int(args.factor)/100 ))
             except:
-                logfile.Console('Command line error; -f incorrect power factor=%s' % args.factor)
+                logfile.Console('Command line error; -p incorrect power factor=%s' % args.factor)
 
         #-----------------------------------------------------------------------
         # Get GradeAdjust = shift/factor
@@ -318,15 +329,19 @@ class CommandLineVariables(object):
                 if len(s) >= 5 and s[4]: self.RunoffPower    = max( 0, min(500, int  ( s[4] ) )) # Watt
                 assert(self.RunoffMinSpeed <= self.RunoffMaxSpeed - self.RunoffDip * 2 )
             except:
-                logfile.Console('Command line error; -R incorrect Runoff definition %s' % args.Runoff)                
+                logfile.Console('Command line error; -R incorrect Runoff definition %s' % args.Runoff)
 
         #-----------------------------------------------------------------------
         # Get TacxType
         #-----------------------------------------------------------------------
         if args.TacxType:
             self.TacxType = args.TacxType
-            if self.TacxType in ('i-Vortex'):
-                self.Tacx_iVortex = True
+            if 'Vortex' in self.TacxType:
+                self.Tacx_Vortex = True
+            elif 'Genius' in  self.TacxType:
+                self.Tacx_Genius = True
+            elif 'Bushido' in self.TacxType:
+                self.Tacx_Bushido = True
             else:
                 logfile.Console('Command line error; -t incorrect value=%s' % args.TacxType)
                 args.TacxType = False
@@ -334,7 +349,8 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         # Check pedal stroke analysis
         #-----------------------------------------------------------------------
-        if args.PedalStrokeAnalysis and (not args.gui or self.Tacx_iVortex):
+        if args.PedalStrokeAnalysis and (not args.gui or self.Tacx_Vortex or
+                                         self.Tacx_Genius or self.Tacx_Bushido):
             logfile.Console("Pedal stroke analysis is not possible in console mode or this Tacx type")
             self.PedalStrokeAnalysis = False
 
