@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-04"
+__version__ = "2021-01-05"
+# 2021-01-05    Tacxtype Motorbrake added
 # 2021-01-04    lib_programname used to get correct dirname
 # 2020-12-30    Added: clsTacxAntTrainer, clsTacxAntBushidoTrainer,
 #               clsTacxAntGeniusTrainer, GeniusState, BushidoState
@@ -2901,7 +2902,10 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         data  = self.USB_Read_retry4x40()
 
         if len(data) < 40:
-            pass
+            #-----------------------------------------------------------------------
+            # If no message received, set Motorbrake if so specified on command line
+            #-----------------------------------------------------------------------
+            self.MotorBrake = self.clv.Tacx_MotorBrake
         else:
             #-----------------------------------------------------------------------
             # Define buffer format

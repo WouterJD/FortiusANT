@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-30"
+__version__ = "2021-01-05"
+# 2021-01-05    added: trainer type: Motorbrake
 # 2020-12-30    added: trainer types "Vortex", "Bushido" and "Genius" (-t option)
 #               "i-Vortex" is deprecated
 #               fix typo in power factor error message
@@ -86,9 +87,10 @@ class CommandLineVariables(object):
     PowerFactor     = 1.00
     SimulateTrainer = False
     TacxType        = False
-    Tacx_Vortex    = False
-    Tacx_Genius    = False
-    Tacx_Bushido   = False
+    Tacx_Vortex     = False
+    Tacx_Genius     = False
+    Tacx_Bushido    = False
+    Tacx_MotorBrake = False
 
     #---------------------------------------------------------------------------
     # Runoff, as defined by @cyclingflow
@@ -165,8 +167,8 @@ class CommandLineVariables(object):
         parser.add_argument   ('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument   ('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
 
-        ant_tacx_models = ['Vortex', 'Genius', 'Bushido']
-        ant_tacx_help = 'Specify Tacx Type; e.g. Vortex, default=autodetect.' \
+        ant_tacx_models = ['Vortex', 'Genius', 'Bushido', 'Motorbrake']
+        ant_tacx_help = 'Specify Tacx Type; default=autodetect.' \
                       + 'Allowed values are: %s' % ', '.join(ant_tacx_models)
         parser.add_argument('-t', '--TacxType', help=ant_tacx_help, metavar='',                             required=False, default=False, \
                 choices=ant_tacx_models + ['i-Vortex']) # i-Vortex is still allowed for compatibility
@@ -342,6 +344,8 @@ class CommandLineVariables(object):
                 self.Tacx_Genius = True
             elif 'Bushido' in self.TacxType:
                 self.Tacx_Bushido = True
+            elif 'Motorbrake' in self.TacxType:
+                self.Tacx_MotorBrake = True
             else:
                 logfile.Console('Command line error; -t incorrect value=%s' % args.TacxType)
                 args.TacxType = False
