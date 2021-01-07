@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-24"
+__version__ = "2021-01-07"
+# 2021-01-06    settings added (+ missing other files for version check)
 # 2020-12-24    usage of UseGui implemented
 # 2020-12-20    Constants used from constants.py
 # 2020-11-18    Logfile shows what version is started; windows exe or python
@@ -14,7 +15,8 @@ __version__ = "2020-12-24"
 #               This module contains program startup, GUI-binding and
 #               multi-processing functionality only
 #-------------------------------------------------------------------------------
-from   constants                        import mode_Power, mode_Grade, UseGui
+from   constants import mode_Power, mode_Grade, UseGui, UseBluetooth, UseMultiProcessing
+import constants                        #  for __version__
 
 import argparse
 from datetime                           import datetime
@@ -34,11 +36,14 @@ import antDongle            as ant
 import antHRM               as hrm
 import antFE                as fe
 import antPWR               as pwr
+import antSCS               as scs
+import bleDongle
 import debug
 import logfile
 import FortiusAntBody
 import FortiusAntCommand    as cmd
 from   FortiusAntTitle                  import githubWindowTitle
+import settings
 import structConstants      as sc
 import TCXexport
 import usbTrainer
@@ -51,8 +56,7 @@ if UseGui:
 #-------------------------------------------------------------------------------
 # Directives for this module
 #-------------------------------------------------------------------------------
-testMode            = False         # Production version should be False
-useMultiProcessing  = True          # Production version can be either two
+testMode            = False             # Production version should be False
 
 #-------------------------------------------------------------------------------
 # Constants between the two processes, exchanged through the pipe
@@ -63,6 +67,7 @@ cmd_LocateHW            = 19592         # Child->Main; Response = True/False for
 cmd_Runoff              = 19593         # Child->Main; Response = True
 cmd_Tacx2Dongle         = 19594         # Child->Main; Response = True
 cmd_StopButton          = 19595         # Child->Main; Response = True
+cmd_Settings            = 19596         # Child->Main; Response = True
 
 cmd_SetMessages         = 19596         # Main->Child; No response expected
 cmd_SetValues           = 19597         # Main->Child; No response expected
@@ -74,6 +79,24 @@ cmd_PedalStrokeAnalysis = 19598         # Main->Child; No response expected
 # The functions are used to test the multi-processing and/or GUI without
 # being bothered by the actual FortiusAntBody/usbTrainer/antDongle functionality.
 # ==============================================================================
+def Settings(self, pRestartApplication, pclv):
+    global RestartApplication, clv
+    RestartApplication = pRestartApplication
+    clv                = pclv
+
+    if debug.on(debug.Function):
+        logfile.Write ("FortiusAnt.Settings(%s, %s)" % (pRestartApplication, pclv.debug))
+
+    if testMode:
+        print('')
+        logfile.Console ('Transfer settings')
+        time.sleep(1)
+        logfile.Console ('Done')
+        rtn = True
+    else:
+        rtn = FortiusAntBody.Settings(self, pRestartApplication, pclv)
+    return rtn
+
 def IdleFunction(self):
     if testMode:
         print ('i', end='')
@@ -134,6 +157,9 @@ def Tacx2Dongle(self):
 # ==============================================================================
 if UseGui:
     class frmFortiusAnt(gui.frmFortiusAntGui):
+        def callSettings(self, RestartApplication, pclv):
+            return Settings(self, RestartApplication, pclv)
+
         def callIdleFunction(self):
             Buttons = IdleFunction(self)
             # ----------------------------------------------------------------------
@@ -229,13 +255,13 @@ if UseGui:
             self.gui_conn = conn
             super(frmFortiusAntChild, self).__init__(parent, pclv)
 
-        def GuiMessageToMain(self, command, wait=True):
+        def GuiMessageToMain(self, command, wait=True, p1=None, p2=None):
             # ----------------------------------------------------------------------
             # Step 1. GUI sends a command to main
             # ----------------------------------------------------------------------
             if debug.on(debug.MultiProcessing) and not (command == cmd_Idle):
-                logfile.Write ("mp-GuiMessageToMain(conn, %s, %s)" % (command, wait))
-            self.gui_conn.send(command)
+                logfile.Write ("mp-GuiMessageToMain(conn, %s, %s, %s, %s)" % (command, wait, p1, p2))
+            self.gui_conn.send((command, p1, p2))
 
             rtn = True
             while wait:
@@ -285,6 +311,10 @@ if UseGui:
         #       Idle/LocateHW:      the only response expected is the answer from the function
         #       Runoff/Tacx2Dongle: the main process can also send information to be displayed!
         # --------------------------------------------------------------------------
+        def callSettings(self, RestartApplication, pclv):
+            rtn = self.GuiMessageToMain(cmd_Settings, True, RestartApplication, self.clv)
+            return rtn
+
         def callIdleFunction(self):
             Buttons = self.GuiMessageToMain(cmd_Idle)     # Send command and wait response
             # ----------------------------------------------------------------------
@@ -349,10 +379,13 @@ class clsFortiusAntParent:
         self.PreviousMessages   = None
 
     def MainCommandFromGui(self):               # Step 2. Main receives command from GUI
-        command = self.app_conn.recv()
+        msg = self.app_conn.recv()
+        command = msg[0]
+        p1      = msg[1]
+        p2      = msg[2]
         if debug.on(debug.MultiProcessing) and not (command == cmd_Idle):
-            logfile.Write ("mp-MainCommandFromGui() returns %s" % (command))
-        return command
+            logfile.Write ("mp-MainCommandFromGui() returns (%s, %s, %s)" % (command, p1, p2))
+        return command, p1, p2
 
     def MainRespondToGUI(self, command, rtn):
         if debug.on(debug.MultiProcessing) and not (command == cmd_Idle and rtn == 0):
@@ -393,10 +426,14 @@ class clsFortiusAntParent:
         # Note that we never end (on our initiative)!!
         # ----------------------------------------------------------------------
         while True:
-            gui_command = self.MainCommandFromGui()
+            gui_command, gui_p1, gui_p2 = self.MainCommandFromGui()
 
             if   gui_command == cmd_EndExecution:
                 break
+
+            elif gui_command == cmd_Settings:
+                rtn = Settings(self, gui_p1, gui_p2)
+                self.MainRespondToGUI(cmd_Settings, rtn)
 
             elif gui_command == cmd_Idle:
                 rtn = IdleFunction(self)
@@ -471,23 +508,25 @@ def FortiusAntChild(clv, conn):
 # ==============================================================================
 # Main program
 # ==============================================================================
-if __name__ == "__main__":
-    multiprocessing.freeze_support()
-    global clv
+def mainProgram():
+    global RestartApplication, clv
 
     # --------------------------------------------------------------------------
     # Initialize
     # --------------------------------------------------------------------------
     debug.deactivate()
-    clv = cmd.CommandLineVariables()
+    if not RestartApplication: clv = cmd.CommandLineVariables()
     debug.activate(clv.debug)
     FortiusAntBody.Initialize(clv)
 
     if debug.on(debug.Any):
         logfile.Open()
         logfile.Console("FortiusANT started")
+        logfile.Write  ('    Restart=%s debug=%s' % (RestartApplication, clv.debug))
         clv.print()
         logfile.Console("------------------")
+
+    RestartApplication = False
 
     #-------------------------------------------------------------------------------
     # Component info
@@ -507,6 +546,9 @@ if __name__ == "__main__":
         logfile.Write(s % ('antFE',                      fe.__version__ ))
         logfile.Write(s % ('antHRM',                    hrm.__version__ ))
         logfile.Write(s % ('antPWR',                    pwr.__version__ ))
+        logfile.Write(s % ('antSCS',                    scs.__version__ ))
+        logfile.Write(s % ('bleDongle',           bleDongle.__version__ ))
+        logfile.Write(s % ('constants',           constants.__version__ ))
         logfile.Write(s % ('debug',                   debug.__version__ ))
         logfile.Write(s % ('FortiusAntBody', FortiusAntBody.__version__ ))
         logfile.Write(s % ('FortiusAntCommand',         cmd.__version__ ))
@@ -515,6 +557,7 @@ if __name__ == "__main__":
         logfile.Write(s % ('logfile',               logfile.__version__ ))
         if UseGui:
             logfile.Write(s % ('RadarGraph',     RadarGraph.__version__ ))
+        logfile.Write(s % ('settings',             settings.__version__ ))
         logfile.Write(s % ('structConstants',            sc.__version__ ))
         logfile.Write(s % ('TCXexport',           TCXexport.__version__ ))
         logfile.Write(s % ('usbTrainer',         usbTrainer.__version__ ))
@@ -540,7 +583,9 @@ if __name__ == "__main__":
             logfile.Write(s % ('wx',                     wx.__version__ ))
 
         logfile.Write('FortiusANT code flags')
-        logfile.Write(s % ('useMultiProcessing',            useMultiProcessing))
+        logfile.Write(s % ('UseMultiProcessing',            UseMultiProcessing))
+        logfile.Write(s % ('UseGui',                        UseGui))
+        logfile.Write(s % ('UseBluetooth',                  UseBluetooth))
         logfile.Write("------------------")
 
     if not clv.gui:
@@ -550,7 +595,7 @@ if __name__ == "__main__":
         Console = clsFortiusAntConsole()
         Console.Autostart()
 
-    elif not useMultiProcessing:
+    elif not UseMultiProcessing:
         # --------------------------------------------------------------------------
         # No multiprocessing wanted, start GUI immediatly
         # --------------------------------------------------------------------------
@@ -590,3 +635,15 @@ if __name__ == "__main__":
     if debug.on(debug.Any):
         logfile.Console('FortiusAnt ended')
         logfile.Close()
+
+#-----------------------------------------------------------------------------------
+# Main program; when restart is required due to new parameters we will loop
+#-----------------------------------------------------------------------------------
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    global RestartApplication, clv
+
+    RestartApplication = False
+    while True:
+        mainProgram()
+        if not RestartApplication: break

@@ -3,12 +3,13 @@
 # used with command: pyinstaller MakeFortiusANT.spec
 #
 # Version info
-# 2020-03-02    Firmware .hex added
+# 2021-01-07    Settings.bmp added
+# 2020-03-02    Firmware.hex added
 # 2020-04-08    Gearbox.jpg added
 
 block_cipher = None
 
-a = Analysis(['FortiusANT.py'],
+a = Analysis(['FortiusAnt.py'],
              pathex=['C:\\Github\\WouterJD\\FortiusANT\\pythoncode'],
              binaries=[
                 ( 'C:\\Windows\\System32\\libusb0.dll', '.')
@@ -16,7 +17,8 @@ a = Analysis(['FortiusANT.py'],
              datas=[
                 ( './FortiusAnt.ico',                '.' ),
                 ( './FortiusAnt.jpg',                '.' ),
-                ( './Heart.jpg',                     '.' ),
+                ( './heart.jpg',                     '.' ),
+                ( './settings.bmp',                  '.' ),
                 ( './tacxfortius_1942_firmware.hex', '.' ),
                 ( './tacximagic_1902_firmware.hex',  '.' )
              ],
@@ -38,11 +40,11 @@ exe = EXE(pyz,
           a.zipfiles,
           a.datas,
           [],
-          name='FortiusANT',
+          name='FortiusAnt',
           debug=False,
           bootloader_ignore_signals=False,
           strip=False,
           upx=True,
           upx_exclude=[],
           runtime_tmpdir=None,
-          console=True , icon='FortiusANT.ico')
+          console=True , icon='FortiusAnt.ico')

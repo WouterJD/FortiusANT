@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-20"
+__version__ = "2021-01-07"
+# 2021-01-06    settings added
 # 2020-12-20    Constants moved to constants.py
 # 2020-12-16    Force refresh when main inputs zero
 # 2020-11-04    WindowTitle separated into FortiusAntTitle.py
@@ -64,6 +65,7 @@ import logfile
 import FortiusAntCommand     as cmd
 from   FortiusAntTitle                  import githubWindowTitle
 import RadarGraph
+import settings
 
 #-------------------------------------------------------------------------------
 # constants
@@ -85,7 +87,8 @@ Margin              = 4
 #               SetValues, ResetValues
 #               SetMessages
 #
-# Three functions to be provided:
+# Folowing functions to be provided:
+#               callSettings(self)
 #               callIdleFunction(self)
 #               callLocateHW(self)          returns True/False
 #               callRunoff(self)
@@ -112,7 +115,8 @@ class frmFortiusAntGui(wx.Frame):
 
         FortiusAnt_ico = os.path.join(dirname, "FortiusAnt.ico")
         FortiusAnt_jpg = os.path.join(dirname, "FortiusAnt.jpg")
-        Heart_jpg      = os.path.join(dirname, "Heart.jpg"     )
+        Heart_jpg      = os.path.join(dirname, "heart.jpg"     )
+        settings_bmp   = os.path.join(dirname, "settings.bmp"  )
 
         try:
             ico = wx.Icon(FortiusAnt_ico, wx.BITMAP_TYPE_ICO)
@@ -522,8 +526,17 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# Buttons
         # ----------------------------------------------------------------------
+        b = wx.Image(settings_bmp)
+        b.Rescale(16,16)
+        b = wx.Bitmap(b)
+
+        self.btnSettings = wx.BitmapButton(self, bitmap=b, size=(ButtonW, -1), style=0) # wx.NO_BORDER)
+        self.btnSettings.SetPosition((ButtonX, self.btnSettings.Size[1]))
+        self.btnSettings.SetFocus()
+        self.Bind(wx.EVT_BUTTON, self.OnClick_btnSettings, self.btnSettings)
+
         self.btnLocateHW = wx.Button(self, label="Locate HW", size=(ButtonW, -1))
-        self.btnLocateHW.SetPosition((ButtonX, self.btnLocateHW.Size[1]))
+        self.btnLocateHW.SetPosition((ButtonX, self.btnSettings.Position[1] + self.btnSettings.Size[1]))
         self.btnLocateHW.SetFocus()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnLocateHW, self.btnLocateHW)
 
@@ -560,6 +573,10 @@ class frmFortiusAntGui(wx.Frame):
     #
     # The code below provides functionality so that the GUI works and can be tested
     # --------------------------------------------------------------------------
+    def callSettings(self, RestartApplication, pclv):
+        print("callSettings not defined by application class")
+        return True
+
     def callIdleFunction(self):
         if self.IdleDone < 10:
             print("callIdleFunction not defined by application class")
@@ -624,7 +641,7 @@ class frmFortiusAntGui(wx.Frame):
     # input:        None
     #
     # Description:  Press two buttons: [LocateHW] and [Start]
-    #               Button-press simulate so that buttons are emabled/disabled
+    #               Button-press simulate so that buttons are enabled/disabled
     #
     # Output:       None
     # --------------------------------------------------------------------------
@@ -958,6 +975,38 @@ class frmFortiusAntGui(wx.Frame):
             self.callIdleFunction()
 
     # --------------------------------------------------------------------------
+    # O n C l i c k _ b t n S e t t i n g s
+    # --------------------------------------------------------------------------
+    # input:        [Settings] pressed
+    #
+    # Description:  Modify FortiusAnt settings
+    #
+    # Output:       None
+    # --------------------------------------------------------------------------
+    def OnClick_btnSettings(self, event=False):
+        if __name__ == "__main__": print ("OnClick_btnSettings()")
+        self.OnTimerEnabled = False
+        # app is not available here, use None
+        RestartApplication, clvReturned = settings.OpenDialog(None, self, self.clv)
+        self.OnTimerEnabled = True
+        if RestartApplication != None:
+            # ------------------------------------------------------------------
+            # Inform that clv is changed and that application has to be restarted
+            # ------------------------------------------------------------------
+            self.clv = clvReturned
+            self.callSettings(RestartApplication, self.clv)
+            # ------------------------------------------------------------------
+            # If application must be restarted, end the GUI
+            # We do not expect that a thread is running!!
+            # ------------------------------------------------------------------
+            if RestartApplication == True:
+                if self.RunningSwitch == True:
+                    logfile.Console('frmFortiusAntGui.OnClick_btnSettings() unexpected situation')
+                    pass
+                else:
+                    self.Close()                              # Stop program
+
+    # --------------------------------------------------------------------------
     # O n C l i c k _ b t n L o c a t e H W
     # --------------------------------------------------------------------------
     # input:        [Locate HW] pressed
@@ -975,6 +1024,7 @@ class frmFortiusAntGui(wx.Frame):
         if rtn:
             self.btnRunoff.Enable()
             self.btnStart.Enable()
+            self.btnSettings.Disable()
             self.btnLocateHW.Disable()
             self.btnStart.SetFocus()
         return rtn
@@ -985,7 +1035,7 @@ class frmFortiusAntGui(wx.Frame):
     # input:        [RUNOFF] pressed
     #
     # Description:  Start RunoffThread
-    #               Enable [STOP], Disable [START] and [RUNOFF]
+    #               Enable [STOP], Disable [SETTINGS], [START] and [RUNOFF]
     #               If CloseButtonPressed, stop the program after the thread
     #
     # Output:       None
@@ -995,6 +1045,7 @@ class frmFortiusAntGui(wx.Frame):
 
         self.btnStop.Enable()
         self.btnStart.Disable()
+        self.btnSettings.Disable()
         self.btnRunoff.Disable()
         self.btnStop.SetFocus()
 
@@ -1024,7 +1075,7 @@ class frmFortiusAntGui(wx.Frame):
     # input:        [START] pressed
     #
     # Description:  Start RunningThread
-    #               Enable [STOP], Disable [START] and [RUNOFF]
+    #               Enable [STOP], Disable [SETTINGS], [START] and [RUNOFF]
     #               If CloseButtonPressed, stop the program after the thread
     #
     # Output:       None
@@ -1034,6 +1085,7 @@ class frmFortiusAntGui(wx.Frame):
 
         self.btnStop.Enable()
         self.btnStart.Disable()
+        self.btnSettings.Disable()
         self.btnRunoff.Disable()
         self.btnStop.SetFocus()
 
@@ -1063,7 +1115,7 @@ class frmFortiusAntGui(wx.Frame):
     # input:        [STOP] pressed
     #
     # Description:  Stop RunningThread; when that was not running, no effect
-    #               Enable [START] and [RUNOFF], Disable [STOP]
+    #               Enable [SETTINGS], [START] and [RUNOFF], Disable [STOP]
     #
     # Output:       self.RunningSwitch
     # --------------------------------------------------------------------------
@@ -1071,6 +1123,7 @@ class frmFortiusAntGui(wx.Frame):
         if __name__ == "__main__": print ("OnClick_btnStop()")
         self.RunningSwitch = False
         self.ResetValues()
+        self.btnSettings.Enable()
         self.btnRunoff.Enable()
         self.btnStart.Enable()
         self.btnStop.Disable()

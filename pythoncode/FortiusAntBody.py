@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-30"
+__version__ = "2021-01-07"
+# 2021-01-06    settings added (+ missing other files for version check)
 # 2020-12-30    Tacx Genius and Bushido implemented
 # 2020-12-27    Inform user of (de)activation of ANT/BLE devices
 # 2020-12-24    usage of UseGui implemented
@@ -254,6 +255,28 @@ def IdleFunction(self):
         TacxTrainer.Refresh(True, usbTrainer.modeStop)
         rtn = TacxTrainer.Buttons
     return rtn
+
+# ------------------------------------------------------------------------------
+# S e t t i n g s
+# ------------------------------------------------------------------------------
+# input:        pRestartApplication, pclv
+#
+# Description:  data provided by the GUI/Settings interface
+#               NOTE: only dynamic parameters of clv may be changed, otherwise
+#                     the application must be restarted.
+#                     If important parameters are changed (without restart)
+#                     this may cause unchecked inconsistencies!
+#
+# Output:       new clv adopted
+#
+# Returns:      True
+# ------------------------------------------------------------------------------
+def Settings(self, pRestartApplication, pclv):
+    global clv
+    clv = pclv
+    if debug.on(debug.Function):
+        logfile.Write ("FortiusAntBody.Settings(%s, %s)" % (pRestartApplication, pclv.debug))
+    return True
 
 # ------------------------------------------------------------------------------
 # L o c a t e H W

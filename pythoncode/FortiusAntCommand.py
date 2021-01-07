@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-05"
+__version__ = "2021-01-06"
+# 2021-01-06    settings added and can be tested from __main__
+#               Json-file overwrites command line
 # 2021-01-05    added: trainer type: Motorbrake
 # 2020-12-30    added: trainer types "Vortex", "Bushido" and "Genius" (-t option)
 #               "i-Vortex" is deprecated
@@ -49,6 +51,10 @@ import debug
 import logfile
 
 from   constants                    import UseBluetooth, UseGui
+
+if UseGui:
+    import wx
+    import settings
 
 #-------------------------------------------------------------------------------
 # Realize clv to be program-global, by accessing through this function.
@@ -176,9 +182,11 @@ class CommandLineVariables(object):
         parser.add_argument   ('-x','--exportTCX', help='Export TCX file',                                     required=False, action='store_true')
 
         #-----------------------------------------------------------------------
-        # Parse
+        # Parse command line
+        # Overwrite from json file if present
         #-----------------------------------------------------------------------
         args                        = parser.parse_args()
+        settings.ReadJsonFile(args)
         self.args                   = args
 
         #-----------------------------------------------------------------------
@@ -444,3 +452,7 @@ if __name__ == "__main__":
     else:
         i = int(clv.hrm)
         print(i)
+
+    if UseGui:
+        app = wx.App(0)
+        settings.OpenDialog(app, None, clv)

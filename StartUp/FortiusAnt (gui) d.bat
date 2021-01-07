@@ -1,4 +1,4 @@
-del *.log *.json *.tcx
+del *.log FortiusAnt.*.json *.tcx
 rem No              = 0x00      # 0
 rem Application     = 0x01      # 1
 rem Function        = 0x02      # 2
