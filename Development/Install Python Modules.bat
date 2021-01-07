@@ -1,12 +1,14 @@
 @rem for %~dp0 refer to https://stackoverflow.com/questions/672693/windows-batch-file-starting-directory-when-run-as-admin
 
 @echo Upgrade pip and install modules
+goto doit
 
 @if "%~dp0"=="%cd%\" if exist "C:\Program Files (x86)\Python38-32" (
 @echo Python is installed for all users, run as administrator!
 @goto Done
 )
 
+:doit
 @rem check pip itself
 python -m pip install --upgrade pip
 

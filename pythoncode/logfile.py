@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-19"
+__version__ = "2020-11-25"
+# 2020-11-25    Small textual modifications (time->Time)
+#               .utcnow() replaced by .now()
 # 2020-11-19    json PedalEcho added and time-format made JAVA-style
 # 2020-11-13    json logfile added
 # 2020-04-28    Logfile flushed as well
@@ -67,9 +69,9 @@ class clsLogfileJson():
         #       We add 25569 so that Excel understands it.
         #       It' does not account for summer/wintertime...
         #-----------------------------------------------------------------------
-        # = '{"time"                : "%s",' % datetime.now()                       + \
-        # = '{"time"                : "%s",' % datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ") + \
-        s = '{"time"                :  %s ,' % ((time.time() / (24 * 3600)) + 25569)+ \
+        # = '{"Time"                : "%s",' % datetime.now()                       + \
+        # = '{"Time"                : "%s",' % datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ") + \
+        s = '{"Time"                :  %s ,' % ((time.time() / (24 * 3600)) + 25569)+ \
             ' "QuarterSecond"       : "%s",' % QuarterSecond                        + \
             ' "HeartRate"           :  %s ,' % HeartRate                            + \
             ' "Target"              : "|" ,'                                        + \
@@ -131,7 +133,7 @@ def Open(prefix='FortiusANT', suffix=''):
     if debug.on():
         if len(suffix) > 0 and suffix[0] != '.':
             suffix = '.' + suffix
-        filename = prefix + '.' + datetime.utcnow().strftime('%Y-%m-%d %H-%M-%S') + suffix + ".log"
+        filename = prefix + '.' + datetime.now().strftime('%Y-%m-%d %H-%M-%S') + suffix + ".log"
         fLogfile = open(filename,"w+")
 
         if debug.on(debug.LogfileJson) and prefix == 'FortiusANT':
@@ -177,7 +179,7 @@ def Console (logText):
     Write(logText, True)
 
 def Write (logText, console=False):
-    logText = datetime.utcnow().strftime('%H:%M:%S,%f')[0:12] + ": " + logText
+    logText = datetime.now().strftime('%H:%M:%S,%f')[0:12] + ": " + logText
     if console: print (logText)
     sys.stdout.flush()
 

@@ -1,7 +1,11 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-11-18"
+__version__ = "2020-12-30"
+# 2020-12-30    Tacx Genius/Bushido data pages, constants and channel
+#               configuration implemented
+#               Added: msg44_ChannelSearchTimeout
+# 2020-12-14    ANT+ Control command implemented
 # 2020-11-18    Retry added when intiating USB dongle as suggested by @martin-vi
 # 2020-11-03    If there is no dongle, Write() and Read() become completely
 #               dummy, so that we can run without ANTdongle.
@@ -119,14 +123,85 @@ channel_VTX_s       = channel_VTX # slave=Cycle Training Program
 
 channel_VHU_s       = 5           # ANT+ Channel for Tacx i-Vortex Headunit
                                   # slave=Cycle Training Program
+channel_GNS_s       = channel_VHU_s # ANT+ Channel for Tacx Genius
+
+channel_BHU_s       = channel_VHU_s # ANT+ Channel for Tacx Buhsido Headunit
+
+channel_CTRL        = 6           # ANT+ Channel for Remote Control
+#---------------------------------------------------------------------------
+# Vortex Headunit modes
+#---------------------------------------------------------------------------
+VHU_Normal          = 0        # Headunit commands the Vortex trainer
+VHU_ResetDistance   = 1        # Reset odometer on HU
+VHU_Training        = 2        # Headunit controls the Vortex and
+                               #        FortiusANT TargetPower seems ignored.
+VHU_TrainingPause   = 3        # Displays "start cycling"
+VHU_PCmode          = 4        # Headunit only sends buttons to slave (FortiusANT)
 
 #---------------------------------------------------------------------------
-# i-Vortex Headunit modes
+# Vortex head unit buttons
 #---------------------------------------------------------------------------
-VHU_Normal          = 0        # Headunit commands the i-Vortex trainer
-VHU_SpecialMode     = 2        # Headunit controls the i-Vortex and 
-                               #        FortiusANT TargetPower seems ignored.
-VHU_PCmode          = 4        # Headunit only sends buttons to slave (FortiusANT)
+VHU_Button_None  = 0x0
+VHU_Button_Left  = 0x1
+VHU_Button_Up    = 0x2
+VHU_Button_Enter = 0x3
+VHU_Button_Down  = 0x4
+VHU_Button_Right = 0x5
+
+#---------------------------------------------------------------------------
+# Tacx Genius brake modes
+#---------------------------------------------------------------------------
+GNS_Mode_Slope      = 0x00
+GNS_Mode_Power      = 0x01
+GNS_Mode_Heartrate  = 0x02
+
+#---------------------------------------------------------------------------
+# Tacx Genius calibration actions
+#---------------------------------------------------------------------------
+GNS_Calibration_Action_Stop         = 0x00
+GNS_Calibration_Action_Start        = 0x01
+GNS_Calibration_Action_Request_Info = 0x02
+
+#---------------------------------------------------------------------------
+# Tacx Genius calibration status
+#---------------------------------------------------------------------------
+GNS_Calibration_State_Stopped       = 0x00
+GNS_Calibration_State_Started       = 0x01
+GNS_Calibration_State_Running       = 0x02
+GNS_Calibration_State_Calibrated    = 0x03
+GNS_Calibration_State_Uncalibrated  = 0x04
+GNS_Calibration_State_Value_Error   = 0x81
+GNS_Calibration_State_Cadence_Error = 0x82
+GNS_Calibration_State_Speed_Error   = 0x83
+GNS_Calibration_State_Timeout       = 0x83
+GNS_Calibration_State_Torque_Error  = 0x83
+
+#---------------------------------------------------------------------------
+# Tacx Genius alarm bits
+#---------------------------------------------------------------------------
+GNS_Alarm_Overtemperature       = 0x0001
+GNS_Alarm_Overvoltage           = 0x0004
+GNS_Alarm_GenericError          = 0x0008
+GNS_Alarm_Overcurrent           = 0x0020
+GNS_Alarm_SpeedTooHigh          = 0x0080
+GNS_Alarm_Undervoltage          = 0x0100
+GNS_Alarm_DownhillLimited       = 0x4000
+GNS_Alarm_CommunicationError    = 0x8000
+
+#---------------------------------------------------------------------------
+# Tacx Bushido head unit alarm bits
+#---------------------------------------------------------------------------
+BHU_Alarm_Temperature_1      = 0x0001
+BHU_Alarm_Temperature_2      = 0x0002
+BHU_Alarm_Temperature_3      = 0x0003
+BHU_Alarm_Temperature_4      = 0x0004
+BHU_Alarm_Temperature_5      = 0x0005
+BHU_Alarm_Overvoltage        = 0x0008
+BHU_Alarm_Overcurrent_1      = 0x0010
+BHU_Alarm_Overcurrent_2      = 0x0020
+BHU_Alarm_SpeedTooHigh       = 0x0080
+BHU_Alarm_Undervoltage       = 0x0100
+BHU_Alarm_CommunicationError = 0x8000
 
 
 DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
@@ -136,6 +211,7 @@ DeviceNumber_VTX    = 57593    #
 DeviceNumber_VHU    = 57594    #
 DeviceNumber_SCS    = 57595    #
 DeviceNumber_PWR    = 57596    #
+DeviceNumber_CTRL   = 57597    #
 
 ModelNumber_FE      = 2875     # short antifier-value=0x8385, Tacx Neo=2875
 SerialNumber_FE     = 19590705 # int   1959-7-5
@@ -148,12 +224,17 @@ SerialNumber_HRM    = 5975     # short 1959-7-5
 HWrevision_HRM      = 1        # char
 SWversion_HRM       = 1        # char
 
+ModelNumber_CTRL     = 1234     # short
+SerialNumber_CTRL    = 19590709 # int   1959-7-9
+HWrevision_CTRL      = 1        # char
+SWrevisionMain_CTRL  = 1        # char
+SWrevisionSupp_CTRL  = 1        # char
+
 ModelNumber_PWR      = 2161     # Garmin Vector 2 (profile.xlsx, garmin_product)
-SerialNumber_PWR     = 19590702 # int   1959-7-2
+SerialNumber_PWR     = 19570702 # int   1957-7-2
 HWrevision_PWR       = 1        # char
 SWrevisionMain_PWR   = 1        # char
 SWrevisionSupp_PWR   = 1        # char
-
 
 if False:                      # Tacx Neo Erik OT; perhaps relevant for Tacx Desktop App
                                # because TDA does not want to pair with FortiusAnt...
@@ -186,6 +267,7 @@ msgID_Capabilities                      = 0x54
 msgID_UnassignChannel                   = 0x41
 msgID_AssignChannel                     = 0x42
 msgID_ChannelPeriod                     = 0x43
+msgID_ChannelSearchTimeout              = 0x44
 msgID_ChannelRfFrequency                = 0x45
 msgID_SetNetworkKey                     = 0x46
 msgID_ResetSystem                       = 0x4a
@@ -230,13 +312,17 @@ Manufacturer_garmin                     =  1
 Manufacturer_dynastream	                = 15
 Manufacturer_tacx                       = 89
 Manufacturer_trainer_road	            =281
+Manufacturer_dev                        =255
 
 DeviceTypeID_FE         = DeviceTypeID_fitness_equipment
 DeviceTypeID_HRM        = DeviceTypeID_heart_rate
 DeviceTypeID_PWR        = DeviceTypeID_bike_power
 DeviceTypeID_SCS        = DeviceTypeID_bike_speed_cadence
+DeviceTypeID_CTRL       = DeviceTypeID_control
 DeviceTypeID_VTX        = 61            # Tacx i-Vortex
-                                        # 0x3d  according TotalReverse
+DeviceTypeID_GNS        = 83            # Tacx Genius
+DeviceTypeID_BHU        = 82            # Tacx Bushido head unit
+# 0x3d  according TotalReverse
 DeviceTypeID_VHU        = 0x3e          # Thanks again to TotalReverse
 # https://github.com/WouterJD/FortiusANT/issues/46#issuecomment-616838329
 
@@ -245,6 +331,7 @@ TransmissionType_IC_GDP = 0x05          #           0x01 = Independant Channel
                                         #           0x04 = Global datapages used
 TransmitPower_0dBm      = 0x03          # 9.4.3     Output Power Level Settings
 RfFrequency_2457Mhz     =   57          # 9.5.2.6   Channel RF Frequency
+RfFrequency_2460Mhz     =   60          # used for Tacx Genius/Bushido
 RfFrequency_2466Mhz     =   66          # used for Tacx i-Vortex only
 RfFrequency_2478Mhz     = 0x4e          # used for Tacx i-Vortex Headunit
 #---------------------------------------------------------------------------
@@ -766,9 +853,27 @@ class clsAntDongle():
         ]
         self.Write(messages)
 
+    def CTRL_ChannelConfig(self, DeviceNumber):
+        if self.OK:
+            # For consistency it should have been:
+            #                'FortiusANT broadcasts that it accepts commands from an ANT+ Generic Remote Control')
+            # because we are the master device and the Remote Control pairs to us
+            logfile.Console ('FortiusANT receives commands from an ANT+ Generic Remote Control')
+            if debug.on(debug.Data1): logfile.Write ("CTRL_ChannelConfig()")
+        messages=[
+            msg42_AssignChannel         (channel_CTRL, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
+            msg51_ChannelID             (channel_CTRL, DeviceNumber, DeviceTypeID_CTRL, TransmissionType_IC),
+            msg45_ChannelRfFrequency    (channel_CTRL, RfFrequency_2457Mhz),
+            msg43_ChannelPeriod         (channel_CTRL, ChannelPeriod=8192),        # 4 Hz
+            msg60_ChannelTransmitPower  (channel_CTRL, TransmitPower_0dBm),
+            msg4B_OpenChannel           (channel_CTRL),
+            msg4D_RequestMessage        (channel_CTRL, msgID_ChannelID)
+        ]
+        self.Write(messages)
+
     def VTX_ChannelConfig(self):                         # Pretend to be a Tacx i-Vortex
         if self.OK:
-            logfile.Console ('FortiusANT broadcasts data as an ANT+ Tacx i-Vortex (VTX), id=%s' % DeviceNumber_VTX)
+            logfile.Console ('FortiusANT broadcasts data as an ANT Tacx i-Vortex (VTX), id=%s' % DeviceNumber_VTX)
             if debug.on(debug.Data1): logfile.Write ("VTX_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VTX, ChannelType_BidirectionalTransmit, NetworkNumber=0x01),
@@ -785,7 +890,7 @@ class clsAntDongle():
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         if self.OK:
-            logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Vortex (VTX Controller)' + s)
+            logfile.Console ('FortiusANT receives data from an ANT Tacx i-Vortex (VTX Controller)' + s)
             if debug.on(debug.Data1): logfile.Write ("SlaveVTX_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
@@ -798,13 +903,47 @@ class clsAntDongle():
         ]
         self.Write(messages)
 
+    def SlaveGNS_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx Genius
+        if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
+        else:                s = ", any device"
+        logfile.Console ('FortiusANT receives data from an ANT Tacx Genius (GNS Brake)' + s)
+        if debug.on(debug.Data1): logfile.Write ("SlaveGNS_ChannelConfig()")
+        messages=[
+            msg42_AssignChannel         (channel_GNS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
+            msg51_ChannelID             (channel_GNS_s, DeviceNumber, DeviceTypeID_GNS, TransmissionType_IC),
+            msg45_ChannelRfFrequency    (channel_GNS_s, RfFrequency_2460Mhz),
+            msg43_ChannelPeriod         (channel_GNS_s, ChannelPeriod=0x1000), # keep searching indefinitely
+            msg44_ChannelSearchTimeout  (channel_GNS_s, 255),
+            msg60_ChannelTransmitPower  (channel_GNS_s, TransmitPower_0dBm),
+            msg4B_OpenChannel           (channel_GNS_s),
+            msg4D_RequestMessage        (channel_GNS_s, msgID_ChannelID)
+        ]
+        self.Write(messages)
+
+    def SlaveBHU_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx Genius
+        if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
+        else:                s = ", any device"
+        logfile.Console ('FortiusANT receives data from an ANT Tacx Bushido head unit (BHU Controller)' + s)
+        if debug.on(debug.Data1): logfile.Write ("SlaveBHU_ChannelConfig()")
+        messages=[
+            msg42_AssignChannel         (channel_GNS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
+            msg51_ChannelID             (channel_GNS_s, DeviceNumber, DeviceTypeID_BHU, TransmissionType_IC),
+            msg45_ChannelRfFrequency    (channel_GNS_s, RfFrequency_2460Mhz),
+            msg43_ChannelPeriod         (channel_GNS_s, ChannelPeriod=0x1000),
+            msg60_ChannelTransmitPower  (channel_GNS_s, TransmitPower_0dBm),
+            msg44_ChannelSearchTimeout  (channel_GNS_s, 255),  # keep searching indefinitely
+            msg4B_OpenChannel           (channel_GNS_s),
+            msg4D_RequestMessage        (channel_GNS_s, msgID_ChannelID)
+        ]
+        self.Write(messages)
+
     def SlaveVHU_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex Headunit
                                                         # See comment above msgPage000_TacxVortexHU_StayAlive
         
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         if self.OK:
-            logfile.Console ('FortiusANT receives data from an ANT+ Tacx i-Vortex Headunit (VHU Controller)' + s)
+            logfile.Console ('FortiusANT receives data from an ANT Tacx i-Vortex Headunit (VHU Controller)' + s)
             if debug.on(debug.Data1): logfile.Write ("SlaveVHU_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VHU_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
@@ -972,6 +1111,7 @@ def DongleDebugMessage(text, d):
         elif id == msgID_UnassignChannel        : id_ = 'Unassign Channel'
         elif id == msgID_AssignChannel          : id_ = 'Assign Channel'
         elif id == msgID_ChannelPeriod          : id_ = 'Channel Period'
+        elif id == msgID_ChannelSearchTimeout   : id_ = 'Channel Search Timeout'
         elif id == msgID_ChannelRfFrequency     : id_ = 'Channel RfFrequency'
         elif id == msgID_SetNetworkKey          : id_ = 'Set NetworkKey'
         elif id == msgID_ResetSystem            : id_ = 'Reset System'
@@ -1032,9 +1172,10 @@ def DongleDebugMessage(text, d):
             elif p        == 81: p_ = 'Product Information'
             elif p        == 82: p_ = 'Battery Status'
 #           elif p        == 89: p_ = 'Add channel ID to list ???'
-            elif p        ==172: p_ = 'VHU Set headunit mode'
-            elif p        ==173: p_ = 'VHU Serial number'
-            elif p        ==221: p_ = 'VHU Button pressed'
+            elif p        ==172: p_ = 'Tacx Request information/Set mode'
+            elif p        ==173: p_ = 'Tacx Device information'
+            elif p        ==220: p_ = 'Tacx Brake control'
+            elif p        ==221: p_ = 'Tacx Data update'
             else               : p_ = '??'
 
             if p != None:        p_ = " p=%s(%s)" % (p, p_)     # Page, show number and name
@@ -1091,6 +1232,15 @@ def msg43_ChannelPeriod(ChannelNumber, ChannelPeriod):
     format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_short
     info    = struct.pack(format,  ChannelNumber,     ChannelPeriod)
     msg     = ComposeMessage (0x43, info)
+    return msg
+
+# ------------------------------------------------------------------------------
+# A N T   M e s s a g e   44   C h a n n e l S e a r c h T i m e o u t
+# ------------------------------------------------------------------------------
+def msg44_ChannelSearchTimeout(ChannelNumber, SearchTimeout):
+    format  =    sc.no_alignment + sc.unsigned_char + sc.unsigned_short
+    info    = struct.pack(format,  ChannelNumber,     SearchTimeout)
+    msg     = ComposeMessage (0x44, info)
     return msg
 
 # ------------------------------------------------------------------------------
@@ -1653,6 +1803,182 @@ def msgUnpage221_TacxVortexHU_ButtonPressed (info):
     return tuple[nButton]
 
 # ------------------------------------------------------------------------------
+# T a c x  G e n i u s  p a g e s
+# ------------------------------------------------------------------------------
+# Refer:    https://gist.github.com/switchabl/75b2619e2e3381f49425479d59523ead
+# ------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# P a g e 2 2 0  ( 0 x 0 1 )  T a c x G e n i u s S e t T a r g e t
+# ------------------------------------------------------------------------------
+def msgPage220_01_TacxGeniusSetTarget (Channel, Mode, Target, Weight):
+    DataPageNumber      = 220
+    SubPageNumber       = 0x01
+    Weight              = int(Weight)
+    if Mode == GNS_Mode_Slope:
+        Target = int(Target * 10)
+    else:
+        Target = int(Target)
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char
+    fMode               = sc.unsigned_char  # brake mode (slope/power/heart rate)
+    fTarget             = sc.short          # target slope (%) * 10/power (W)/HR (bpm)
+    fWeight             = sc.unsigned_char  # user + bike weight (kg)
+    fPadding            = sc.pad * 2
+
+    format = sc.big_endian +     fChannel + fDataPageNumber + fSubPageNumber + fMode + fTarget + fWeight + fPadding
+    info   = struct.pack (format, Channel,   DataPageNumber,   SubPageNumber,   Mode,   Target,   Weight)
+
+    return info
+
+# ------------------------------------------------------------------------------
+# P a g e 2 2 0  ( 0 x 0 2 )  T a c x G e n i u s W i n d R e s i s t a n c e
+# ------------------------------------------------------------------------------
+def msgPage220_02_TacxGeniusWindResistance (Channel, WindResistance, WindSpeed):
+    DataPageNumber      = 220
+    SubPageNumber       = 0x02
+    WindResistance      = int(WindResistance)
+    WindSpeed           = int(WindSpeed)
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char
+    fWindResistance     = sc.unsigned_short # 0.5 * wind resistance cofficient (kg/m) * 1000
+    fWindSpeed          = sc.short          # wind speed (m/s) * 250 (head wind = negative)
+    fPadding            = sc.pad * 2
+
+    format = sc.big_endian +     fChannel + fDataPageNumber + fSubPageNumber + fWindResistance + fWindSpeed + fPadding
+    info   = struct.pack (format, Channel,   DataPageNumber,   SubPageNumber,   WindResistance,   WindSpeed)
+
+    return info
+
+# ------------------------------------------------------------------------------
+# P a g e 2 2 0  ( 0 x 0 4 )  T a c x G e n i u s C a l i b r a t i o n
+# ------------------------------------------------------------------------------
+def msgPage220_04_TacxGeniusCalibration (Channel, Action):
+    DataPageNumber      = 220
+    SubPageNumber       = 0x04
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char
+    fAction             = sc.unsigned_char  # Calibration action
+    fPadding            = sc.pad * 5
+
+    format = sc.big_endian +     fChannel + fDataPageNumber + fSubPageNumber + fAction + fPadding
+    info   = struct.pack (format, Channel,   DataPageNumber,   SubPageNumber,   Action)
+
+    return info
+
+# -------------------------------------------------------------------------------------
+# P a g e 2 2 1  ( 0 x 0 1 )  T a c x G e n i u s S p e e d / P o w e r / C a d e n c e
+# -------------------------------------------------------------------------------------
+def msgUnpage221_01_TacxGeniusSpeedPowerCadence (info):
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char  # == 0x01
+
+    fSpeed              = sc.unsigned_short # speed (km/h) * 10
+    nSpeed              = 3
+    fPower              = sc.unsigned_short # power (W)
+    nPower              = 4
+    fCadence            = sc.unsigned_char  # cadence (rpm)
+    nCadence            = 5
+    fBalance            = sc.unsigned_char  # L/R power balance (%)
+    nBalance            = 6
+
+    format = sc.big_endian + fChannel + fDataPageNumber + fSubPageNumber + \
+             fSpeed + fPower + fCadence + fBalance
+    tuple = struct.unpack(format, info)
+
+    return tuple[nPower], tuple[nSpeed], tuple[nCadence], tuple[nBalance]
+
+# -------------------------------------------------------------------------------------
+# P a g e 2 2 1  ( 0 x 0 2 )  T a c x G e n i u s D i s t a n c e H R
+# -------------------------------------------------------------------------------------
+def msgUnpage221_02_TacxGeniusDistanceHR (info):
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char  # == 0x02
+
+    fDistance           = sc.unsigned_int   # distance (m)
+    nDistance           = 3
+    fHeartrate          = sc.unsigned_char  # heartrate (bpm) (Vortex/Bushido only?)
+    nHeartrate          = 4
+    fPadding            = sc.pad
+
+    format = sc.big_endian + fChannel + fDataPageNumber + fSubPageNumber + \
+             fDistance + fHeartrate + fPadding
+    tuple = struct.unpack(format, info)
+
+    return tuple[nDistance], tuple[nHeartrate]
+
+# -------------------------------------------------------------------------------------
+# P a g e 2 2 1  ( 0 x 0 3 )  T a c x G e n i u s A l a r m T e m p e r a t u r e
+# -------------------------------------------------------------------------------------
+def msgUnpage221_03_TacxGeniusAlarmTemperature (info):
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char  # == 0x03
+
+    fAlarm              = sc.unsigned_short # alarm bitmask
+    nAlarm              = 3
+    fTemperature        = sc.unsigned_char  # brake temperature (°C ?)
+    nTemperature        = 4
+    fPowerback          = sc.unsigned_short # Powerback (W)
+    nPowerback          = 5
+    fPadding            = sc.pad
+
+    format = sc.big_endian + fChannel + fDataPageNumber + fSubPageNumber + \
+             fAlarm + fTemperature + fPowerback + fPadding
+    tuple = struct.unpack(format, info)
+
+    return tuple[nAlarm], tuple[nTemperature], tuple[nPowerback]
+
+# -------------------------------------------------------------------------------------
+# P a g e 2 2 1  ( 0 x 0 4 )  T a c x G e n i u s C a l i b r a t i o n I n f o
+# -------------------------------------------------------------------------------------
+def msgUnpage221_04_TacxGeniusCalibrationInfo (info):
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char  # == 0x04
+
+    fCalibrationState   = sc.unsigned_char  # calibration status
+    nCalibrationState   = 3
+    fCalibrationValue   = sc.unsigned_short  # brake temperature (°C ?)
+    nCalibrationValue   = 4
+    fPadding            = 3 * sc.pad
+
+    format = sc.big_endian + fChannel + fDataPageNumber + fSubPageNumber + \
+             fCalibrationState + fCalibrationValue + fPadding
+    tuple = struct.unpack(format, info)
+
+    return tuple[nCalibrationState], tuple[nCalibrationValue]
+
+# -------------------------------------------------------------------------------------
+# P a g e 1 7 3  ( 0 x 0 1 )  T a c x B u s h i d o S e r i a l M o d e
+# -------------------------------------------------------------------------------------
+def msgUnpage173_01_TacxBushidoSerialMode (info):
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char  # == 0x01
+
+    fMode               = sc.unsigned_char  # head unit mode
+    nMode               = 3
+    fYear               = sc.unsigned_char  # production year
+    nYear               = 4
+    fDeviceNumber       = sc.int            # device number
+    nDeviceNumber       = 5
+
+    format = sc.big_endian + fChannel + fDataPageNumber + fSubPageNumber + \
+             fMode + fYear + fDeviceNumber
+    tuple = struct.unpack(format, info)
+
+    return tuple[nMode], tuple[nYear], tuple[nDeviceNumber]
+
+# ------------------------------------------------------------------------------
 # P a g e 1 6   G e n e r a l   F E   i n f o
 # ------------------------------------------------------------------------------
 # Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
@@ -2030,6 +2356,43 @@ def msgPage71_CommandStatus(Channel, LastReceivedCommandID, SequenceNr, CommandS
     return info
 
 # ------------------------------------------------------------------------------
+# P a g e 7 3 _ G e n e r i c C o m m a n d
+# ------------------------------------------------------------------------------
+# Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
+# D00001198_-_ANT+_Common_Data_Pages_Rev_3.1.pdf
+# ------------------------------------------------------------------------------
+def msgPage73_GenericCommand(Channel, SlaveSerialNumber, SlaveManufacturerID, SequencNr, CommandNr):
+    DataPageNumber          = 73
+
+    fChannel                = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber         = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSlaveSerialNumber      = sc.unsigned_short
+    fSlaveManufacturerID    = sc.unsigned_short
+    fSequenceNr             = sc.unsigned_char
+    fCommandNr              = sc.unsigned_short
+
+    format=    sc.no_alignment + fChannel + fDataPageNumber + fSlaveSerialNumber + fSlaveManufacturerID + fSequenceNr +\
+               fCommandNr
+    info  = struct.pack (format,  Channel,   DataPageNumber,   SlaveSerialNumber,   SlaveManufacturerID,   SequencNr,
+                         CommandNr)
+
+    return info
+
+def msgUnpage73_GenericCommand (info):
+    fChannel                = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber         = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSlaveSerialNumber      = sc.unsigned_short
+    fSlaveManufacturerID    = sc.unsigned_short
+    fSequenceNr             = sc.unsigned_char
+    fCommandNr              = sc.unsigned_short
+
+    format=    sc.no_alignment + fChannel + fDataPageNumber + fSlaveSerialNumber + fSlaveManufacturerID + fSequenceNr + \
+               fCommandNr
+    tuple = struct.unpack (format, info)
+
+    return tuple[2], tuple[3], tuple[4], tuple[5]
+
+# ------------------------------------------------------------------------------
 # P a g e 8 0 _ M a n u f a c t u r e r I n f o
 # ------------------------------------------------------------------------------
 # Refer:    https://www.thisisant.com/developer/resources/downloads#documents_tab
@@ -2220,3 +2583,30 @@ def msgUnpage_SCS (info):
 
     #      EventTime, CadenceRevolutionCount, EventTime, SpeedRevolutionCount
     return tuple[1],  tuple[2],               tuple[3],  tuple[4]
+
+# ------------------------------------------------------------------------------
+# P a g e 2   C o n t r o l
+# ------------------------------------------------------------------------------
+# https://www.thisisant.com/developer/resources/downloads#documents_tab
+# D00001307_-_ANT+_Device_Profile_-_Controls_-_2.0.pdf
+# ------------------------------------------------------------------------------
+def msgPage2_CTRL (Channel, CurrentNotifcations, Reserved1, Reserved2, Reserved3, Reserved4, Reserved5,
+                   DeviceCapabilities):
+    DataPageNumber         = 2
+
+    fChannel                = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber         = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fCurrentNotifications   = sc.unsigned_char
+    fReserved1              = sc.unsigned_char
+    fReserved2              = sc.unsigned_char
+    fReserved3              = sc.unsigned_char
+    fReserved4              = sc.unsigned_char
+    fReserved5              = sc.unsigned_char
+    fDeviceCapabilities     = sc.unsigned_char
+
+    format      = sc.no_alignment + fChannel + fDataPageNumber + fCurrentNotifications + fReserved1 + fReserved2 + \
+                  fReserved3 + fReserved4 + fReserved5 + fDeviceCapabilities
+    info        = struct.pack (format, Channel, DataPageNumber, CurrentNotifcations, Reserved1, Reserved2, Reserved3,
+                               Reserved4, Reserved5, DeviceCapabilities)
+
+    return info

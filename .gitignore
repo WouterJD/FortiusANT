@@ -3,6 +3,10 @@
 *.lnk
 *.tcx
 *.json
+Thumbs.db
 pythoncode/build/
 pythoncode/dist/
 Miscellaneous/
+node_modules
+package-lock.json
+pythoncode/help.txt

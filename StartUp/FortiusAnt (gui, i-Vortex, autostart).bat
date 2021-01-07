@@ -1,3 +1,3 @@
 del *.log
-..\pythoncode\FortiusAnt.py -a -g -H0 -t i-Vortex
+..\pythoncode\FortiusAnt.py -a -g -H0 -t Vortex
 pause

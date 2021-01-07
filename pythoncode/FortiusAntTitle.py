@@ -1,7 +1,15 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v3.8"                # Double quotes, see below!
+WindowTitle = "Fortius Antifier v5.0"              # Double quotes, see below!
+# 2020-01-04    Version 5.0     #117 Tacx Bushido and #101 Genius implemented
+# 2020-12-20    Version 4.1.1   #137 Improvements for Raspberry PI
+# 2020-12-20    Version 4.1.c   #103 Implement Bluetooth support
+# 2020-12-15    Version 4.1.b   #147 Improve run-off procedure
+#                               #164 Ignore headunit buttons
+# 2020-12-14    Version 4.1.a   #121 Implementation of ANT+ Remote control
+# 2020-12-11    Version 4.0     Implementation of Magnetic Brake on "USB"
+# 2020-11-19    Version 3.8
 # 2020-11-18    Version 3.7
 # 2020-11-12    Version 3.6
 # 2020-11-05    Version 3.5

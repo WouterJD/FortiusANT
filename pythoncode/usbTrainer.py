@@ -1,7 +1,22 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-18"
+__version__ = "2020-12-30"
+# 2020-12-30    Added: clsTacxAntTrainer, clsTacxAntBushidoTrainer,
+#               clsTacxAntGeniusTrainer, GeniusState, BushidoState
+#               (support for Tacx Genius and Tacx Bushido trainers)
+#               Fix formula for wind resistance (with tail wind)
+# 2020-12-21    #173 T1946 was not detected as motor brake.
+# 2020-12-20    Constants used from constants.py
+# 2020-12-10    Removed: -u uphill
+# 2020-12-03    For Magnetic brake -r uses the resistance table [0...13]
+#               introduced: Resistance2PowerMB(), under investigation!!
+# 2020-12-01    Speedscale set to 289.75
+# 2020-12-01    -G option and Magnetic Brake formula's removed
+#               and marked "TO BE IMPLEMENTED"
+# 2020-11-23    Motor Brake command implemented for NewUSB interface
+#               CalibrateSupported depends on motorbrake, not head unit
+#               -r TargetResistance = TargetPower implemented
 # 2020-11-18    Calibration also supported for 1942 headunit
 # 2020-11-10    Issue 135: React on button press only once corrected
 #               Function Power2Speed() added
@@ -100,6 +115,7 @@ __version__ = "2020-11-18"
 # 2019-12-25    Target grade implemented; modes defined
 #-------------------------------------------------------------------------------
 import array
+from enum import Enum
 import usb.core
 import os
 import random
@@ -108,10 +124,10 @@ import sys
 import time
 
 import antDongle         as ant
+from   constants                    import mode_Power, mode_Grade
 import debug
 import logfile
 import structConstants   as sc
-from   FortiusAntGui                import mode_Power, mode_Grade
 import FortiusAntCommand as cmd
 import fxload
 
@@ -135,6 +151,7 @@ OKButton        = 16        # Non-existant for USB-trainers, for i-Vortex only
 modeStop        = 0         # USB Tacx modes
 modeResistance  = 2
 modeCalibrate   = 3
+modeMotorBrake  = 10        # To distinguish from the previous real modes
 
 #-------------------------------------------------------------------------------
 # path to firmware files; since 29-3-2020 in same folder as .py or .exe
@@ -222,6 +239,7 @@ class clsTacxTrainer():
     AntDevice               = None          # clsVortexTrainer only!
     OK                      = False
     Message                 = None
+    MotorBrake              = False         # Fortius motorbrake, supports calibration
 
     # Target provided by CTP (Trainer Road, Zwift, Rouvy, ...)
     # See Refresh() for dependencies
@@ -266,6 +284,7 @@ class clsTacxTrainer():
     PowercurveFactor        = 1             # 1.1 causes higher load
                                             # 0.9 causes lower load
                                             # Is manually set in Grademode
+
     Teeth                   = 15            # See Refresh()
 
     # USB devices only:
@@ -297,8 +316,10 @@ class clsTacxTrainer():
         # Usually I do not like multiple exit points, but here it's too handy
         #-----------------------------------------------------------------------
         if clv.SimulateTrainer: return clsSimulatedTrainer(clv)
-        if clv.Tacx_iVortex:    return clsTacxAntVortexTrainer(clv, AntDevice)
-            
+        if clv.Tacx_Vortex:     return clsTacxAntVortexTrainer(clv, AntDevice)
+        if clv.Tacx_Genius:     return clsTacxAntGeniusTrainer(clv, AntDevice)
+        if clv.Tacx_Bushido:    return clsTacxAntBushidoTrainer(clv, AntDevice)
+
         #-----------------------------------------------------------------------
         # So we are going to initialize USB
         # This may be either 'Legacy interface' or 'New interface'
@@ -675,10 +696,11 @@ class clsTacxTrainer():
     # returns   True/False
     #---------------------------------------------------------------------------
     def CalibrateSupported(self):
-        if self.Headunit in (hu1932, hu1942):       # And perhaps others as well
-            return True
-        else:
-            return False
+        # if self.Headunit in (hu1932, hu1942):       # And perhaps others as well
+        #     return True
+        # else:
+        #     return False
+        return self.MotorBrake
 
     #---------------------------------------------------------------------------
     # Convert G r a d e T o P o w e r           |  Grade = slope
@@ -744,10 +766,10 @@ class clsTacxTrainer():
         p_cdA = self.WindResistance                 # default=0.51
         w     = self.WindSpeed / 3.6                # default=0
         d     = self.DraftingFactor                 # default=1
-        Pair  = 0.5 * p_cdA * (v+w) * (v+w) * d * v # Watt
+        # without abs a strong tailwind would result in a higher power
+        Pair  = 0.5 * p_cdA * (v+w) * abs(v+w) * d * v # Watt
 
         i     = self.TargetGrade                    # Percentage 0...100
-        if self.clv.uphill and i < 0: i = 0         # 2020-10-09 suppress downhill
         Pslope= i/100 * m * g * v                   # Watt
 
         self.TargetPower = int(Proll + Pair + Pslope)
@@ -773,7 +795,6 @@ class clsTacxTrainer():
         Pair  = 0.5 * p * cdA * (v+w)*(v+w)* v  # Watt
 
         i     = self.TargetGrade                # Percentage 0...100
-        if self.clv.uphill and i < 0: i = 0     # 2020-10-09 suppress downhill
         Pslope= i/100 * m * g * v               # Watt
 
         Pbike = 37
@@ -1036,13 +1057,13 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
         # Mapping according TotalReverse:
         # https://github.com/totalreverse/ttyT1941/issues/9#issuecomment-624360140
         # ----------------------------------------------------------------------
-        if   self.__iVortexButtons == 0: self.Buttons = 0
-        elif self.__iVortexButtons == 1: self.Buttons = CancelButton # Left 
-        elif self.__iVortexButtons == 2: self.Buttons = UpButton
-        elif self.__iVortexButtons == 3: self.Buttons = OKButton
-        elif self.__iVortexButtons == 4: self.Buttons = DownButton
-        elif self.__iVortexButtons == 5: self.Buttons = EnterButton  # Right
-        self.__iVortexButtons = 0
+        if   self.__iVortexButtons == ant.VHU_Button_None:  self.Buttons = 0
+        elif self.__iVortexButtons == ant.VHU_Button_Left:  self.Buttons = CancelButton
+        elif self.__iVortexButtons == ant.VHU_Button_Up:    self.Buttons = UpButton
+        elif self.__iVortexButtons == ant.VHU_Button_Enter: self.Buttons = OKButton
+        elif self.__iVortexButtons == ant.VHU_Button_Down:  self.Buttons = DownButton
+        elif self.__iVortexButtons == ant.VHU_Button_Right: self.Buttons = EnterButton
+        self.__iVortexButtons = ant.VHU_Button_None
 
         # ----------------------------------------------------------------------
         # Compose displayable message
@@ -1272,6 +1293,757 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
 
         return dataHandled
 
+
+#-------------------------------------------------------------------------------
+# c l s T a c x A n t T r a i n e r
+#-------------------------------------------------------------------------------
+# Tacx-trainer with ANT connection (base class)
+#-------------------------------------------------------------------------------
+class clsTacxAntTrainer(clsTacxTrainer):
+    def __init__(self, clv, msg, AntDevice, channel):
+        super().__init__(clv, msg)
+        if debug.on(debug.Function):
+            logfile.Write ("clsTacxAntTrainer.__init__()")
+        self.AntDevice         = AntDevice
+        self.OK                = True
+        self.Channel           = channel
+        # The AntDevice is there, the trainer is not yet paired!
+
+        self._ResetTrainer()
+
+    def _ResetTrainer(self):
+        self._DeviceNumber     = 0              # provided by CHANNEL_ID msg
+        self._CommandCounter   = 0
+
+        self._Cadence          = 0              # provided by datapage 0
+        self._CurrentPower     = 0
+        self._WheelSpeed       = 0
+        self._SpeedKmh         = 0              #     (from WheelSpeed)
+        self._AlarmStatus      = 0
+
+    #---------------------------------------------------------------------------
+    # R e c e i v e F r o m T r a i n e r
+    #---------------------------------------------------------------------------
+    # input     __data as collected by HandleANTmessage
+    #
+    # function  Now provide data to TacxTrainer
+    #
+    # returns   Buttons, Cadence, CurrentPower, SpeedKmh, Message
+    #
+    #           NOT: HeartRate, TargetResistance, CurrentResistance, PedalEcho
+    #                WheelSpeed
+    #---------------------------------------------------------------------------
+    def _ReceiveFromTrainer(self):
+        # ----------------------------------------------------------------------
+        # Data provided by data pages
+        # ----------------------------------------------------------------------
+        self.Cadence      = self._Cadence
+        self.CurrentPower = self._CurrentPower
+        self.WheelSpeed   = self._WheelSpeed
+
+        self.SpeedKmh     = self.WheelSpeed / 10    # Speed = in 0.1 km/hr
+
+    #---------------------------------------------------------------------------
+    # __ConvertWind()
+    #---------------------------------------------------------------------------
+    # Different Tacx trainers use different units for wind resistance/speed
+    # Subclass needs to provide the correct formula
+    def _ConvertWind(self, WindResistance, WindSpeed, DraftingFactor):
+        raise NotImplementedError()
+
+    #---------------------------------------------------------------------------
+    # SendToTrainer()
+    #---------------------------------------------------------------------------
+    def SendToTrainer(self, QuarterSecond, TacxMode):
+        if TacxMode == modeStop:
+            self._ResetTrainer()                       # Must be paired again!
+
+        if QuarterSecond:
+            messages = []
+            if TacxMode == modeResistance:
+                if self.TargetMode == mode_Grade:
+                    # insert a wind resistance page at regular intervals
+                    WindResistanceInterval = 4
+
+                    self._CommandCounter += 1
+                    if self._CommandCounter < WindResistanceInterval:
+                        #---------------------------------------------------------------
+                        # Set target slope
+                        #---------------------------------------------------------------
+
+                        # the brake does not support changing the rolling resistance
+                        # directly; higher than default rolling resistance is simulated
+                        # by increasing the grade (result is the same)
+                        effectiveGrade = self.TargetGrade + self.__RollingResistance2Grade()
+
+                        info = ant.msgPage220_01_TacxGeniusSetTarget(self.Channel, ant.GNS_Mode_Slope,
+                                                                     effectiveGrade, self.UserAndBikeWeight)
+
+                        if debug.on(debug.Function):
+                            logfile.Write(
+                                "Tacx page 220/0x01 (OUT)  Mode=%d Target=%.1f Weight=%.1f" % \
+                                (ant.GNS_Mode_Slope, effectiveGrade, self.UserAndBikeWeight))
+                    else:
+                        #---------------------------------------------------------------
+                        # Set wind resistance and speed
+                        #---------------------------------------------------------------
+                        WindResistance, WindSpeed = self._ConvertWind(self.WindResistance,
+                                                                      self.WindSpeed, self.DraftingFactor)
+                        info = ant.msgPage220_02_TacxGeniusWindResistance(self.Channel,
+                                                                          WindResistance, WindSpeed)
+                        if debug.on(debug.Function):
+                            logfile.Write(
+                                "Tacx page 220/0x02 (OUT)  WindResistance=%.2f WindSpeed=%.1f" % \
+                                (self.WindResistance, self.WindSpeed))
+                        self._CommandCounter = 0
+
+                    msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
+                    messages.append(msg)
+                else:
+                    #---------------------------------------------------------------
+                    # Set target power
+                    #---------------------------------------------------------------
+                    # lower flywheel mass in ERG mode to make the trainer more responsive
+                    # 10kg is what is used on the Fortius
+                    flywheelMass = 10
+                    info = ant.msgPage220_01_TacxGeniusSetTarget(self.Channel, ant.GNS_Mode_Power,
+                                                                  self.TargetResistance, flywheelMass)
+                    msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
+                    messages.append(msg)
+
+                    if debug.on(debug.Function):
+                        logfile.Write(
+                            "Tacx page 220/0x01 (OUT)  Mode=%d Target=%.1f Weight=%.1f" % \
+                            (ant.GNS_Mode_Power, self.TargetResistance, flywheelMass))
+
+            #-------------------------------------------------------------------
+            # Send messages, leave receiving to the outer loop
+            #-------------------------------------------------------------------
+            if messages:
+                self.AntDevice.Write(messages, False, False)
+
+
+    # ---------------------------------------------------------------------------
+    # TargetPower2Resistance
+    #
+    # TargetResistance is used for the Genius/Bushido, even when expressed in Watt, so
+    # that PowerFactor apply; see clsUsbTrainer.Refresh().
+    # ---------------------------------------------------------------------------
+    def TargetPower2Resistance(self):
+        self.TargetResistance = self.TargetPower
+
+
+    # ---------------------------------------------------------------------------
+    # __RollingResistance2Grade
+    #
+    # Some trainers (Genius, Bushido) do not support setting a rolling
+    # resistance coefficient, but it is possible to calculate an additional
+    # slope that realizes the same effect
+    # ---------------------------------------------------------------------------
+    def __RollingResistance2Grade(self):
+        # assume the default rolling resistance applied internally is 0.004
+        # and calculate a slope that accounts for the difference
+        defaultRR = 0.004
+        deltaRR = self.RollingResistance - defaultRR
+        return deltaRR * 100
+
+    #---------------------------------------------------------------------------
+    # HandleANTmessage()
+    #---------------------------------------------------------------------------
+    def HandleANTmessage(self, msg):
+        _synch, _length, id, info, _checksum, _rest, \
+        Channel, DataPageNumber = ant.DecomposeMessage(msg)
+        SubPageNumber = info[2] if len(info) > 2 else None
+        dataHandled = False
+        messages = []
+
+        if Channel == self.Channel:
+
+            #-------------------------------------------------------------------
+            # BroadcastData - info received from the master device
+            #-------------------------------------------------------------------
+            if id == ant.msgID_BroadcastData:
+
+                #-----------------------------------------------------------------
+                # Data page 221 (0x01) msgUnpage221_01_TacxGeniusSpeedPowerCadence
+                #-----------------------------------------------------------------
+                if DataPageNumber == 221 and SubPageNumber == 0x01:
+                    self._CurrentPower, self._WheelSpeed, self._Cadence, Balance = \
+                        ant.msgUnpage221_01_TacxGeniusSpeedPowerCadence(info)
+
+                    if debug.on(debug.Function):
+                        logfile.Write('Tacx Page=%d/%#x (IN)  Power=%d Speed=%d Cadence=%d Balance=%d' %
+                                      (DataPageNumber, SubPageNumber, self._CurrentPower,
+                                       self._WheelSpeed, self._Cadence, Balance))
+
+                # -----------------------------------------------------------------
+                # Data page 221 (0x02) msgUnpage221_02_TacxGeniusDistanceHR
+                # -----------------------------------------------------------------
+                elif DataPageNumber == 221 and SubPageNumber == 0x02:
+                    Distance, Heartrate = \
+                        ant.msgUnpage221_02_TacxGeniusDistanceHR(info)
+
+                    if debug.on(debug.Function):
+                        logfile.Write('Tacx Page=%d/%#x (IN)  Distance=%d Heartrate=%d' %
+                                      (DataPageNumber, SubPageNumber, Distance, Heartrate))
+
+                # -----------------------------------------------------------------
+                # Data page 221 (0x03) msgUnpage221_03_TacxGeniusAlarmTemperature
+                # -----------------------------------------------------------------
+                elif DataPageNumber == 221 and SubPageNumber == 0x03:
+                    self._AlarmStatus, Temperature, Powerback = \
+                        ant.msgUnpage221_03_TacxGeniusAlarmTemperature(info)
+
+                    if debug.on(debug.Function):
+                        logfile.Write('Tacx Page=%d/%#x (IN)  Alarm=%d Temperature=%d Powerback=%d' %
+                                      (DataPageNumber, SubPageNumber, self._AlarmStatus, Temperature, Powerback))
+
+            #-------------------------------------------------------------------
+            # Outer loop does not need to handle trainer channel messages
+            #-------------------------------------------------------------------
+            dataHandled = True
+
+        #-----------------------------------------------------------------------
+        # Send messages, leave receiving to the outer loop
+        #-----------------------------------------------------------------------
+        if messages:
+            self.AntDevice.Write(messages, False, False)
+
+        return dataHandled
+
+#-------------------------------------------------------------------------------
+# c l s T a c x A n t G e n i u s T r a i n e r
+#-------------------------------------------------------------------------------
+# Tacx Genius trainer
+#-------------------------------------------------------------------------------
+
+# Genius state machine
+class GeniusState(Enum):
+    Pairing = 0,
+    RequestCalibrationInfo = 1,
+    RequestCalibration = 2,
+    CalibrationStarted = 3,
+    CalibrationRunning = 4,
+    CalibrationDone = 5,
+    CalibrationFailed = 6,
+    Running = 7
+
+
+class clsTacxAntGeniusTrainer(clsTacxAntTrainer):
+    def __init__(self, clv, AntDevice):
+        msg = "Pair with Tacx Genius"
+        super().__init__(clv, msg, AntDevice, ant.channel_GNS_s)
+
+    def _ResetTrainer(self):
+        super()._ResetTrainer()
+        self.__Calibrated       = False
+        self.__WatchdogTime     = time.time()
+        self.__CalibrationValue = 0
+        self.__State            = GeniusState.Pairing
+
+    def __SetState(self, state):
+        if debug.on(debug.Function):
+            logfile.Write("Genius state %s -> %s" % (self.__State, state))
+        self.__State = state
+        self.__CommandCounter = 0
+
+    def __ResetTimeout(self):
+        self.__WatchdogTime = time.time()
+
+    def __CheckCalibrationTimeout(self):
+        # cancel calibration if no progress in last 60s
+        timeout = 60
+        if time.time() > self.__WatchdogTime + timeout:
+            self.__SetState(GeniusState.CalibrationFailed)
+            self.__Calibrated = False
+
+            if debug.on(debug.Function):
+                logfile.Write("Genius calibration timed out")
+
+    #---------------------------------------------------------------------------
+    # R e c e i v e F r o m T r a i n e r
+    #---------------------------------------------------------------------------
+    # input     __data as collected by HandleANTmessage
+    #
+    # function  Now provide data to TacxTrainer
+    #
+    # returns   Buttons, Cadence, CurrentPower, SpeedKmh, Message
+    #
+    #           NOT: HeartRate, TargetResistance, CurrentResistance, PedalEcho
+    #                WheelSpeed
+    #---------------------------------------------------------------------------
+    def _ReceiveFromTrainer(self):
+        super()._ReceiveFromTrainer()
+
+        # ----------------------------------------------------------------------
+        # Compose displayable message
+        # ----------------------------------------------------------------------
+        if self.__State == GeniusState.CalibrationStarted:
+            self.Message = "* * * * N U D G E  W H E E L  F O R W A R D * * * *"
+        elif self.__State == GeniusState.CalibrationRunning:
+            self.Message = "* * * * C A L I B R A T I N G  ( D O  N O T  P E D A L ! ) * * * *"
+        elif self.__State == GeniusState.CalibrationDone:
+            nominalCalValue = 75
+            calMargin = 15
+            msg = "Calibration complete (%+d)" % \
+                           (self.__CalibrationValue - nominalCalValue)
+            if self.__CalibrationValue > nominalCalValue + calMargin:
+                msg += " - Decrease roller pressure!"
+            elif self.__CalibrationValue < nominalCalValue - calMargin:
+                msg += " - Increase roller pressure!"
+            self.Message = msg
+        elif self.__State == GeniusState.CalibrationFailed:
+            self.Message = "Calibration failed"
+        elif self._DeviceNumber:
+            msg = "Tacx Genius paired: %d" % self._DeviceNumber
+            if not self.__Calibrated:
+                msg += " UNCALIBRATED"
+            if self._AlarmStatus & ant.GNS_Alarm_Overtemperature:
+                msg += " TEMPERATURE TOO HIGH!"
+            if self._AlarmStatus & ant.GNS_Alarm_Overvoltage:
+                msg += " OVERVOLTAGE!"
+            if self._AlarmStatus & ant.GNS_Alarm_GenericError:
+                msg += " BRAKE ERROR"
+            if self._AlarmStatus & ant.GNS_Alarm_Overcurrent:
+                msg += " OVERCURRENT!"
+            if self._AlarmStatus & ant.GNS_Alarm_SpeedTooHigh:
+                msg += " SPEED TOO HIGH!"
+            if self._AlarmStatus & ant.GNS_Alarm_Undervoltage:
+                msg += " UNDERVOLTAGE!"
+            if self._AlarmStatus & ant.GNS_Alarm_CommunicationError:
+                msg += " COMMUNICATION ERROR"
+            self.Message = msg
+        else:
+            self.Message = "Pair with Tacx Genius (can take a minute)"
+
+    #---------------------------------------------------------------------------
+    # __ConvertWind()
+    #---------------------------------------------------------------------------
+    # Genius-specific wind resistance/speed units
+    def _ConvertWind(self, WindResistance, WindSpeed, DraftingFactor):
+        return 0.5 * WindResistance * DraftingFactor * 1000, \
+               -250 * WindSpeed / 3.6
+
+    #---------------------------------------------------------------------------
+    # SendToTrainer()
+    #---------------------------------------------------------------------------
+    def SendToTrainer(self, QuarterSecond, TacxMode):
+        messages = []
+        if self.__State == GeniusState.Running:
+            # ---------------------------------------------------------------
+            # Normal operation (non-calibration) handled by base class
+            # ---------------------------------------------------------------
+            super().SendToTrainer(QuarterSecond, TacxMode)
+        elif self.__State == GeniusState.RequestCalibrationInfo and QuarterSecond:
+            # ---------------------------------------------------------------
+            # Request calibration info (repeat until response received)
+            # ---------------------------------------------------------------
+            info = ant.msgPage220_04_TacxGeniusCalibration(self.Channel,
+                        ant.GNS_Calibration_Action_Request_Info)
+            msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
+            messages.append(msg)
+
+            if debug.on(debug.Function):
+                logfile.Write(
+                    "Genius page 220/0x04 (OUT)  CalibrationAction=%d" % \
+                    ant.GNS_Calibration_Action_Request_Info)
+        elif self.__State == GeniusState.RequestCalibration and QuarterSecond:
+            # ---------------------------------------------------------------
+            # Request calibration (repeat until response received)
+            # ---------------------------------------------------------------
+            info = ant.msgPage220_04_TacxGeniusCalibration(self.Channel,
+                                                           ant.GNS_Calibration_Action_Start)
+            msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
+            messages.append(msg)
+
+            if debug.on(debug.Function):
+                logfile.Write(
+                    "Genius page 220/0x04 (OUT)  CalibrationAction=%d" % \
+                    ant.GNS_Calibration_Action_Start)
+
+            self.__CheckCalibrationTimeout()
+        elif self.__State in [GeniusState.CalibrationStarted, GeniusState.CalibrationRunning] \
+                and QuarterSecond:
+            RequestInterval = 4
+            self._CommandCounter += 1
+
+            if self._CommandCounter >= RequestInterval:
+                # ---------------------------------------------------------------
+                # Request calibration info (at regular intervals)
+                # ---------------------------------------------------------------
+                info = ant.msgPage220_04_TacxGeniusCalibration(self.Channel,
+                                                               ant.GNS_Calibration_Action_Request_Info)
+                msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
+                messages.append(msg)
+
+                if debug.on(debug.Function):
+                    logfile.Write(
+                        "Genius page 220/0x04 (OUT)  CalibrationAction=%d" % \
+                        ant.GNS_Calibration_Action_Request_Info)
+
+                self._CommandCounter = 0
+
+            self.__CheckCalibrationTimeout()
+        elif self.__State == GeniusState.CalibrationDone or \
+                self.__State == GeniusState.CalibrationFailed:
+            if self.WheelSpeed > 30:
+                self.__SetState(GeniusState.Running)
+
+        #-------------------------------------------------------------------
+        # Send messages, leave receiving to the outer loop
+        #-------------------------------------------------------------------
+        if messages:
+            self.AntDevice.Write(messages, False, False)
+
+    #---------------------------------------------------------------------------
+    # HandleANTmessage()
+    #---------------------------------------------------------------------------
+    def HandleANTmessage(self, msg):
+        _synch, _length, id, info, _checksum, _rest,\
+                Channel, DataPageNumber = ant.DecomposeMessage(msg)
+        SubPageNumber = info[2] if len(info) > 2 else None
+        dataHandled = False
+        messages = []
+
+        if Channel == self.Channel:
+
+            #-------------------------------------------------------------------
+            # BroadcastData - info received from the master device
+            #-------------------------------------------------------------------
+            if id == ant.msgID_BroadcastData:
+                #---------------------------------------------------------------
+                # Ask what device is paired
+                #---------------------------------------------------------------
+                if self.__State == GeniusState.Pairing:
+                    msg = ant.msg4D_RequestMessage(self.Channel, ant.msgID_ChannelID)
+                    messages.append(msg)
+
+                # -------------------------------------------------------------------
+                # Data page 221 (0x04) msgUnpage221_04_TacxGeniusCalibrationInfo
+                # -------------------------------------------------------------------
+                if DataPageNumber == 221 and SubPageNumber == 0x04:
+                    calibrationState, calibrationValue = \
+                        ant.msgUnpage221_04_TacxGeniusCalibrationInfo(info)
+
+                    if self.__State == GeniusState.Running:
+                        # ignore if no calibration pending
+                        pass
+                    elif self.__State == GeniusState.RequestCalibrationInfo:
+                        if calibrationState == ant.GNS_Calibration_State_Calibrated:
+                            # already calibrated, start training
+                            self.__Calibrated = True
+                            self.__SetState(GeniusState.Running)
+                        elif self.clv.calibrate:
+                            # uncalibrated, initiate calibration
+                            self.__ResetTimeout()
+                            self.__SetState(GeniusState.RequestCalibration)
+                        else:
+                            # start training without calibration
+                            self.__Calibrated = False
+                            self.__SetState(GeniusState.Running)
+                    elif self.__State == GeniusState.RequestCalibration:
+                        if calibrationState == ant.GNS_Calibration_State_Started:
+                            # calibration initiated
+                            self.__SetState(GeniusState.CalibrationStarted)
+                            self.__ResetTimeout()
+                    else: # calibration started or running
+                        if calibrationState >= ant.GNS_Calibration_State_Value_Error:
+                            # error, calibration failed
+                            self.__SetState(GeniusState.CalibrationFailed)
+                            self.__Calibrated = False
+
+                        elif calibrationState == ant.GNS_Calibration_State_Running:
+                            # calibration is running
+                            self.__SetState(GeniusState.CalibrationRunning)
+                            self.__ResetTimeout()
+                        elif calibrationState == ant.GNS_Calibration_State_Calibrated:
+                            # calibration completed
+                            self.__SetState(GeniusState.CalibrationDone)
+                            self.__Calibrated = True
+                            self.__CalibrationValue = calibrationValue
+
+                    if debug.on(debug.Function):
+                        logfile.Write('Genius Page=%d/%#x (IN)  CalibrationState=%d CalibrationValue=%d' %
+                                      (DataPageNumber, SubPageNumber, calibrationState, calibrationValue))
+
+                    dataHandled = True
+
+            #-------------------------------------------------------------------
+            # ChannelID - the info that a master on the network is paired
+            #-------------------------------------------------------------------
+            elif id == ant.msgID_ChannelID:
+                Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \
+                    ant.unmsg51_ChannelID(info)
+
+                if DeviceTypeID == ant.DeviceTypeID_GNS:
+                    self._DeviceNumber = DeviceNumber
+
+                    # check calibration state after pairing
+                    self.__SetState(GeniusState.RequestCalibrationInfo)
+
+                dataHandled = True
+
+        #-----------------------------------------------------------------------
+        # Messages that are not Genius specific are handled by the base class
+        #-----------------------------------------------------------------------
+        if not dataHandled:
+            dataHandled = super().HandleANTmessage(msg)
+
+        #-----------------------------------------------------------------------
+        # Send messages, leave receiving to the outer loop
+        #-----------------------------------------------------------------------
+        if messages:
+            self.AntDevice.Write(messages, False, False)
+
+        return dataHandled
+
+#-------------------------------------------------------------------------------
+# c l s T a c x A n t B u s h i d o T r a i n e r
+#-------------------------------------------------------------------------------
+# Tacx Bushido trainer
+#-------------------------------------------------------------------------------
+
+# Bushido state machine
+class BushidoState(Enum):
+    Pairing = 0,
+    RequestMode = 1,
+    Running = 2
+
+
+class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
+    def __init__(self, clv, AntDevice):
+        msg = "Pair with Tacx Bushido controller"
+        super().__init__(clv, msg, AntDevice, ant.channel_BHU_s)
+
+    def _ResetTrainer(self):
+        super()._ResetTrainer()
+        self.__State            = BushidoState.Pairing
+        self.__ModeRequested    = ant.VHU_PCmode
+        self.__KeepAliveTime    = time.time()
+        self.__Buttons          = ant.VHU_Button_None
+
+    def __SetState(self, state):
+        if debug.on(debug.Function):
+            logfile.Write("Bushido state %s -> %s" % (self.__State, state))
+        self.__State = state
+        self._CommandCounter = 0
+
+    #---------------------------------------------------------------------------
+    # R e c e i v e F r o m T r a i n e r
+    #---------------------------------------------------------------------------
+    # input     __data as collected by HandleANTmessage
+    #
+    # function  Now provide data to TacxTrainer
+    #
+    # returns   Buttons, Cadence, CurrentPower, SpeedKmh, Message
+    #
+    #           NOT: HeartRate, TargetResistance, CurrentResistance, PedalEcho
+    #                WheelSpeed
+    #---------------------------------------------------------------------------
+    def _ReceiveFromTrainer(self):
+        super()._ReceiveFromTrainer()
+
+        # ----------------------------------------------------------------------
+        # Compose displayable message
+        # ----------------------------------------------------------------------
+        if self._DeviceNumber:
+            msg = "Tacx Bushido paired: %d" % self._DeviceNumber
+            if self.__State == BushidoState.RequestMode:
+                msg += " - Configuring head unit"
+            if self._AlarmStatus & ant.BHU_Alarm_Temperature_5 \
+                    == ant.BHU_Alarm_Temperature_5:
+                msg += " TEMPERATURE TOO HIGH!"
+            if self._AlarmStatus & ant.BHU_Alarm_Overvoltage:
+                msg += " OVERVOLTAGE!"
+            if self._AlarmStatus & ant.BHU_Alarm_Overcurrent_1 or \
+               self._AlarmStatus & ant.BHU_Alarm_Overcurrent_2:
+                msg += " OVERCURRENT!"
+            if self._AlarmStatus & ant.BHU_Alarm_SpeedTooHigh:
+                msg += " SPEED TOO HIGH!"
+            if self._AlarmStatus & ant.BHU_Alarm_Undervoltage:
+                msg += " UNDERVOLTAGE!"
+            if self._AlarmStatus & ant.BHU_Alarm_CommunicationError:
+                msg += " COMMUNICATION ERROR"
+            self.Message = msg
+        else:
+            self.Message = "Pair with Tacx Bushido controller (can take a minute)"
+
+        # ----------------------------------------------------------------------
+        # Map head unit buttons
+        # ----------------------------------------------------------------------
+        Keycode = self.__Buttons & 0x0F     # ignore key press duration
+        if   Keycode == ant.VHU_Button_None:  self.Buttons = 0
+        elif Keycode == ant.VHU_Button_Left:  self.Buttons = CancelButton
+        elif Keycode == ant.VHU_Button_Up:    self.Buttons = UpButton
+        elif Keycode == ant.VHU_Button_Enter: self.Buttons = OKButton
+        elif Keycode == ant.VHU_Button_Down:  self.Buttons = DownButton
+        elif Keycode == ant.VHU_Button_Right: self.Buttons = EnterButton
+        self.__Buttons = ant.VHU_Button_None
+
+    #---------------------------------------------------------------------------
+    # __ConvertWind()
+    #---------------------------------------------------------------------------
+    # Bushido-specific wind resistance/speed units
+    def _ConvertWind(self, WindResistance, WindSpeed, DraftingFactor):
+        return 0.5 * WindResistance * DraftingFactor * 1000, \
+               WindSpeed / 3.6
+
+    # ---------------------------------------------------------------------------
+    # SendToTrainer()
+    # ---------------------------------------------------------------------------
+    def SendToTrainer(self, QuarterSecond, TacxMode):
+        messages = []
+
+        # -------------------------------------------------------------------
+        # Send keep-alive pages at regular interval to keep HU awake
+        # -------------------------------------------------------------------
+        KeepAliveInterval = 10  # in s
+        TimeElapsed = time.time() - self.__KeepAliveTime
+        if TimeElapsed > KeepAliveInterval and QuarterSecond:
+            info = ant.msgPage000_TacxVortexHU_StayAlive(self.Channel)
+            msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
+            messages.append(msg)
+
+            if debug.on(debug.Function):
+                logfile.Write("Bushido page 0 (OUT) Keep-alive")
+
+            # reset keep-alive timer
+            self.__KeepAliveTime = time.time()
+
+        # ---------------------------------------------------------------
+        # Request mode switch (repeat until response received)
+        # ---------------------------------------------------------------
+        elif self.__State == BushidoState.RequestMode and QuarterSecond:
+            info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode(self.Channel, self.__ModeRequested)
+            msg = ant.ComposeMessage(ant.msgID_BroadcastData, info)
+            messages.append(msg)
+
+            if debug.on(debug.Function):
+                logfile.Write(
+                    "Bushido page 172/0x03 (OUT)  Mode=%d" % \
+                    self.__ModeRequested)
+
+        # ---------------------------------------------------------------
+        # Handle normal training commands in base class
+        # ---------------------------------------------------------------
+        elif self.__State == BushidoState.Running:
+            super().SendToTrainer(QuarterSecond, TacxMode)
+
+        # -------------------------------------------------------------------
+        # Send messages, leave receiving to the outer loop
+        # -------------------------------------------------------------------
+        if messages:
+            self.AntDevice.Write(messages, False, False)
+
+    # ---------------------------------------------------------------------------
+    # HandleANTmessage()
+    # ---------------------------------------------------------------------------
+    def HandleANTmessage(self, msg):
+        _synch, _length, id, info, _checksum, _rest, \
+        Channel, DataPageNumber = ant.DecomposeMessage(msg)
+        SubPageNumber = info[2] if len(info) > 2 else None
+        dataHandled = False
+        messages = []
+
+        if Channel == self.Channel:
+
+            if id == ant.msgID_AcknowledgedData:
+                # -------------------------------------------------------------------
+                # Data page 221 (0x10) msgUnpage221_TacxVortexHU_ButtonPressed
+                # -------------------------------------------------------------------
+                if DataPageNumber == 221 and SubPageNumber == 0x10:
+                    self.__Buttons = ant.msgUnpage221_TacxVortexHU_ButtonPressed(info)
+
+                    if debug.on(debug.Function):
+                        logfile.Write('Bushido Page=%d/%#x (IN)  Keycode=%d' %
+                                      (DataPageNumber, SubPageNumber, self.__Buttons))
+
+                    dataHandled = True
+
+            # -------------------------------------------------------------------
+            # BroadcastData - info received from the master device
+            # -------------------------------------------------------------------
+            elif id == ant.msgID_BroadcastData:
+                # ---------------------------------------------------------------
+                # Ask what device is paired
+                # ---------------------------------------------------------------
+                if self.__State == BushidoState.Pairing:
+                    msg = ant.msg4D_RequestMessage(self.Channel, ant.msgID_ChannelID)
+                    messages.append(msg)
+                # ---------------------------------------------------------------
+                # Check head unit mode
+                # ---------------------------------------------------------------
+                elif self.__State == BushidoState.RequestMode:
+                    # -------------------------------------------------------------------
+                    # Data page 173 (0x01) msgUnpage173_01_TacxBushidoSerialMode
+                    # -------------------------------------------------------------------
+                    if DataPageNumber == 173 and SubPageNumber == 0x01:
+                        Mode, Year, DeviceNumber = ant.msgUnpage173_01_TacxBushidoSerialMode(info)
+
+                        if debug.on(debug.Function):
+                            logfile.Write('Bushido Page=%d/%#x (IN)  Mode=%d Year=%d DeviceNumber=%d' %
+                                          (DataPageNumber, SubPageNumber, Mode,
+                                           Year, DeviceNumber))
+
+                        if Mode == self.__ModeRequested:
+                            if Mode == ant.VHU_PCmode:
+                                # PC connection active, go to training mode
+                                self.__ModeRequested = ant.VHU_TrainingPause
+                            elif Mode == ant.VHU_TrainingPause:
+                                # entered training mode, start training
+                                self.__ModeRequested = ant.VHU_Training
+                            elif Mode == ant.VHU_Training:
+                                self.__SetState(BushidoState.Running)
+
+                        dataHandled = True
+
+                elif self.__State == BushidoState.Running:
+                    # -------------------------------------------------------------------
+                    # Data page 173 (0x01) msgUnpage173_01_TacxBushidoSerialMode
+                    # -------------------------------------------------------------------
+                    if DataPageNumber == 173 and SubPageNumber == 0x01:
+                        Mode, Year, DeviceNumber = ant.msgUnpage173_01_TacxBushidoSerialMode(info)
+
+                        if debug.on(debug.Function):
+                            logfile.Write('Bushido Page=%d/%#x (IN)  Mode=%d Year=%d DeviceNumber=%d' %
+                                          (DataPageNumber, SubPageNumber, Mode,
+                                           Year, DeviceNumber))
+
+                        if Mode == ant.VHU_TrainingPause:
+                            # unpause the training
+                            self.__ModeRequested = ant.VHU_Training
+                            self.__SetState(BushidoState.RequestMode)
+
+            # -------------------------------------------------------------------
+            # ChannelID - the info that a master on the network is paired
+            # -------------------------------------------------------------------
+            elif id == ant.msgID_ChannelID:
+                Channel, DeviceNumber, DeviceTypeID, _TransmissionType = \
+                    ant.unmsg51_ChannelID(info)
+
+                if DeviceTypeID == ant.DeviceTypeID_BHU:
+                    self._DeviceNumber = DeviceNumber
+
+                    # switch to PC mode after pairing
+                    self.__SetState(BushidoState.RequestMode)
+
+                dataHandled = True
+
+        # -----------------------------------------------------------------------
+        # Messages that are not Bushido specific are handled by the base class
+        # -----------------------------------------------------------------------
+        if not dataHandled:
+            dataHandled = super().HandleANTmessage(msg)
+
+        # -----------------------------------------------------------------------
+        # Send messages, leave receiving to the outer loop
+        # -----------------------------------------------------------------------
+        if messages:
+            self.AntDevice.Write(messages, False, False)
+
+        return dataHandled
+
+
 #-------------------------------------------------------------------------------
 # c l s T a c x U s b T r a i n e r
 #-------------------------------------------------------------------------------
@@ -1280,11 +2052,31 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     # Convert WheelSpeed --> Speed in km/hr
     # SpeedScale must be defined in sub-class
     #---------------------------------------------------------------------------
+    # TotalReverse wiki:
+    # - 'Load' is the target speed. load_speed = 'kph * 289.75'
+    # - TTS4 calibrates with value '0x16a3' and says that this is 20 kph.
+    #       0x16a3 / 20 (kph) = 289.75.
+    #---------------------------------------------------------------------------
     # WheelSpeed = 1 mm/sec <==> 1.000.000 / 3600 km/hr = 1/278 km/hr
     # TotalReverse: Other implementations are using values between 1/277 and 1/360.
-    # A practical test shows that Cadence=92 gives 40km/hr at a given ratio
+    # WouterJD: A practical test shows that Cadence=92 gives 40km/hr at a given ratio
     #		factor 289.75 gives a slightly higher speed
     #		factor 301 would be good (8-11-2019)
+    #---------------------------------------------------------------------------
+    # @switchable 2020-12-02:
+    # If you mean: is there some simple explanation why the factor 289.75 is? 
+    # Unfortunately I did not find one. Maybe it is just related to the way the
+    # speed was orignally measured on the Fortius and there isn't one.
+    # What I did to calculate the factor was this: with a roll diameter of 29mm,
+    # if the speed is v then it will rotate at a rate v / (29mm * pi).
+    # The sensor in the brake will output 4 pulses per turn, so I set my function
+    # generator to a frequency of 4 * v / (29mm * pi) to simulate riding at speed
+    # v and compared the value sent over USB.
+    # I also compared the value calculated by TTS and it agreed well with the
+    # theoretical one. This was repeated 60 times for different speeds, the factor
+    # calculated using linear regression. It may in fact be closer to 289.76, 
+    # but that ist irrelevant in practice.
+    # It definitely isn't 280 or 300, at least on my unit.
     #---------------------------------------------------------------------------
     def Wheel2Speed(self):
         self.SpeedKmh = round(self.WheelSpeed / self.SpeedScale, 1)
@@ -1356,8 +2148,11 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     def SendToTrainerUSBData(self, TacxMode, Calibrate, PedalEcho, Target, Weight):
         raise NotImplementedError                   # To be defined in sub-class
 
+    def SendToTrainerUSBData_MotorBrake(self):
+        return False                                # Can be overwritten in sub-class
+
     def SendToTrainer(self, _QuarterSecond, TacxMode):
-        assert (TacxMode in (modeStop, modeResistance, modeCalibrate))
+        assert (TacxMode in (modeStop, modeResistance, modeCalibrate, modeMotorBrake))
 
         Calibrate = self.Calibrate
         PedalEcho = self.PedalEcho
@@ -1403,11 +2198,17 @@ class clsTacxUsbTrainer(clsTacxTrainer):
             Target      = self.Speed2Wheel(20)                  # 20 km/h is our decision for calibration
             Weight      = 0
 
+        elif TacxMode == modeMotorBrake:
+            pass                                                # No actions required
+
         if error:
             logfile.Console(error)
         else:
-            Target = int(Target)
-            data   = self.SendToTrainerUSBData(TacxMode, Calibrate, PedalEcho, Target, Weight)
+            if TacxMode == modeMotorBrake:
+                data   = self.SendToTrainerUSBData_MotorBrake()
+            else:
+                Target = int(Target)
+                data   = self.SendToTrainerUSBData(TacxMode, Calibrate, PedalEcho, Target, Weight)
 
             #-------------------------------------------------------------------
             # Send buffer to trainer
@@ -1460,16 +2261,20 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
 
     def TargetPower2Resistance(self):
         rtn = 0
-        if self.SpeedKmh > 0:
-            # instead of brakeCalibrationFactor use PowerFactor -p
-            # GoldenCheetah: setResistance = (((load  / curSpeedInternal) - 0.2f) / 0.0036f)
-            #                setResistance *= brakeCalibrationFactor
-            # rtn = ((PowerInWatt / WheelSpeed) - 0.2) * PowerResistanceFactor
 
-            # ref https://github.com/WouterJD/FortiusANT/wiki/Power-calibrated-with-power-meter-(iMagic)
-            rtn = (self.TargetPower - 2.2 * self.SpeedKmh) / \
-                    (self.SpeedKmh * self.SpeedKmh / 648 + \
-                     self.SpeedKmh / 5411 + 0.1058)
+        if self.clv.Resistance:
+            rtn = self.TargetPower  # e.g. in manual mode you can directly set Resistance
+        else:
+            if self.SpeedKmh > 0:
+                # instead of brakeCalibrationFactor use PowerFactor -p
+                # GoldenCheetah: setResistance = (((load  / curSpeedInternal) - 0.2f) / 0.0036f)
+                #                setResistance *= brakeCalibrationFactor
+                # rtn = ((PowerInWatt / WheelSpeed) - 0.2) * PowerResistanceFactor
+
+                # ref https://github.com/WouterJD/FortiusANT/wiki/Power-calibrated-with-power-meter-(iMagic)
+                rtn = (self.TargetPower - 2.2 * self.SpeedKmh) / \
+                        (self.SpeedKmh * self.SpeedKmh / 648 + \
+                        self.SpeedKmh / 5411 + 0.1058)
 
         # Check bounds
         rtn = min(226, rtn) # Maximum value; as defined by Golden Cheetah
@@ -1616,29 +2421,158 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
 # c l s T a c x N e w U s b T r a i n e r
 #-------------------------------------------------------------------------------
 # Tacx-trainer with New interface & USB connection
+#
+# This class implements the MotorBrake AND the MagneticBrake.
+# For the time being; Creating a derived class duplicates more common code than
+# simplifying it.
 #-------------------------------------------------------------------------------
 class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     def __init__(self, clv, Message, Headunit, UsbDevice):
         super().__init__(clv, Message)
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__()")
-        self.SpeedScale = 301                        # TotalReverse: 289.75
-        self.PowerResistanceFactor = 128866          # TotalReverse
+        self.SpeedScale = 289.75                    # See comment above
+        self.PowerResistanceFactor = 128866         # TotalReverse
 
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
         self.OK         = True
 
+        self.MotorBrakeUnitFirmware = 0             # Introduced 2020-11-23
+        self.MotorBrakeUnitSerial   = 0
+        self.MotorBrakeUnitYear     = 0
+        self.MotorBrakeUnitType     = 0             # 41 = T1941 (Fortius motorbrake)
+                                                    # 01 = T1901 (Magnetic brake)
+        self.Version2               = 0
+
+        #---------------------------------------------------------------------------
+        # Resistance values for MagneticBrake
+        # - possible force values to be recv from device
+        # - possible resistance value to be transmitted to device
+        #
+        # The head-unit only returns the values 1039...4677 in CurrentResistance.
+        # the head-unit only accepts the TargetResistances 1900...3750; other values
+        # are rounded down to the nearest value..
+        # Sending 1000 is the same as 1900
+        # Sending 2029 is the same as 1900
+        # Sending 5000 is the same as 3750
+        #
+        # The idea behind this, why there are 14 entries, why these values and why
+        # the steps between these values are not equal is the secret of the new USB
+        # interface with the Magnetic brake attached.
+        #---------------------------------------------------------------------------
+        self.currentR = [1039, 1299, 1559, 1819, 2078, 2338, 2598, 2858, 3118, 3378, 3767, 4027, 4287, 4677]
+        self.targetR  = [1900, 2030, 2150, 2300, 2400, 2550, 2700, 2900, 3070, 3200, 3350, 3460, 3600, 3750]
+
+        #---------------------------------------------------------------------------
+        # Initial state = stop
+        # Do not refresh() before sending a command
+        #---------------------------------------------------------------------------
+        self.SendToTrainer(True, modeStop)
+        time.sleep(0.1)                            # Allow head unit time to process
+        self.Refresh(True, modeStop)
+        time.sleep(0.1)                            # Allow head unit time to process
+
+        #---------------------------------------------------------------------------
+        # Only headunit T1932 supports Magnetic brake; all others Motor Brake only
+        #---------------------------------------------------------------------------
+        if self.Headunit != hu1932:
+            self.MotorBrake = True
+
+        if True:
+            #-----------------------------------------------------------------------
+            # Check motor brake version
+            #-----------------------------------------------------------------------
+            self.SendToTrainer(True, modeMotorBrake)
+            time.sleep(0.1)                        # Allow head unit time to process
+            self._ReceiveFromTrainer_MotorBrake()
+            time.sleep(0.1)                        # Allow head unit time to process
+
+            #-----------------------------------------------------------------------
+            # Refresh with stop-command
+            #-----------------------------------------------------------------------
+            self.SendToTrainer(True, modeStop)
+            time.sleep(0.1)                        # Allow head unit time to process
+            self.Refresh(True, modeStop)
+
+        #---------------------------------------------------------------------------
+        if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__() done")
+
     #---------------------------------------------------------------------------
     # Basic physics: Power = Resistance * Speed  <==> Resistance = Power / Speed
     #---------------------------------------------------------------------------
     def CurrentResistance2Power(self):
-        self.CurrentPower = int(self.CurrentResistance / self.PowerResistanceFactor * self.WheelSpeed)
+        if self.MotorBrake:
+            #-------------------------------------------------------------------
+            # e.g. Tacx Fortius: Motor Brake T1941 connected to head unit T1932
+            #-------------------------------------------------------------------
+            self.CurrentPower = int(self.CurrentResistance / self.PowerResistanceFactor * self.WheelSpeed)
+
+        else:
+            #-------------------------------------------------------------------
+            # e.g. Tacx Flow: Magnetic Brake T1901 connected to head unit T1932
+            #-------------------------------------------------------------------
+            self.CurrentPower = int(self.Resistance2PowerMB(self.CurrentResistance, self.SpeedKmh))
+
+    #---------------------------------------------------------------------------
+    # Power formula for Magnetic brake; thanks to @swichabl and @cyclingflow
+    #---------------------------------------------------------------------------
+    # The formula used is this:
+    # power = speed * (scale factor * resistance * 
+    #                     speed / (speed + critical speed) + rolling resistance)
+    # So there are just two parameters (scale factor and critical speed) that
+    # would be the same for everyone + rolling resistance which should
+    # eventually be determined individually using the "runoff"/spin-down test.
+    #---------------------------------------------------------------------------
+    def Resistance2PowerMB(self, Resistance, SpeedKmh):
+        ScaleFactor             = 0.0149   # N
+        CriticalSpeed           = 4.85     # m/s
+
+        if self.clv.CalibrateRR:
+            RollingResistance = self.clv.CalibrateRR    # Value 0...100 allowed
+            RollingResistance = min(100, RollingResistance)
+            RollingResistance = max(  0, RollingResistance)
+        else:
+            RollingResistance   = 15      # N
+
+        Speed = SpeedKmh / 3.6
+        return Speed * (ScaleFactor * Resistance * Speed / (Speed + CriticalSpeed) + RollingResistance)
 
     def TargetPower2Resistance(self):
         rtn        = 0
-        if self.WheelSpeed > 0:
-            rtn = self.TargetPower * self.PowerResistanceFactor / self.WheelSpeed
-            rtn = self.__AvoidCycleOfDeath(rtn)
+
+        if self.clv.Resistance:
+            #-------------------------------------------------------------------
+            # e.g. in manual mode you can directly set Resistance
+            # For the magnetic brake, there are 13 individual values
+            #       knowing that we UP/DOWN by 50 Watt, divide TargetPower by 50
+            #       So 0...650 Watt results in passing the targetR[] table
+            #-------------------------------------------------------------------
+            if self.MotorBrake:
+                rtn = self.TargetPower
+            else:
+                i = int(self.TargetPower / 50)
+                i = max(                    0, i)        # Not less than 0
+                i = min(len(self.targetR) - 1, i)        # Not more than 13
+                rtn = self.targetR[i]
+
+        elif self.MotorBrake:
+            #-------------------------------------------------------------------
+            # e.g. Tacx Fortius: Motor Brake T1941 connected to head unit T1932
+            #-------------------------------------------------------------------
+            if self.WheelSpeed > 0:
+                rtn = self.TargetPower * self.PowerResistanceFactor / self.WheelSpeed
+                rtn = self.__AvoidCycleOfDeath(rtn)
+
+        else:
+            #-------------------------------------------------------------------
+            # e.g. Tacx Flow: Magnetic Brake T1901 connected to head unit T1932
+            #-------------------------------------------------------------------
+            if self.WheelSpeed > 0:
+                for i in range(0, len(self.currentR)):
+                    if self.Resistance2PowerMB(self.currentR[i], self.SpeedKmh) >= self.TargetPower:
+                        break
+                rtn = self.targetR[i]
+
         rtn = int(rtn)
 
         if debug.on(debug.Function):logfile.Write (\
@@ -1741,6 +2675,30 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         return data
 
     #---------------------------------------------------------------------------
+    # S e n d T o T r a i n e r D a t a _ M o t o r B r a k e
+    #---------------------------------------------------------------------------
+    # input     None
+    #
+    # function  Called by SendToTrainer()
+    #           Compose buffer to ask for Motor Brake Version
+    #
+    # returns   data
+    #---------------------------------------------------------------------------
+    def SendToTrainerUSBData_MotorBrake(self):
+        #-----------------------------------------------------------------------
+        # Data buffer "T1941 Motor Brake Version Message", refer to TotalReverse
+        # https://github.com/totalreverse/ttyT1941/wiki#t1941-motor-brake-commands-and-answers
+        #-----------------------------------------------------------------------
+        fControlCommand     = sc.unsigned_int       # 0...3
+
+        #-----------------------------------------------------------------------
+        # Build data buffer to be sent to trainer
+        #-----------------------------------------------------------------------
+        format = sc.no_alignment + fControlCommand
+        data   = struct.pack (format, 0x00000002)
+        return data
+
+    #---------------------------------------------------------------------------
     # R e c e i v e F r o m T r a i n e r
     #---------------------------------------------------------------------------
     # input     usbDevice
@@ -1781,10 +2739,10 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         data  = array.array('B', [])        # Empty Binary array
         data  = self.USB_Read()             # Try without a sleep first!
         while retry and len(data) < 40:
-            time.sleep(0.1)             # 2020-09-29 short delay @RogerPleijers
-            data = self.USB_Read()
             if debug.on(debug.Any):
                 logfile.Write ('Retry because short buffer received')
+            time.sleep(0.1)             # 2020-09-29 short delay @RogerPleijers
+            data = self.USB_Read()
             retry -= 1
 
         if len(data) < 40:
@@ -1904,4 +2862,101 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             if debug.on(debug.Function):
                 logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
                             (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
+                            )
+    #---------------------------------------------------------------------------
+    # R e c e i v e F r o m T r a i n e r
+    #---------------------------------------------------------------------------
+    # input     usbDevice
+    #
+    # function  Read status from trainer
+    #
+    # returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
+    #
+    #---------------------------------------------------------------------------
+    def _ReceiveFromTrainer_MotorBrake(self):
+        if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer._ReceiveFromTrainer_MotorBrake()")
+        #-----------------------------------------------------------------------
+        # Read from trainer
+        #-----------------------------------------------------------------------
+        data  = array.array('B', [])        # Empty Binary array
+        data  = self.USB_Read()
+
+        if len(data) < 40:
+            pass
+        else:
+            #-----------------------------------------------------------------------
+            # Define buffer format
+            #-----------------------------------------------------------------------
+            fFiller0_23             = sc.pad * 24       #  0...23
+
+            _nHeader                = 0
+            fHeader                 = sc.unsigned_int   # 24...27
+
+            nMotorBrakeUnitFirmware = 1
+            fMotorBrakeUnitFirmware = sc.unsigned_int   # 28...31   0.x.y.z
+
+            nMotorBrakeUnitSerial   = 2                 # 32...35   tt-YY-##### (tt=41 (T1941), YY=year,
+            fMotorBrakeUnitSerial   = sc.unsigned_int   #                 ##### brake individual serial)
+
+            nVersion2               = 3                 # 36, 37
+            fVersion2               = sc.unsigned_short
+
+            fFiller38_63            = sc.pad * (63-37)  # 38...63
+
+            format = sc.no_alignment + fFiller0_23 + fHeader + fMotorBrakeUnitFirmware + \
+                        fMotorBrakeUnitSerial + \
+                        fVersion2 + fFiller38_63
+
+            #-----------------------------------------------------------------------
+            # Buffer must be 64 characters (struct.calcsize(format)),
+            # Note that tt_FortiusSB returns 48 bytes only; append with dummy
+            #-----------------------------------------------------------------------
+            for _v in range( 64 - len(data) ):
+                data.append(0)
+
+            #-----------------------------------------------------------------------
+            # Parse buffer
+            #-----------------------------------------------------------------------
+            tuple = struct.unpack (format, data)
+            self.MotorBrakeUnitFirmware = tuple[nMotorBrakeUnitFirmware]
+            self.MotorBrakeUnitSerial   = tuple[nMotorBrakeUnitSerial]
+            self.Version2               = tuple[nVersion2]
+
+            #-----------------------------------------------------------------------
+            # Split serial; all decimal digits = tt-yy-#####
+            #-----------------------------------------------------------------------
+            d = self.MotorBrakeUnitSerial                       # d = decimals
+
+            self.MotorBrakeUnitType = int(d / 10000000)         # move 7 digits to right
+            d = d - self.MotorBrakeUnitType * 10000000
+
+            self.MotorBrakeUnitYear = int(d / 100000)           # move 5 digits to right
+            d = d - self.MotorBrakeUnitYear * 100000
+
+            self.MotorBrakeUnitSerial = d                       # remaining
+
+            #-----------------------------------------------------------------------
+            # If T1941 or T1946 motorbrake, then calibration is supported AND
+            #       a different PowerCurve is used.
+            #
+            # Note that Headunit T1932 does not return a value for T1901
+            #       Note that, only the T1932 controls a magnetic brake.
+            #
+            # #173 The possible motor brakes are T1941 (230V) and T1946 (110V)
+            #       Controlled by T1932 and T1942 headunits.
+            #-----------------------------------------------------------------------
+            if self.MotorBrakeUnitType in (41, 46):
+                self.MotorBrake = True
+
+            if False:
+                print ('MagneticBrake active --- to test code ---  T O   B E   D E A C T I V A T E D')
+                self.MotorBrake = False
+
+            #-----------------------------------------------------------------------
+            # Important enough; always display
+            #-----------------------------------------------------------------------
+            logfile.Console ("Motor Brake Unit Firmware=%s Serial=%5s year=%s type=T19%s Version2=%s MotorBrake=%s" % \
+                            (   self.MotorBrakeUnitFirmware, self.MotorBrakeUnitSerial, \
+                                self.MotorBrakeUnitYear + 2000, self.MotorBrakeUnitType, \
+                                self.Version2, self.MotorBrake) \
                             )
