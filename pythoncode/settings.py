@@ -977,10 +977,10 @@ class dlgFortiusAntSettings(wx.Dialog):
             else:
                 clv.hrm             = int(self.txt_H.GetValue())
 
-            if self.txt_t.GetValue() == '':
+            if self.combo_t.GetValue() == '':
                 clv.TacxType        = False
             else:
-                clv.TacxType        = self.txt_t.GetValue()
+                clv.TacxType        = self.combo_t.GetValue()
 
         # ----------------------------------------------------------------------
         # Store values in json file
