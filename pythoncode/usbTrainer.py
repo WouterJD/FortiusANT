@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-05"
+__version__ = "2021-01-10"
+# 2021-01-10    Motorbrake version message decomposition improved #201
 # 2021-01-05    Tacxtype Motorbrake added
 # 2021-01-04    lib_programname used to get correct dirname
 # 2020-12-30    Added: clsTacxAntTrainer, clsTacxAntBushidoTrainer,
@@ -2947,16 +2948,18 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
 
             #-----------------------------------------------------------------------
             # Split serial; all decimal digits = tt-yy-#####
+            # Note that ##### may be any length; e.g. 1903!
             #-----------------------------------------------------------------------
-            d = self.MotorBrakeUnitSerial                       # d = decimals
-
-            self.MotorBrakeUnitType = int(d / 10000000)         # move 7 digits to right
-            d = d - self.MotorBrakeUnitType * 10000000
-
-            self.MotorBrakeUnitYear = int(d / 100000)           # move 5 digits to right
-            d = d - self.MotorBrakeUnitYear * 100000
-
-            self.MotorBrakeUnitSerial = d                       # remaining
+            s = str(self.MotorBrakeUnitSerial)
+            self.MotorBrakeUnitType   = 0
+            self.MotorBrakeUnitYear   = 0
+            self.MotorBrakeUnitSerial = 0
+            try:
+                self.MotorBrakeUnitType   = int(s[0:2])
+                self.MotorBrakeUnitYear   = int(s[2:4])
+                self.MotorBrakeUnitSerial = int(s[4:])
+            except:
+                pass
 
             #-----------------------------------------------------------------------
             # If T1941 or T1946 motorbrake, then calibration is supported AND
@@ -2983,3 +2986,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
                                 self.MotorBrakeUnitYear + 2000, self.MotorBrakeUnitType, \
                                 self.Version2, self.MotorBrake) \
                             )
+        if self.MotorBrake:
+            logfile.Console ("FortiusAnt handles your trainer with the MotorBrake power curve")
+        else:
+            logfile.Console ("FortiusAnt handles your trainer with the MagneticBrake power curve")
