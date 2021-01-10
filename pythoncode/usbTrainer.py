@@ -3,6 +3,7 @@
 #-------------------------------------------------------------------------------
 __version__ = "2021-01-10"
 # 2021-01-10    Motorbrake version message decomposition improved #201
+#               Informative messages on brake type
 # 2021-01-05    Tacxtype Motorbrake added
 # 2021-01-04    lib_programname used to get correct dirname
 # 2020-12-30    Added: clsTacxAntTrainer, clsTacxAntBushidoTrainer,
