@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-07"
+__version__ = "2021-01-10"
+# 2021-01-10    Digital gearbox changed to front/rear index
 # 2021-01-06    settings added (+ missing other files for version check)
 # 2020-12-24    usage of UseGui implemented
 # 2020-12-20    Constants used from constants.py
@@ -127,7 +128,7 @@ def Runoff(self):
         while self.RunningSwitch:
             logfile.Console ('Doing runoff')
             self.SetMessages('Doing runoff', datetime.utcnow().strftime('%Y-%m-%d %H-%M-%S'), str(time.gmtime().tm_sec))
-            self.SetValues(0,1,time.gmtime().tm_sec,3,4,5,6,7,8)
+            self.SetValues(0,1,time.gmtime().tm_sec,3,4,5,6,7,8,9,10)
             time.sleep(1)
         logfile.Console ('Runoff done')
         rtn = True
@@ -141,7 +142,7 @@ def Tacx2Dongle(self):
         while self.RunningSwitch:
             logfile.Console ('Translate Tacx 2 Dongle')
             self.SetMessages('Translate Tacx 2 Dongle', datetime.utcnow().strftime('%Y-%m-%d %H-%M-%S'), str(time.gmtime().tm_sec))
-            self.SetValues(0,1,time.gmtime().tm_sec,3,4,5,6,7,8)
+            self.SetValues(0,1,time.gmtime().tm_sec,3,4,5,6,7,8,9,10)
             time.sleep(1)
         logfile.Console ('Tacx2Dongle done')
         rtn = True
@@ -203,7 +204,8 @@ class clsFortiusAntConsole:
             self.RunningSwitch = True
             Tacx2Dongle(self)
 
-    def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth):
+    def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, \
+            fTargetGrade, iTacx, iHeartRate, iCrancksetIndex, iCassetteIndex, fReduction):
         # ----------------------------------------------------------------------
         # Console: Update current readings, once per second
         # ----------------------------------------------------------------------
@@ -219,8 +221,8 @@ class clsFortiusAntConsole:
                     sTarget += "(%iW)" % iTargetPower        # Target power added for reference
             else:
                 sTarget = "None"
-            msg = "Target=%s Speed=%4.1fkmh hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f T=%3.0f" % \
-                  (  sTarget,    fSpeed,  iHeartRate,       iPower,     iRevs,  iTacx, int(iTeeth) )
+            msg = "Target=%s Speed=%4.1fkmh hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f T=%2s %2s %s" % \
+                  (sTarget,       fSpeed,  iHeartRate,       iPower,    iRevs,  iTacx, iCrancksetIndex, iCassetteIndex, fReduction)
             logfile.Console (msg)
 
     def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
@@ -293,7 +295,7 @@ if UseGui:
                 elif cmd == cmd_StopButton:
                     pass
                 elif cmd == cmd_SetValues:
-                    self.SetValues(rtn[0], rtn[1], rtn[2], rtn[3], rtn[4], rtn[5], rtn[6], rtn[7], rtn[8])# rtn is tuple
+                    self.SetValues(rtn[0], rtn[1], rtn[2], rtn[3], rtn[4], rtn[5], rtn[6], rtn[7], rtn[8], rtn[9], rtn[10])# rtn is tuple
                 elif cmd == cmd_SetMessages:
                     self.SetMessages(rtn[0], rtn[1], rtn[2])# rtn is (Tacx, Dongle, HRM) tuple
                 elif cmd == cmd_PedalStrokeAnalysis:
@@ -392,13 +394,13 @@ class clsFortiusAntParent:
             logfile.Write ("mp-MainRespondToGUI(%s, %s)" % (command, rtn))
         self.app_conn.send((command, rtn))      # Step 3. Main sends the response to GUI
 
-    def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth):
+    def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iCrancksetIndex, iCassetteIndex, fReduction):
         delta = time.time() - self.LastTime     # Delta time since previous call
         if delta >= 1:                          # Do not send faster than once per second
             self.LastTime = time.time()         # Time in seconds
-            if debug.on(debug.MultiProcessing): logfile.Write ("mp-MainDataToGUI(%s, (%s, %s, %s, %s, %s, %s, %s, %s, %s))" % \
-                    (cmd_SetValues, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth))
-            self.app_conn.send((cmd_SetValues, (fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth)))
+            if debug.on(debug.MultiProcessing): logfile.Write ("mp-MainDataToGUI(%s, (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))" % \
+                    (cmd_SetValues, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iCrancksetIndex, iCassetteIndex, fReduction))
+            self.app_conn.send((cmd_SetValues, (fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iCrancksetIndex, iCassetteIndex, fReduction)))
 
     def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
         newMessages = (Tacx, Dongle, HRM)

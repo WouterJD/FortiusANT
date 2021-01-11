@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-06"
+__version__ = "2021-01-10"
+# 2021-01-10    -T transmission added, issue #120
+#               added: trainer type: Magneticbrake, for consistency
 # 2021-01-06    settings added and can be tested from __main__
 #               Json-file overwrites command line
 # 2021-01-05    added: trainer type: Motorbrake
@@ -97,6 +99,17 @@ class CommandLineVariables(object):
     Tacx_Genius     = False
     Tacx_Bushido    = False
     Tacx_MotorBrake = False
+    Tacx_MagneticBrake = False
+
+    Transmission    = ''        # introduced 2020-01-10
+
+    Cranckset      = []
+    CrancksetStart = 0          # The initial value of index
+    CrancksetMax   = 0          # Corresponds to full WH of the drawing area
+
+    Cassette       = []
+    CassetteStart  = 0          # The initial value of index
+    CassetteMax    = 0          # Corresponds to full WH of the drawing area
 
     #---------------------------------------------------------------------------
     # Runoff, as defined by @cyclingflow
@@ -119,22 +132,6 @@ class CommandLineVariables(object):
     RunoffMinSpeed  =   1
     RunoffTime      =   7
     RunoffPower     = 100
-
-    #---------------------------------------------------------------------------
-    # Deprecated
-    #---------------------------------------------------------------------------
-    # __tyre__        = 2.096
-    # __ftp__         = 200
-    # __fL__          = 50
-    # __fS__          = 34
-    # __rS__          = 15
-    # __rL__          = 25
-
-    # tyre            = __tyre__   # m        tyre circumference
-    # fL              = __fL__     # teeth    chain wheel front / large
-    # fS              = __fS__     # teeth    chain wheel front / small
-    # rL              = __rL__     # teeth    cassette back / large
-    # rS              = __rS__     # teeth    cassette back / small
 
     #---------------------------------------------------------------------------
     # Define and process command line
@@ -172,12 +169,13 @@ class CommandLineVariables(object):
         parser.add_argument   ('-R','--Runoff',    help='maxSpeed/dip/minSpeed/targetTime/power',              required=False, default=False)
         parser.add_argument   ('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
 #scs    parser.add_argument   ('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
+        parser.add_argument   ('-T','--Transmission',help=argparse.SUPPRESS,                                   required=False, default=False)
 
-        ant_tacx_models = ['Vortex', 'Genius', 'Bushido', 'Motorbrake']
+        self.ant_tacx_models = ['Bushido', 'Genius', 'Vortex', 'Magneticbrake', 'Motorbrake']
         ant_tacx_help = 'Specify Tacx Type; default=autodetect.' \
-                      + 'Allowed values are: %s' % ', '.join(ant_tacx_models)
+                      + 'Allowed values are: %s' % ', '.join(self.ant_tacx_models)
         parser.add_argument('-t', '--TacxType', help=ant_tacx_help, metavar='',                             required=False, default=False, \
-                choices=ant_tacx_models + ['i-Vortex']) # i-Vortex is still allowed for compatibility
+                choices=self.ant_tacx_models + ['i-Vortex']) # i-Vortex is still allowed for compatibility
 
         parser.add_argument   ('-x','--exportTCX', help='Export TCX file',                                     required=False, action='store_true')
 
@@ -352,11 +350,78 @@ class CommandLineVariables(object):
                 self.Tacx_Genius = True
             elif 'Bushido' in self.TacxType:
                 self.Tacx_Bushido = True
+            elif 'Magneticbrake' in self.TacxType:
+                self.Tacx_Magneticbrake = True
             elif 'Motorbrake' in self.TacxType:
                 self.Tacx_MotorBrake = True
             else:
                 logfile.Console('Command line error; -t incorrect value=%s' % args.TacxType)
                 args.TacxType = False
+
+        #-----------------------------------------------------------------------
+        # Get Transmission
+        # Default    = "34-50    x 34-30-27-25-23-21-19-17-15-13-11"
+        # MTB single = "32       x 50-42-36-32-28-24-21-18-16-14-12-10"
+        # MTB double = "24-36    x 36-32-28-24-21-19-17-15-13-11"
+        # MTB triple = "22-34-44 x 36-32-28-24-21-19-17-15-13-11"
+        # MTB 3 x 13 = "22-34-44 x 50-42-36-32-28-24-21-18-16-14-12-10"
+        #-----------------------------------------------------------------------
+        Transmission = "34-50* x 34-30-27-25-23-21-19*-17-15-13-11"
+        if not args.Transmission: args.Transmission = Transmission
+        while True:
+            #-------------------------------------------------------------------
+            # Use command-line value, if fails - use default
+            #-------------------------------------------------------------------
+            try:
+                self.Cranckset      = []
+                self.CrancksetStart = 0  # The initial value of index
+                self.CrancksetMax   = 0  # Corresponds to full WH of the drawing area
+
+                self.Cassette       = []
+                self.CassetteStart  = 0  # The initial value of index
+                self.CassetteMax    = 0  # Corresponds to full WH of the drawing area
+
+                args.Transmission   = args.Transmission.replace(' ', '')
+                #---------------------------------------------------------------
+                # Split in crackset and cassette
+                #---------------------------------------------------------------
+                s1 = args.Transmission.split("x")
+                assert( len(s1) == 2 )
+                #---------------------------------------------------------------
+                # Split cranckset into chainrings (max 3)
+                #---------------------------------------------------------------
+                s2 = s1[0].split("-")
+                for i in range(0, len(s2)):
+                    chainring = s2[i]
+                    if (chainring.find('*') != -1): 
+                        self.CrancksetStart = i
+                        chainring = chainring.replace('*', '')
+                    self.Cranckset.append(int(chainring))
+                    if int(chainring) > self.CrancksetMax: self.CrancksetMax = int(chainring)
+                    if i == 2: break
+                #---------------------------------------------------------------
+                # Split cassette into sprockets (max 13)
+                #---------------------------------------------------------------
+                s2 = s1[1].split("-")
+                for i in range(0, len(s2)):
+                    sprocket = s2[i]
+                    if (sprocket.find('*') != -1): 
+                        self.CassetteStart = i
+                        sprocket = sprocket.replace('*', '')
+                    self.Cassette.append(int(sprocket))
+                    if int(sprocket) > self.CassetteMax: self.CassetteMax = int(sprocket)
+                    if i == 12: break
+            except:
+                logfile.Console('Command line error; -T incorrect Transmission=%s' % args.GradeAdjust)
+                args.Transmission = Transmission
+                break
+            else:
+                break
+        #-----------------------------------------------------------------------
+        # If no start defined, take middle position
+        #-----------------------------------------------------------------------
+        if self.CrancksetStart == 0: self.CrancksetStart = int(round(len(self.Cranckset) / 2 - 0.5))
+        if self.CassetteStart  == 0: self.CassetteStart  = int(round(len(self.Cassette)  / 2 - 0.5))
 
         #-----------------------------------------------------------------------
         # Check pedal stroke analysis
@@ -430,6 +495,11 @@ class CommandLineVariables(object):
             if      self.args.simulate:      logfile.Console("-s")
 #scs        if v or self.args.scs:           logfile.Console("-S %s" % self.scs )
             if v or self.args.TacxType:      logfile.Console("-t %s" % self.TacxType)
+            if True or v or self.args.Transmission:
+                                             logfile.Console('-T %s x %s (start=%sx%s)' % \
+                                                                    (self.Cranckset, self.Cassette, \
+                                                                     self.Cranckset[self.CrancksetStart], \
+                                                                     self.Cassette [self.CassetteStart]) )
             if      self.exportTCX:          logfile.Console("-x")
 
         except:

@@ -1,7 +1,12 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-07"
+__version__ = "2021-01-08"
+# 2021-01-08    Buttons spaced and Panel used for TAB-handling
+#               Drawing done on the panel and speedometers 'disable focus'
+#               #120 cranckset added for virtual front/read shifting
+#               Shifting changed to setting the indexes (front/rear)
+#                   SetValues() parameter-change
 # 2021-01-06    settings added
 # 2020-12-20    Constants moved to constants.py
 # 2020-12-16    Force refresh when main inputs zero
@@ -102,9 +107,22 @@ class frmFortiusAntGui(wx.Frame):
     power      = [] # Array with power-tuples
 
     def __init__(self, parent, pclv):
+        # ----------------------------------------------------------------------
+		# Create frame and panel for TAB-handling
+        # (First versions did not use panel, and that's why TABs did not work)
+        # ----------------------------------------------------------------------
         wx.Frame.__init__(self, parent, -1, githubWindowTitle(), \
                style = wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
-        self.clv = pclv     # clv = Command Line Variables
+        if True:
+            self.panel = wx.Panel(self) # Controls on panel for TAB-handling
+        else:
+            self.panel = self           # Controls directly on the frame window
+
+        # ----------------------------------------------------------------------
+		# Save Command Line Variables in tge GUI-context
+        # ----------------------------------------------------------------------
+        self.clv = pclv
+
         # ----------------------------------------------------------------------
 		# Images are either in directory of the .py or embedded in .exe
         # ----------------------------------------------------------------------
@@ -129,8 +147,8 @@ class frmFortiusAntGui(wx.Frame):
 		# Default initial actions, bind functions to frame
         # ----------------------------------------------------------------------
         self.Bind(wx.EVT_CLOSE, self.OnClose)
-        self.Bind(wx.EVT_PAINT, self.OnPaint)              # Draw the bitmap
-        self.Iconize(False)                                # un-iconize
+        self.panel.Bind(wx.EVT_PAINT, self.OnPaint)    # Draw the bitmap
+        self.Iconize(False)                            # un-iconize
 #       print(self.GetPosition())
 #       self.Center()                                      # It does not center the frame on the screen...
 #       print(self.GetPosition())
@@ -182,43 +200,53 @@ class frmFortiusAntGui(wx.Frame):
             # print('Cannot load ' + Heart_jpg)
             pass
         # ----------------------------------------------------------------------
-		# Calculate location of Gearbox image
+		# Calculate location of Cassette image
         # Positioned above HeartRate_img, equally wide/heigh
         # ----------------------------------------------------------------------
-        self.GearboxTeeth  = 0
-        self.GearboxWH     = self.HeartRateWH
-        self.GearboxX      = self.HeartRateX
-        self.GearboxY      = self.HeartRateY - self.HeartRateWH - Margin
+        self.CassetteIndex  = self.clv.CassetteStart
+        self.CassetteWH     = self.HeartRateWH
+        self.CassetteX      = self.HeartRateX
+        self.CassetteY      = self.HeartRateY - self.HeartRateWH - Margin
         
         # ----------------------------------------------------------------------
-        # Idea to generate the bitmap, but the "gearbox" can as easily be drawn
+		# Calculate location of Cranckset image
+        # Positioned above Cassette_img, equally wide/heigh
+        # Re-positioned later under txtAntHRM (find self.CrancksetY)
+        # ----------------------------------------------------------------------
+        self.CrancksetIndex = self.clv.CrancksetStart
+        self.CrancksetWH    = self.CassetteWH
+        self.CrancksetX     = self.CassetteX
+        self.CrancksetY     = self.CassetteY - self.CassetteWH - Margin
+
+        # ----------------------------------------------------------------------
+        # Idea to generate the bitmap, but the "Cassette" can as easily be drawn
         # Code left for reference, even though not correct/complete yet.
         # ----------------------------------------------------------------------
         if False:
             print(1)
-            print(self.GearboxImage)
-            print('width=%s height=%s' % (self.GearboxImage.GetWidth(), self.GearboxImage.GetHeight()))
+            print(self.CassetteImage)
+            print('width=%s height=%s' % (self.CassetteImage.GetWidth(), self.CassetteImage.GetHeight()))
             print(2)
-            print(self.GearboxBitmap)
-            print('width=%s height=%s' % (self.GearboxBitmap.GetWidth(), self.GearboxBitmap.GetHeight()))
+            print(self.CassetteBitmap)
+            print('width=%s height=%s' % (self.CassetteBitmap.GetWidth(), self.CassetteBitmap.GetHeight()))
             print(3)
 
 
-            self.GearboxBitmap  = wx.Bitmap(self.GearboxImage)
+            self.CassetteBitmap  = wx.Bitmap(self.CassetteImage)
 
-            bitDepth = self.GearboxBitmap.GetDepth()
+            bitDepth = self.CassetteBitmap.GetDepth()
             if bitDepth == 24:
                 bpp = 3  # bytes per pixel
-                buffer_length = self.GearboxBitmap.GetWidth() * self.GearboxBitmap.GetHeight() * bpp
+                buffer_length = self.CassetteBitmap.GetWidth() * self.CassetteBitmap.GetHeight() * bpp
                 buffer = array.array('B', [0] * buffer_length )
-                self.GearboxBitmap.CopyToBuffer(buffer, wx.BitmapBufferFormat_RGB)
+                self.CassetteBitmap.CopyToBuffer(buffer, wx.BitmapBufferFormat_RGB)
                 
                 print ('  :0         1         2         3         ')
                 print ('  : 123456789 123456789 123456789 123456789')
-                for y in range(0, self.GearboxBitmap.GetHeight()):
+                for y in range(0, self.CassetteBitmap.GetHeight()):
                     print('%2.0f:' % y, end='')
-                    for x in range(0, self.GearboxBitmap.GetWidth()):
-                        index = (y * self.GearboxBitmap.GetWidth() + x ) * bpp
+                    for x in range(0, self.CassetteBitmap.GetWidth()):
+                        index = (y * self.CassetteBitmap.GetWidth() + x ) * bpp
                         r = buffer[index]
                         g = buffer[index + 1]
                         b = buffer[index + 2]
@@ -255,7 +283,8 @@ class frmFortiusAntGui(wx.Frame):
         BitmapX     = 0
         BitmapY     = 0
 
-        self.SetSize (BitmapX + BitmapW + 15, BitmapY + BitmapH)
+        self.      SetSize (BitmapX + BitmapW + 15, BitmapY + BitmapH)
+        self.panel.SetSize (BitmapX + BitmapW + 15, BitmapY + BitmapH)
 
         # ----------------------------------------------------------------------
 		# Speedometer values and colours
@@ -267,8 +296,9 @@ class frmFortiusAntGui(wx.Frame):
 		# self.Speedometer
         # ----------------------------------------------------------------------
         if True:
-            self.Speed = SM.SpeedMeter(self, agwStyle=SM.SM_DRAW_HAND|SM.SM_DRAW_GRADIENT|SM.SM_DRAW_MIDDLE_TEXT|SM.SM_DRAW_SECONDARY_TICKS)
+            self.Speed = SM.SpeedMeter(self.panel, agwStyle=SM.SM_DRAW_HAND|SM.SM_DRAW_GRADIENT|SM.SM_DRAW_MIDDLE_TEXT|SM.SM_DRAW_SECONDARY_TICKS)
             self.Speed.SetSize (SpeedX, SpeedY, SpeedWH, SpeedWH)
+            self.Speed.DisableFocusFromKeyboard()
 
             self.Speed.SetSpeedBackground(bg)
             self.Speed.SetFirstGradientColour(colorTacxFortius)             # Colours for SM_DRAW_GRADIENT
@@ -319,8 +349,9 @@ class frmFortiusAntGui(wx.Frame):
             # SM_DRAW_MIDDLE_ICON       An icon is drawn in the middle of the control near the center.
             # SM_DRAW_GRADIENT          A gradient of colours will fill the control.
             # SM_DRAW_FANCY_TICKS       With this style you can use xml tags to create some custom text and draw it at the ticks position. See lib.fancytext for the tags.
-            self.Revs = SM.SpeedMeter(self, agwStyle=SM.SM_DRAW_GRADIENT | SM.SM_DRAW_PARTIAL_SECTORS | SM.SM_DRAW_HAND | SM.SM_DRAW_SECONDARY_TICKS | SM.SM_DRAW_MIDDLE_TEXT)
+            self.Revs = SM.SpeedMeter(self.panel, agwStyle=SM.SM_DRAW_GRADIENT | SM.SM_DRAW_PARTIAL_SECTORS | SM.SM_DRAW_HAND | SM.SM_DRAW_SECONDARY_TICKS | SM.SM_DRAW_MIDDLE_TEXT)
             self.Revs.SetSize (RevsX, RevsY, RevsWH, RevsWH) # x,y and width, height
+            self.Revs.DisableFocusFromKeyboard()
 
             self.Revs.SetSpeedBackground(bg)
             self.Revs.SetFirstGradientColour(wx.BLUE)                       # Colours for SM_DRAW_GRADIENT
@@ -373,8 +404,9 @@ class frmFortiusAntGui(wx.Frame):
 		# self.Power
         # ----------------------------------------------------------------------
         if True:
-            self.Power = SM.SpeedMeter(self, agwStyle=SM.SM_DRAW_HAND|SM.SM_DRAW_GRADIENT|SM.SM_DRAW_MIDDLE_TEXT|SM.SM_DRAW_SECONDARY_TICKS)
+            self.Power = SM.SpeedMeter(self.panel, agwStyle=SM.SM_DRAW_HAND|SM.SM_DRAW_GRADIENT|SM.SM_DRAW_MIDDLE_TEXT|SM.SM_DRAW_SECONDARY_TICKS)
             self.Power.SetSize (PowerX, PowerY, PowerWH, PowerWH) # x,y and width, height
+            self.Power.DisableFocusFromKeyboard()
 
             self.Power.SetSpeedBackground(bg)
             self.Power.SetFirstGradientColour(colorTacxFortius)             # Colours for SM_DRAW_GRADIENT
@@ -425,7 +457,7 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# self.Speed label & text
         # ----------------------------------------------------------------------
-        self.txtSpeed = wx.TextCtrl(self, value="99.9 km/h", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtSpeed = wx.TextCtrl(self.panel, value="99.9 km/h", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtSpeed.SetBackgroundColour(bg)
         self.txtSpeed.SetPosition((int(self.Speed.Position[0] + (self.Speed.Size[0] - self.txtSpeed.Size[0])/2), \
                                     self.Speed.Position[1] + self.Speed.Size[1] - 2 * self.txtSpeed.Size[1]))
@@ -433,7 +465,7 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# self.Revs
         # ----------------------------------------------------------------------
-        self.txtRevs = wx.TextCtrl(self, value="999/min", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtRevs = wx.TextCtrl(self.panel, value="999/min", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtRevs.SetBackgroundColour(bg)
         self.txtRevs.SetPosition((int(self.Revs.Position[0] + (self.Revs.Size[0] - self.txtRevs.Size[0])/2), \
                                     self.Revs.Position[1] + self.Revs.Size[1] - 2 * self.txtRevs.Size[1]))
@@ -441,17 +473,17 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# self.Power
         # ----------------------------------------------------------------------
-        self.txtPower = wx.TextCtrl(self, value="999 Watt", size=(TextCtrlW,TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtPower = wx.TextCtrl(self.panel, value="999 Watt", size=(TextCtrlW,TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtPower.SetBackgroundColour(bg)
         self.txtPower.SetPosition((int(self.Power.Position[0] + (self.Power.Size[0] - self.txtPower.Size[0])/2), \
                                     self.Power.Position[1] + self.Power.Size[1] - 2 * self.txtPower.Size[1]))
 
-        self.txtTarget = wx.TextCtrl(self, value="Target=999 Watt", size=(int(TextCtrlW *1.3),TextCtrlH), style=wx.TE_LEFT | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtTarget = wx.TextCtrl(self.panel, value="Target=999 Watt", size=(int(TextCtrlW *1.3),TextCtrlH), style=wx.TE_LEFT | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtTarget.SetBackgroundColour(bg)
         self.txtTarget.SetPosition((self.Power.Position[0], \
                                     self.Power.Position[1] + self.Power.Size[1] - self.txtTarget.Size[1]))
 
-        self.txtTacx = wx.TextCtrl(self, value="Tacx=9999", size=(int(TextCtrlW * 0.7),TextCtrlH), style=wx.TE_RIGHT | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtTacx = wx.TextCtrl(self.panel, value="Tacx=9999", size=(int(TextCtrlW * 0.7),TextCtrlH), style=wx.TE_RIGHT | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtTacx.SetBackgroundColour(bg)
         self.txtTacx.SetPosition((self.Power.Position[0] + self.Power.Size[0] - self.txtTacx.Size[0], \
                                     self.Power.Position[1] + self.Power.Size[1] - self.txtTacx.Size[1]))
@@ -461,7 +493,7 @@ class frmFortiusAntGui(wx.Frame):
         # - Is positioned UNDER the Speed control
         # - Has width of Speed + Cadence control
         # ----------------------------------------------------------------------
-        self.txtUsbTrainer = wx.TextCtrl(self, value="txtUsbTrainer", size=(10,TextCtrlH2), style=wx.TE_LEFT | wx.TE_READONLY)
+        self.txtUsbTrainer = wx.TextCtrl(self.panel, value="txtUsbTrainer", size=(10,TextCtrlH2), style=wx.TE_LEFT | wx.TE_READONLY)
         self.txtUsbTrainer.SetSize((self.Revs.Position[0] + self.Revs.Size[0] - Margin, -1))
         self.txtUsbTrainer.SetPosition((Margin, self.Speed.Position[1] + self.Speed.Size[1] + 5))
         self.txtUsbTrainer.SetBackgroundColour(bg)
@@ -469,7 +501,7 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# ANT Dongle
         # ----------------------------------------------------------------------
-        self.txtAntDongle = wx.TextCtrl(self, value="txtAntDongle", size=(10,TextCtrlH2), style=wx.TE_LEFT | wx.TE_READONLY)
+        self.txtAntDongle = wx.TextCtrl(self.panel, value="txtAntDongle", size=(10,TextCtrlH2), style=wx.TE_LEFT | wx.TE_READONLY)
         self.txtAntDongle.SetSize((self.txtUsbTrainer.Size[0], -1))
         self.txtAntDongle.SetPosition((Margin, self.txtUsbTrainer.Position[1] + self.txtUsbTrainer.Size[1] + 5))
         self.txtAntDongle.SetBackgroundColour(bg)
@@ -477,36 +509,50 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# ANT Heart Rate Monitor
         # ----------------------------------------------------------------------
-        self.txtAntHRM = wx.TextCtrl(self, value="txtAntHRM", size=(10,TextCtrlH2), style=wx.TE_LEFT | wx.TE_READONLY)
+        self.txtAntHRM = wx.TextCtrl(self.panel, value="txtAntHRM", size=(10,TextCtrlH2), style=wx.TE_LEFT | wx.TE_READONLY)
         self.txtAntHRM.SetSize((self.txtUsbTrainer.Size[0], -1))
         self.txtAntHRM.SetPosition((Margin, self.txtAntDongle.Position[1] + self.txtAntDongle.Size[1] + 5))
         self.txtAntHRM.SetBackgroundColour(bg)
 
         # ----------------------------------------------------------------------
+		# Change location of Cranckset image (see initial values above)
+        #        position under txtAntHRM (like RadarGraph below)
+        # Then move Cranckset in the middle between Heartrate and Cassette
+        # ----------------------------------------------------------------------
+        self.CrancksetY     = self.txtAntHRM.Position    [1] + self.txtAntHRM.Size    [1] + 5
+        self.CassetteY      = int((self.HeartRateY + self.HeartRateWH + self.CrancksetY - TextCtrlH) / 2)
+
+        # ----------------------------------------------------------------------
 		# self.HeartRate, shown to the right of the Heartrate image
         # ----------------------------------------------------------------------
-        self.txtHeartRate = wx.TextCtrl(self, value="123", size=(int(self.HeartRateWH*2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY)
+        self.txtHeartRate = wx.TextCtrl(self.panel, value="123", size=(int(self.HeartRateWH*2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY)
         self.txtHeartRate.SetBackgroundColour(bg)
         self.txtHeartRate.SetPosition(( self.HeartRateX + self.HeartRateWH + Margin, self.HeartRateY))
 
         # ----------------------------------------------------------------------
-		# self.Gearbox, shown to the right of the Gearbox image
+		# self.Cranckset, shown to the right of the Cranckset image
         # ----------------------------------------------------------------------
-        self.txtGearbox = wx.TextCtrl(self, value="123", size=(int(self.GearboxWH*2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY)
-        self.txtGearbox.SetBackgroundColour(bg)
-        self.txtGearbox.SetPosition(( self.GearboxX + self.GearboxWH + Margin, self.GearboxY))
+        self.txtCranckset = wx.TextCtrl(self.panel, value="456", size=(int(self.CrancksetWH*2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY)
+        self.txtCranckset.SetBackgroundColour(bg)
+        self.txtCranckset.SetPosition(( self.CrancksetX + self.CrancksetWH + Margin, self.CrancksetY))
+
+        # ----------------------------------------------------------------------
+		# self.Cassette, shown to the right of the Cassette image
+        # ----------------------------------------------------------------------
+        self.txtCassette = wx.TextCtrl(self.panel, value="789", size=(int(self.CassetteWH*2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY)
+        self.txtCassette.SetBackgroundColour(bg)
+        self.txtCassette.SetPosition(( self.CassetteX + self.CassetteWH + Margin, self.CassetteY))
 
         # ----------------------------------------------------------------------
         # Add a radar graph for pedal stroke analysis
-        # - To the right of the gearbox text
+        # - To the right of the HeartRate text
         # - Under txtAntHRM
-        # - Vertically aligning with txtGearbox
         # ----------------------------------------------------------------------
         if self.clv.PedalStrokeAnalysis:
             x  = self.txtHeartRate.Position [0] + self.txtHeartRate.Size [0] + Margin
             y  = self.txtAntHRM.Position    [1] + self.txtAntHRM.Size    [1] + 5
             wh = self.txtHeartRate.Position [1] + self.txtHeartRate.Size [1] - y
-            self.RadarGraph = RadarGraph.clsRadarGraph(self, "Pedal stroke analysis", x, y, wh)
+            self.RadarGraph = RadarGraph.clsRadarGraph(self.panel, "Pedal stroke analysis", x, y, wh)
         
         # ----------------------------------------------------------------------
 		# Font setting for all measurements
@@ -517,7 +563,8 @@ class frmFortiusAntGui(wx.Frame):
         self.txtTarget.SetFont(TextCtrlFont)
         self.txtTacx.SetFont(TextCtrlFont)
         self.txtHeartRate.SetFont(TextCtrlFont)
-        self.txtGearbox.SetFont(TextCtrlFont)
+        self.txtCranckset.SetFont(TextCtrlFont)
+        self.txtCassette.SetFont(TextCtrlFont)
         
         self.txtUsbTrainer.SetFont(TextCtrlFont2)
         self.txtAntDongle.SetFont(TextCtrlFont2)
@@ -530,28 +577,28 @@ class frmFortiusAntGui(wx.Frame):
         b.Rescale(16,16)
         b = wx.Bitmap(b)
 
-        self.btnSettings = wx.BitmapButton(self, bitmap=b, size=(ButtonW, -1), style=0) # wx.NO_BORDER)
+        self.btnSettings = wx.BitmapButton(self.panel, bitmap=b, size=(ButtonW, -1), style=0) # wx.NO_BORDER)
         self.btnSettings.SetPosition((ButtonX, self.btnSettings.Size[1]))
         self.btnSettings.SetFocus()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnSettings, self.btnSettings)
 
-        self.btnLocateHW = wx.Button(self, label="Locate HW", size=(ButtonW, -1))
-        self.btnLocateHW.SetPosition((ButtonX, self.btnSettings.Position[1] + self.btnSettings.Size[1]))
+        self.btnLocateHW = wx.Button(self.panel, label="Locate HW", size=(ButtonW, -1))
+        self.btnLocateHW.SetPosition((ButtonX, self.btnSettings.Position[1] + self.btnSettings.Size[1] + Margin))
         self.btnLocateHW.SetFocus()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnLocateHW, self.btnLocateHW)
 
-        self.btnRunoff   = wx.Button(self, label="Runoff", size=(ButtonW, -1))
-        self.btnRunoff.SetPosition((ButtonX, self.btnLocateHW.Position[1] + self.btnLocateHW.Size[1]))
+        self.btnRunoff   = wx.Button(self.panel, label="Runoff", size=(ButtonW, -1))
+        self.btnRunoff.SetPosition((ButtonX, self.btnLocateHW.Position[1] + self.btnLocateHW.Size[1] + Margin))
         self.btnRunoff.Disable()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnRunoff, self.btnRunoff)
 
-        self.btnStart    = wx.Button(self, label="Start", size=(ButtonW, -1))
-        self.btnStart.SetPosition((ButtonX, self.btnRunoff.Position[1] + self.btnRunoff.Size[1]))
+        self.btnStart    = wx.Button(self.panel, label="Start", size=(ButtonW, -1))
+        self.btnStart.SetPosition((ButtonX, self.btnRunoff.Position[1] + self.btnRunoff.Size[1] + Margin))
         self.btnStart.Disable()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnStart, self.btnStart)
 
-        self.btnStop     = wx.Button(self, label="Stop", size=(ButtonW, -1))
-        self.btnStop.SetPosition((ButtonX, self.btnStart.Position[1] + self.btnStart.Size[1]))
+        self.btnStop     = wx.Button(self.panel, label="Stop", size=(ButtonW, -1))
+        self.btnStop.SetPosition((ButtonX, self.btnStart.Position[1] + self.btnStart.Size[1] + Margin))
         self.btnStop.Disable()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnStop, self.btnStop)
 
@@ -600,7 +647,7 @@ class frmFortiusAntGui(wx.Frame):
         while self.RunningSwitch == True:
             t = time.localtime()
             f += 1
-            self.SetValues(f/100 * self.SpeedMax, f/100 * self.RevsMax, f/100 * self.PowerMax, t[5], False, t[0] + t[5], 123, 10, random.randint(9,27))
+            self.SetValues(f/100 * self.SpeedMax, f/100 * self.RevsMax, f/100 * self.PowerMax, t[5], False, t[0] + t[5], 123, 10, random.randint(0,2), random.randint(0,12), 1)
             time.sleep(1/8)                         # sleep 0.125 second (like Tacx2Dongle)
             if f > 100:
                 self.RunningSwitch == False
@@ -625,7 +672,7 @@ class frmFortiusAntGui(wx.Frame):
 #           tr -= 5
 #           self.SetValues(r * self.SpeedMax, r * self.RevsMax, r * self.PowerMax, t[5], t[0] + t[5])
 #           self.SetValues(35.6, 234, 123, mode_Grade, 345, 19.5, 2345, 123)
-            self.SetValues(r * 35.6, r * 234, r * 123, mode_Grade, r * 345, r * 19.5, r * 2345, r * 123, random.randint(9,27))
+            self.SetValues(r * 35.6, r * 234, r * 123, mode_Grade, r * 345, r * 19.5, r * 2345, r * 123, random.randint(0,2), random.randint(0,12), 1)
 
             if self.clv.PedalStrokeAnalysis:
                 for i, p in enumerate(self.power):
@@ -703,16 +750,18 @@ class frmFortiusAntGui(wx.Frame):
     #               fTargetGrade    Target Grade in %
     #               iTacx           Target resistance for the Tacx
     #               iHeartRate      Heartrate in beats/min
-    #               iTeeth          Number of teeth on the cassette of
-    #                               the virtual gearbox.
+    #               iCrancksetIndex, iCassetteIndex
+    #                               Index position of the virtual gearbox.
     #
     # Description:  Show the values in SpeedoMeter and text-fields
     #
     # Output:       None
     # --------------------------------------------------------------------------
     def ResetValues(self):
-        self.SetValues(0,0,0,0,0,0,0,0,0)
-    def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, iTacx, iHeartRate, iTeeth):
+        self.SetValues(0,0,0,0,0,0,0,0,0,0,0)
+    def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, \
+                        iTacx, iHeartRate, \
+                        iCrancksetIndex, iCassetteIndex, fReduction):
         # ----------------------------------------------------------------------
         # Average power over the last 10 readings
         # ----------------------------------------------------------------------
@@ -735,10 +784,14 @@ class frmFortiusAntGui(wx.Frame):
         else:
             self.HeartRate    = 0
 
-        if iTargetMode == mode_Grade:
-            self.GearboxTeeth = iTeeth          # Only valid in Resistance-mode
+        if iTargetMode in (mode_Grade, mode_Power): # issue #195 asked for power-mode as well
+            self.CrancksetIndex = iCrancksetIndex
+            self.CassetteIndex  = iCassetteIndex
+            self.Reduction      = fReduction
         else:
-            self.GearboxTeeth = 0               # Not valid in PowerMode
+            self.CrancksetIndex = None              # Not valid in other modes
+            self.CassetteIndex  = None
+            self.Reduction      = 1
 
         # ----------------------------------------------------------------------
         # Update measurements once per second only (otherwise too much flicker)
@@ -830,25 +883,44 @@ class frmFortiusAntGui(wx.Frame):
 
         # ----------------------------------------------------------------------
         # Gearbox
-        # Show the size of the selected sprocket.
-        # The cassette is displayed in OnPaint()!
+        # Show the size of the selected sprocket & chainring.
+        # The cassette and cranckset are displayed in OnPaint()!
         # ----------------------------------------------------------------------
-        if self.GearboxTeeth > 0:
-            if not self.txtGearbox.IsShown():
-                self.txtGearbox.Show()
+        if self.CrancksetIndex != None:
+            if not self.txtCranckset.IsShown():
+                self.txtCranckset.Show()
 
-            self.txtGearbox.SetValue  ("%i" % self.GearboxTeeth)
-            bRefreshRequired  = True            # So that gearbox is painted
+            self.txtCranckset.SetValue  ("%i" % self.clv.Cranckset[self.CrancksetIndex])
+            bRefreshRequired  = True            # So that Cassette is painted
             
         else:
-            if self.txtGearbox.IsShown():
-                self.txtGearbox.Hide()
+            if self.txtCranckset.IsShown():
+                self.txtCranckset.Hide()
+                bRefreshRequired  = True
+
+        if self.CassetteIndex != None:
+            if not self.txtCassette.IsShown():
+                self.txtCassette.Show()
+
+            if self.CassetteIndex < 0:      # IF out of bounds: Reduction <> 1
+                teeth = self.clv.Cassette[0]
+            elif self.CassetteIndex >= len(self.clv.Cassette):
+                teeth = self.clv.Cassette[len(self.clv.Cassette) - 1]
+            else:
+                teeth = self.clv.Cassette[self.CassetteIndex]
+
+            self.txtCassette.SetValue  ("%i" % int(round(teeth * self.Reduction) ) )
+            bRefreshRequired  = True            # So that Cassette is painted
+            
+        else:
+            if self.txtCassette.IsShown():
+                self.txtCassette.Hide()
                 bRefreshRequired  = True
 
         # ----------------------------------------------------------------------
         # Refresh if required; so that JPGs are drawn in the OnPaint() event
         # ----------------------------------------------------------------------
-        if bRefreshRequired: self.Refresh()
+        if bRefreshRequired: self.panel.Refresh()
 
     def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
         if Tacx   != None:
@@ -890,7 +962,7 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
         # Draw background (to be done on every OnPaint() otherwise disappears!
         # ----------------------------------------------------------------------
-        dc = wx.PaintDC(self)
+        dc = wx.PaintDC(self.panel)
         dc.DrawBitmap(self.BackgroundBitmap, 0, 0)          # LeftTop in pixels
 
         # ----------------------------------------------------------------------
@@ -910,43 +982,92 @@ class frmFortiusAntGui(wx.Frame):
             pass
 
         # ----------------------------------------------------------------------
-        # Draw 12speed Digital Gearbox with interval of 10% lineair
-        # 12speed since 12*3 pixels fits in the 40x40 area we have chosen to use
+        # Draw Digital Cranckset and Cassette with Max 12 sprockets since 12*3
+        # pixels fits in the 40x40 area we have chosen to use
         # ----------------------------------------------------------------------
-        if self.GearboxTeeth > 0:
-            # Cassette corresponds to the shifting +/- with factor 1.1
-            # FortiusANT takes 15 as midpoint,
-            # so we have a "realistic" smallest sprocket of 9 teeth
-            # The graphical size must decrease with even pixels and is
-            #   therefore not calculated but a static table.
-            #   Size are determined so that it approximately "looks good".
-            #
-            # The sizes[] table should not be modified without checking UI-design
-            # The casette[] table could be changed,
-            # - the 27,24..9 steps on every gear-change, but at either end
-            #   the displayed cassette remains equal for changing teeth
-            # - if 1.21 steps would be used, the displayed cassette steps once
-            #   on every two gearchanges.
-            # I'm curious whether when a question will be raised on this...
-            #
-            #            1   2   3   4   5   6   7   8   9  10  11  12
-            cassette = [27, 24, 22, 20, 18, 17, 15, 14, 12, 11, 10, 9] # teeth
-            sizes    = [40, 36, 32, 28, 24, 20, 16, 14, 12, 10,  8, 6] # pixels
-            drawn = False
+        ChainX1 = False
+        ChainY1 = False
+        ChainX2 = False
+        ChainY1 = False
+        # ----------------------------------------------------------------------
+        # Draw Cassette
+        # ----------------------------------------------------------------------
+        if self.CassetteIndex != None:
+            # ------------------------------------------------------------------
+            # The sprocket is 2 pixels wide, 1 space = 3 per sprocket
+            # With 40 pixels and 13 sprockets: 3 * 13 = 39 which fits
+            # ------------------------------------------------------------------
+            margin    = int((self.CassetteWH - len(self.clv.Cassette) * 3) / 2)
             
-            for i in range(0,12):
-                teeth=cassette[i]
-                if teeth <= self.GearboxTeeth and not drawn:
-                    dc.SetPen(wx.Pen(wx.RED))                     # Selected gear
-                    drawn = True
-                else:
-                    dc.SetPen(wx.Pen(colorTacxFortius))           # Other gears
+            # ------------------------------------------------------------------
+            # Draw sprockets, expected 10, 11, 12
+            # ------------------------------------------------------------------
+            for i in range(0, len(self.clv.Cassette)):
+                x = self.CassetteX + margin + i * 3                    # horizontal position
+                w = 2                                                               # width
+                h = int(self.clv.Cassette[i] / self.clv.CassetteMax * self.CassetteWH )  # heigth
+                y = self.CassetteY + int((self.CassetteWH - h) / 2)   # vertical
 
-                x = self.GearboxX + 1 + i * 3                     # horizontal position
-                w = 2                                             # width
-                h = sizes [i]                                     # heigth
-                y = self.GearboxY + int((self.GearboxWH - h) / 2) # vertical
-                dc.DrawRectangle(self.GearboxX + x, y, w, h)
+                # --------------------------------------------------------------
+                # The selected one is red, the other default colour
+                # --------------------------------------------------------------
+                if i == self.CassetteIndex \
+                    or ( i == 0                          and self.CassetteIndex < 0                       )\
+                    or ( i == len(self.clv.Cassette) - 1 and self.CassetteIndex >= len(self.clv.Cassette) ):
+                    dc.SetPen(wx.Pen(wx.RED))                           # Selected gear
+                    ChainX1 = x
+                    ChainY1 = y
+                else:
+                    dc.SetPen(wx.Pen(colorTacxFortius))                 # Other gears
+
+                # --------------------------------------------------------------
+                # Draw the chainring
+                # --------------------------------------------------------------
+                dc.DrawRectangle(x, y, w, h)
+
+        # ----------------------------------------------------------------------
+        # Draw Cranckset
+        # ----------------------------------------------------------------------
+        if self.CrancksetIndex != None:
+            # ------------------------------------------------------------------
+            # The chainring is 2 pixels wide, 2 space = 4 per chainring
+            # Since max 3 chainrings, this always fits
+            # ------------------------------------------------------------------
+            margin    = int((self.CrancksetWH - len(self.clv.Cranckset) * 4) / 2)
+            
+            # ------------------------------------------------------------------
+            # Draw chainrings, expected 1, 2 or 3
+            # ------------------------------------------------------------------
+            for i in range(0, len(self.clv.Cranckset)):
+                x = self.CrancksetX + margin + i * 4                    # horizontal position
+                w = 2                                                               # width
+                h = int(self.clv.Cranckset[i] / self.clv.CrancksetMax * self.CrancksetWH )  # heigth
+                y = self.CrancksetY + int((self.CrancksetWH - h) / 2)   # vertical
+
+                # --------------------------------------------------------------
+                # The selected one is red, the other default colour
+                # --------------------------------------------------------------
+                if i == self.CrancksetIndex \
+                    or ( i == 0                           and self.CrancksetIndex < 0                        )\
+                    or ( i == len(self.clv.Cranckset) - 1 and self.CrancksetIndex >= len(self.clv.Cranckset) ):
+                    dc.SetPen(wx.Pen(wx.RED))                           # Selected gear
+                    ChainX2 = x
+                    ChainY2 = y + h
+                else:
+                    dc.SetPen(wx.Pen(colorTacxFortius))                 # Other gears
+
+                # --------------------------------------------------------------
+                # Draw the chainring
+                # --------------------------------------------------------------
+                dc.DrawRectangle(x, y, w, h)
+
+                # --------------------------------------------------------------
+                # If cassette and chainring selected, draw chain
+                # --------------------------------------------------------------
+                if ChainX1 and ChainX2:
+                    dc.DrawLine(ChainX1, ChainY1, ChainX2, ChainY2)
+                    ChainX1 = False
+
         else:
             pass
         # ----------------------------------------------------------------------

@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-06"
+__version__ = "2021-01-10"
+# 2020-01-10    self.ant_tacx_models used
 # 2020-01-06    First version
 #-------------------------------------------------------------------------------
 import json
@@ -421,11 +422,12 @@ class dlgFortiusAntSettings(wx.Dialog):
         v = ""
         s = (-1, -1)
         p = Under(self.cb_g)
+        c = clv.ant_tacx_models
         if True:                # Required?? platform.system() in [ 'Windows' ]:
-            self.combo_t = wx.ComboBox(panel, id=wx.ID_ANY, value=v, pos=p, size=s, choices=['', 'Bushido', 'Genius', 'Vortex', 'Motorbrake'], style=0, validator=wx.DefaultValidator, name=wx.ComboBoxNameStr)
+            self.combo_t = wx.ComboBox(panel, id=wx.ID_ANY, value=v, pos=p, size=s, choices=c, style=0, validator=wx.DefaultValidator, name=wx.ComboBoxNameStr)
             self.combo_t.Bind(wx.EVT_COMBOBOX, self.EVT_COMBOBOX_combo_t)
         else:
-            self.combo_t = wx.ListBox(panel, id=wx.ID_ANY, pos=p, size=s, choices=['', 'Bushido', 'Genius', 'Vortex', 'Motorbrake'], style=0, validator=wx.DefaultValidator, name=wx.ListBoxNameStr)
+            self.combo_t = wx.ListBox(panel, id=wx.ID_ANY, pos=p, size=s, choices=c, style=0, validator=wx.DefaultValidator, name=wx.ListBoxNameStr)
             self.combo_t.Bind(wx.EVT_LISTBOX, self.EVT_COMBOBOX_combo_t)
 
         l = "Specify Tacx Type; if not specified, USB-trainers will be detected automatically. (-t *)"

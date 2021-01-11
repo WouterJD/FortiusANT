@@ -1,7 +1,15 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-10"
+__version__ = "2021-01-11"
+# 2021-01-11    Error-recovery improved on USB_Read
+#                   --> USB_Read(), USB_Read_retry4x40() and _ReceiveFromTrainer_MotorBrake
+# 2021-01-10    Digital gearbox changed to front/rear index
+#                   GearboxReduction provided by caller
+#                   Also applies in power mode, modifying TargetPower
+#                       theoretically against ERG-mode idea, but (see #195) if
+#                       you're done, then it's nice to be able to modify.
+#                       The returned power remains the produced power.
 # 2021-01-10    Motorbrake version message decomposition improved #201
 #               Informative messages on brake type
 # 2021-01-05    Tacxtype Motorbrake added
@@ -161,6 +169,14 @@ modeCalibrate   = 3
 modeMotorBrake  = 10        # To distinguish from the previous real modes
 
 #-------------------------------------------------------------------------------
+# See https://github.com/totalreverse/ttyT1941/issues/20
+#-------------------------------------------------------------------------------
+USB_ControlCommand  = 0x00010801
+USB_ControlResponse = 0x00021303
+USB_VersionRequest  = 0x00000002
+USB_VersionResponse = 0x00000c03
+
+#-------------------------------------------------------------------------------
 # path to firmware files; since 29-3-2020 in same folder as .py or .exe
 #-------------------------------------------------------------------------------
 if getattr(sys, 'frozen', False):
@@ -188,9 +204,7 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 # class clsTacxTrainer()
 #     def GetTrainer(clv, AntDevice=None)
 #
-#     def ResetPowercurveFactor()                             # Virtual Gearbox
-#     def SetPowercurveFactorUp()
-#     def SetPowercurveFactorDown()
+#     def SetGearboxReduction()                               # Virtual Gearbox
 #   
 #     def SetPower(Power)                                     # Store Power
 #     def AddPower(deltaPower)
@@ -254,6 +268,7 @@ class clsTacxTrainer():
     # See Refresh() for dependencies
     TargetMode              = mode_Power    # Start with power mode
     TargetGrade             = 0             # no grade
+    TargetPowerProvided     = 100           # and 100Watts
     TargetPower             = 100           # and 100Watts
     TargetResistance        = 0             # calculated and input to trainer
     DynamicAdjust           = 1             # adjustment when CurrentPower <> TargetPower
@@ -290,16 +305,17 @@ class clsTacxTrainer():
 
     # Other general variables
     clv                     = None          # Command line variables
-    PowercurveFactor        = 1             # 1.1 causes higher load
+    GearboxReduction        = 1             # 1.1 causes higher load
                                             # 0.9 causes lower load
                                             # Is manually set in Grademode
-
-    Teeth                   = 15            # See Refresh()
 
     # USB devices only:
     Headunit                = 0             # The connected headunit in GetTrainer()
     Calibrate               = 0             # The value as established during calibration
     SpeedScale              = None          # To be set in sub-class
+
+    ControlCommand          = 0xffffffff    # Last command sent
+    Header                  = 0xffffffff    # Last command received
 
     def __init__(self, clv, Message):
         if debug.on(debug.Function):logfile.Write ("clsTacxTrainer.__init__()")
@@ -418,7 +434,7 @@ class clsTacxTrainer():
             # InitialiseTrainer (will not read cadence until init str is sent)
             #-------------------------------------------------------------------
             if dev != False and LegacyProtocol == False:
-                data = struct.pack (sc.unsigned_int, 0x00000002)
+                data = struct.pack (sc.unsigned_int, USB_VersionRequest)
                 if debug.on(debug.Data2):
                     logfile.Write ("InitialiseTrainer data=%s (len=%s)" % (logfile.HexSpace(data), len(data)))
                 dev.write(0x02,data)
@@ -443,31 +459,20 @@ class clsTacxTrainer():
 
     #---------------------------------------------------------------------------
     # Functions from external to provide data
-    #
-    # PowercurveFactor:
-    # 10% steps insprired by 10-11-12...36-40-44 cassettes.
-    # 0.1 ... 3 is arbitrary, where lowerbound 0 is definitely no good idea.
     #---------------------------------------------------------------------------
-    def ResetPowercurveFactor(self):
-        self.PowercurveFactor   = 1
-
-    def SetPowercurveFactorUp(self):
-        if self.PowercurveFactor < 3:
-            self.PowercurveFactor   *= 1.1
-
-    def SetPowercurveFactorDown(self):
-        if self.PowercurveFactor > 0.1:
-            self.PowercurveFactor   /= 1.1
+    def SetGearboxReduction(self, Reduction):
+        self.GearboxReduction   = Reduction
 
     def SetPower(self, Power):
         if debug.on(debug.Function):logfile.Write ("SetPower(%s)" % Power)
         self.TargetMode         = mode_Power
         self.TargetGrade        = 0
-        self.TargetPower        = Power
+        self.TargetPowerProvided= Power
+        self.TargetPower        = self.TargetPowerProvided * self.GearboxReduction
         self.TargetResistance   = 0             # .Refresh() must be called
 
     def AddPower(self, deltaPower):
-        self.SetPower(self.TargetPower + deltaPower)
+        self.SetPower(self.TargetPowerProvided + deltaPower)
 
     def SetGrade(self, Grade):
         if debug.on(debug.Function):  logfile.Write   ("SetGrade(%s)" % Grade)
@@ -578,7 +583,7 @@ class clsTacxTrainer():
         #
         # Note that Grade2Power() depends on the VirtualSpeed.
         #-----------------------------------------------------------------------
-        self.VirtualSpeedKmh = self.SpeedKmh * self.PowercurveFactor
+        self.VirtualSpeedKmh = self.SpeedKmh * self.GearboxReduction
 
         # No negative value defined for ANT message Page25 (#)
         if self.CurrentPower < 0: self.CurrentPower = 0 
@@ -589,6 +594,12 @@ class clsTacxTrainer():
 
         elif self.TargetMode == mode_Grade:
             self._Grade2Power()
+
+        #-----------------------------------------------------------------------
+        # Apply GearboxReduction to provided TargetPower
+        # Then calculate resistance
+        #-----------------------------------------------------------------------
+        self.TargetPower = self.TargetPowerProvided * self.GearboxReduction
 
         #-----------------------------------------------------------------------
         # For all modes: To be implemented by USB-trainers; pass for others
@@ -672,24 +683,6 @@ class clsTacxTrainer():
         self.SpeedKmh            = round(self.SpeedKmh,1)
         self.VirtualSpeedKmh     = round(self.VirtualSpeedKmh,1)
 
-        # ----------------------------------------------------------------------
-        # Show the virtual cassette, calculated from a 10 teeth sprocket
-        # If PowercurveFactor = 1  : 15 teeth
-        # If PowercurveFactor = 0.9: 14 teeth
-        # Limit of PowercurveFactor is done at the up/down button
-        # 15 is choosen so that when going heavier, first 14,12,11 teeth is
-        #     shown. Numbers like 5,4,3 would be irrealistic in real world.
-        #     Of course the number of teeth is a reference number.
-        #
-        # Set FortiusAntGui.py OnPaint() for details.
-        #       PowercurveFactor = 0.1 = 150 teeth
-        #       PowercurveFactor = 0.5 =  30 teeth
-        #       PowercurveFactor = 1.0 =  15 teeth
-        #       PowercurveFactor = 2.0 =   8 teeth
-        #       PowercurveFactor = 3.0 =   5 teeth
-        # ----------------------------------------------------------------------
-        self.Teeth = int(15 / self.PowercurveFactor)
-            
         #-----------------------------------------------------------------------
         # Then send the results to the trainer again
         #-----------------------------------------------------------------------
@@ -1138,7 +1131,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
     # TargetPower2Resistance
     #
     # TargetResistance is used for the i-Vortex, even when expressed in Watt, so
-    # that PowerFactor and PowercurveFactor apply; see clsUsbTrainer.Refresh().
+    # that PowerFactor and GearboxReduction apply; see clsUsbTrainer.Refresh().
     #---------------------------------------------------------------------------
     def TargetPower2Resistance(self):
         self.TargetResistance = self.TargetPower
@@ -2134,38 +2127,68 @@ class clsTacxUsbTrainer(clsTacxTrainer):
                 pass
             else:
                 logfile.Console("Read from USB trainer error: " + str(e))
+
+        #-----------------------------------------------------------------------
+        # 24...27 is the message response header
+        #-----------------------------------------------------------------------
+        if len(data) > 27:
+            self.Header = int(data[27]<<24 | data[26]<<16 | data[25]<<8 | data[24] )
+        else:
+            self.Header = -1
+
         if debug.on(debug.Data2):
-            logfile.Write   ("Trainer recv data=%s (len=%s)"    % (logfile.HexSpace(data), len(data)))
-#           logfile.Console ("Trainer recv data=%s (len=%s) %s" % (logfile.HexSpace(data), len(data), type(data)))
+            logfile.Write   ("Trainer recv hdr=%s data=%s (len=%s)" % \
+                        (hex(self.Header), logfile.HexSpace(data), len(data)))
         
         return data
 
     #---------------------------------------------------------------------------
     # U S B _ R e a d _ r e t r y 4 x 4 0
     #---------------------------------------------------------------------------
+    # input     UsbDevice
+    #           expectedHeader: the received message must contain this header
+    #               Especially at start-of-program, sometimes rubbish is received
+    #               which influences the content of the MotorBrake version message
+    #               causing incorrect conclusion Motor/Magnetic brake
+    #
     # function  Same plus:
     #           At least 40 bytes must be returned, retry 4 times
     #---------------------------------------------------------------------------
-    def USB_Read_retry4x40(self):
+    def USB_Read_retry4x40(self, expectedHeader = USB_ControlResponse):
         retry = 4
-        data  = self.USB_Read()         # Try without a sleep first!
-        while retry and len(data) < 40:
-            if debug.on(debug.Any):
-                logfile.Write ('Retry because short buffer received')
-            time.sleep(0.1)             # 2020-09-29 short delay @RogerPleijers
-            data = self.USB_Read()
-            retry -= 1
 
+        while True:
+            data  = self.USB_Read()
+
+            #-------------------------------------------------------------------
+            # Retry if no correct buffer received
+            #-------------------------------------------------------------------
+            if retry and (len(data) < 40 or self.Header != expectedHeader):
+                if debug.on(debug.Any):
+                    logfile.Write ( \
+'Retry because short buffer (len=%s) or incorrect header received (expected: %s received: %s)' % \
+                                    (len(data), hex(expectedHeader), hex(self.Header)))
+                time.sleep(0.1)             # 2020-09-29 short delay @RogerPleijers
+                retry -= 1
+            else:
+                break
+
+        #-----------------------------------------------------------------------
+        # Inform when there's something unexpected
+        #-----------------------------------------------------------------------
         if len(data) < 40:
             # 2020-09-29 the buffer is ignored when too short (was processed before)
-            logfile.Console('Tacx returns insufficient data, len=%s' % len(data))
+            logfile.Console('Tacx head unit returns insufficient data, len=%s' % len(data))
             if self.clv.PedalStrokeAnalysis:
                 logfile.Console('To resolve, try to run without Pedal Stroke Analysis.')
             else:
                 logfile.Console('To resolve, check all (signal AND power) cabling for loose contacts.')
 
-        return data
+        elif self.Header != expectedHeader:
+            logfile.Console('Tacx head unit returns incorrect header %s (expected: %s)' % \
+                                        (hex(expectedHeader), hex(self.Header)))
 
+        return data
 
     #---------------------------------------------------------------------------
     # S e n d T o T r a i n e r
@@ -2224,7 +2247,7 @@ class clsTacxUsbTrainer(clsTacxTrainer):
                 Target = self.TargetResistance
                 # Weight = self.UserAndBikeWeight               # Original
                 # Issue 118: Adjust virtual flywheel according to virtual gearbox
-                Weight = max(0x0a, int(self.PowercurveFactor * self.UserAndBikeWeight))
+                Weight = max(0x0a, int(self.GearboxReduction * self.UserAndBikeWeight))
             else:
                 error = "SendToTrainer; Unsupported TargetMode %s" % self.TargetMode
 
@@ -2514,21 +2537,39 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         if self.Headunit != hu1932:
             self.MotorBrake = True
 
-        if True:
-            #-----------------------------------------------------------------------
-            # Check motor brake version
-            #-----------------------------------------------------------------------
+        #---------------------------------------------------------------------------
+        # Check motor brake version
+        #---------------------------------------------------------------------------
+        retry = 4
+        while True:
             self.SendToTrainer(True, modeMotorBrake)
             time.sleep(0.1)                        # Allow head unit time to process
-            self._ReceiveFromTrainer_MotorBrake()
+            msgReceived = self._ReceiveFromTrainer_MotorBrake()
             time.sleep(0.1)                        # Allow head unit time to process
 
-            #-----------------------------------------------------------------------
-            # Refresh with stop-command
-            #-----------------------------------------------------------------------
-            self.SendToTrainer(True, modeStop)
-            time.sleep(0.1)                        # Allow head unit time to process
-            self.Refresh(True, modeStop)
+            if not msgReceived and retry:
+                if debug.on(debug.Any):
+                    logfile.Write ('Retry because no motor brake version message received')
+                retry -= 1
+            else:
+                break
+        if not msgReceived:
+            logfile.Write ('No motorbrake version message received from head unit')
+
+        #---------------------------------------------------------------------------
+        # Show how we behave
+        #---------------------------------------------------------------------------
+        if self.MotorBrake:
+            logfile.Console ("FortiusAnt applies the MotorBrake power curve")
+        else:
+            logfile.Console ("FortiusAnt applies the MagneticBrake power curve")
+
+        #---------------------------------------------------------------------------
+        # Refresh with stop-command
+        #---------------------------------------------------------------------------
+        self.SendToTrainer(True, modeStop)
+        time.sleep(0.1)                        # Allow head unit time to process
+        self.Refresh(True, modeStop)
 
         #---------------------------------------------------------------------------
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__() done")
@@ -2673,6 +2714,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     #---------------------------------------------------------------------------
     def SendToTrainerUSBData(self, TacxMode, Calibrate, PedalEcho, Target, Weight):
         Target = int(min(0x7fff, Target))
+        Weight = int(min(0xff,   Weight))
         #-----------------------------------------------------------------------
         # Data buffer depends on trainer_type
         # Refer to TotalReverse; "Newer protocol"
@@ -2706,8 +2748,9 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         #-----------------------------------------------------------------------
         # Build data buffer to be sent to trainer (legacy or new)
         #-----------------------------------------------------------------------
+        self.ControlCommand = USB_ControlCommand
         format = sc.no_alignment + fControlCommand + fTarget + fPedalecho + fFiller7 + fMode +    fWeight + fCalibrate
-        data   = struct.pack (format, 0x00010801,     Target,   PedalEcho,          TacxMode,  int(Weight),  Calibrate)
+        data   = struct.pack (format, self.ControlCommand,Target, PedalEcho,        TacxMode,  int(Weight),  Calibrate)
         return data
 
     #---------------------------------------------------------------------------
@@ -2730,8 +2773,9 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         #-----------------------------------------------------------------------
         # Build data buffer to be sent to trainer
         #-----------------------------------------------------------------------
+        self.ControlCommand = USB_VersionRequest
         format = sc.no_alignment + fControlCommand
-        data   = struct.pack (format, 0x00000002)
+        data   = struct.pack (format, self.ControlCommand)
         return data
 
     #---------------------------------------------------------------------------
@@ -2813,7 +2857,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             #nAxis3             =  9                # 22-23
             fAxis3              = sc.unsigned_short
 
-            #nHeader            = 10                # 24-27
+            _nHeader            = 10                # 24-27
             fHeader             = sc.unsigned_int
 
             #nDistance          = 11                # 28-31
@@ -2874,6 +2918,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             self.Buttons            = tuple[nButtons]
             self.Cadence            = tuple[nCadence]
             self.CurrentResistance  = tuple[nCurrentResistance]
+            #self.Header            = tuple[nHeader]   filled in USB_Read already
             self.HeartRate          = tuple[nHeartRate]
             self.PedalEcho          = tuple[nEvents]
             self.TargetResistanceFT = tuple[nTargetResistance]
@@ -2883,8 +2928,8 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             self.CurrentResistance2Power()
 
             if debug.on(debug.Function):
-                logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
-                            (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, self.Message) \
+                logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s hdr=%s %s" % \
+                            (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, hex(self.Header), self.Message) \
                             )
     #---------------------------------------------------------------------------
     # R e c e i v e F r o m T r a i n e r
@@ -2893,25 +2938,33 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
     #
     # function  Read status from trainer
     #
-    # returns   Speed, PedalEcho, HeartRate, CurrentPower, Cadence, Resistance, Buttons
+    # output    self.MotorBrake and MotorBrake values
     #
+    # returns   True/False for correct message received
     #---------------------------------------------------------------------------
     def _ReceiveFromTrainer_MotorBrake(self):
-        if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer._ReceiveFromTrainer_MotorBrake()")
+        if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer._ReceiveFromTrainer_MotorBrake()...")
+        #-----------------------------------------------------------------------
+        # Define default
+        # From 2020-01-11: MotorBrake is the default
+        #                  When a correct message is received with Serial=0
+        #                  then it is a MagneticBrake
+        # And when explicitly specified (-t) then that value overrules.
+        #-----------------------------------------------------------------------
+        self.MotorBrake = True
+        rtn             = False
+
         #-----------------------------------------------------------------------
         # Read from trainer
         #-----------------------------------------------------------------------
-        data  = self.USB_Read_retry4x40()
+        data  = self.USB_Read_retry4x40(USB_VersionResponse)
 
         if len(data) < 40:
-            #-----------------------------------------------------------------------
-            # If no message received, set Motorbrake if so specified on command line
-            #-----------------------------------------------------------------------
-            self.MotorBrake = self.clv.Tacx_MotorBrake
+            pass
         else:
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # Define buffer format
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             fFiller0_23             = sc.pad * 24       #  0...23
 
             _nHeader                = 0
@@ -2943,6 +2996,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             # Parse buffer
             #-----------------------------------------------------------------------
             tuple = struct.unpack (format, data)
+            #self.Header                = tuple[nHeader]   filled in USB_Read already
             self.MotorBrakeUnitFirmware = tuple[nMotorBrakeUnitFirmware]
             self.MotorBrakeUnitSerial   = tuple[nMotorBrakeUnitSerial]
             self.Version2               = tuple[nVersion2]
@@ -2952,13 +3006,13 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             # Note that ##### may be any length; e.g. 1903!
             #-----------------------------------------------------------------------
             s = str(self.MotorBrakeUnitSerial)
-            self.MotorBrakeUnitType   = 0
-            self.MotorBrakeUnitYear   = 0
-            self.MotorBrakeUnitSerial = 0
+            self.MotorBrakeUnitType     = 0
+            self.MotorBrakeUnitYear     = 0
+            Serial                      = 0
             try:
-                self.MotorBrakeUnitType   = int(s[0:2])
-                self.MotorBrakeUnitYear   = int(s[2:4])
-                self.MotorBrakeUnitSerial = int(s[4:])
+                self.MotorBrakeUnitType = int(s[0:2])
+                self.MotorBrakeUnitYear = int(s[2:4])
+                Serial                  = int(s[4:])
             except:
                 pass
 
@@ -2972,22 +3026,35 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             # #173 The possible motor brakes are T1941 (230V) and T1946 (110V)
             #       Controlled by T1932 and T1942 headunits.
             #-----------------------------------------------------------------------
-            if self.MotorBrakeUnitType in (41, 46):
+            if self.MotorBrakeUnitType in (41, 46, 49):
                 self.MotorBrake = True
 
-            if False:
-                print ('MagneticBrake active --- to test code ---  T O   B E   D E A C T I V A T E D')
+            if self.MotorBrakeUnitSerial == 0:
                 self.MotorBrake = False
 
             #-----------------------------------------------------------------------
             # Important enough; always display
             #-----------------------------------------------------------------------
             logfile.Console ("Motor Brake Unit Firmware=%s Serial=%5s year=%s type=T19%s Version2=%s MotorBrake=%s" % \
-                            (   self.MotorBrakeUnitFirmware, self.MotorBrakeUnitSerial, \
+                            (   self.MotorBrakeUnitFirmware, Serial, \
                                 self.MotorBrakeUnitYear + 2000, self.MotorBrakeUnitType, \
                                 self.Version2, self.MotorBrake) \
                             )
-        if self.MotorBrake:
-            logfile.Console ("FortiusAnt handles your trainer with the MotorBrake power curve")
-        else:
-            logfile.Console ("FortiusAnt handles your trainer with the MagneticBrake power curve")
+
+            #-----------------------------------------------------------------------
+            # Correct message received
+            #-----------------------------------------------------------------------
+            rtn = True
+
+        #---------------------------------------------------------------------------
+        # If specified, take that value (regardless what happend before!!)
+        #---------------------------------------------------------------------------
+        if self.clv.Tacx_MotorBrake:    self.MotorBrake = True
+        if self.clv.Tacx_MagneticBrake: self.MotorBrake = False
+
+        #---------------------------------------------------------------------------
+        # Return that a correct message is received
+        # This does NOT reflect whether is a Motor- of Magnetic brake!
+        #---------------------------------------------------------------------------
+        if debug.on(debug.Function):logfile.Write ("... returns %s" % rtn)
+        return rtn

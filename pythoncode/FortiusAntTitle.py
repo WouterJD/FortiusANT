@@ -1,8 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v5.1 test II" # Double quotes, see below!
-# 2020-01-07    Version 5.1     settings can be modified interactively
+WindowTitle = "Fortius Antifier v5.1 test III" # Double quotes, see below!
+# 2020-01-11    Version 5.1     settings can be modified interactively
+#                               #120 font/rear changing
+#                               #195 power changing from headunit
 # 2020-01-04                    master branch (5.0) merged into 4.2 Quality upgrade branch
 # 2020-01-04    Version 5.0     #117 Tacx Bushido and #101 Genius implemented
 # 2020-12-20    Version 4.2     #173 Version 4.0 Communicates Much Higher Power vs. 3.8
