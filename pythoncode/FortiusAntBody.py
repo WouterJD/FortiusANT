@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-10"
+__version__ = "2021-01-12"
+# 2021-01-12    Small bu very relevant corrections :-(
 # 2021-01-10    Digital gearbox changed to front/rear index
 # 2021-01-06    settings added (+ missing other files for version check)
 # 2020-12-30    Tacx Genius and Bushido implemented
@@ -1008,29 +1009,29 @@ def Tacx2DongleSub(self, Restart):
                             CrancksetIndex = clv.CrancksetStart         # Reset both front
                             CassetteIndex  = clv.CassetteStart          # and rear
 
-                elif TacxTrainer.Buttons == usbTrainer.UpButton:        # Switch rear down = higher index
+                elif TacxTrainer.Buttons == usbTrainer.UpButton:        # Switch rear right (smaller) = higher index
                             ReductionChanged = True
                             if CassetteIndex < 0:
                                 CassetteIndex += 1
-                                ReductionCassetteX /= 1.1
+                                ReductionCassetteX *= 1.1
                             elif CassetteIndex < len(clv.Cassette) - 1:
                                 CassetteIndex += 1
-                            elif ReductionCassetteX > 0.6:
+                            elif ReductionCassetteX < 2:
                                 # Plus 7 extra steps beyond the end of the cassette
                                 CassetteIndex += 1
-                                ReductionCassetteX /= 1.1
+                                ReductionCassetteX *= 1.1
 
-                elif TacxTrainer.Buttons == usbTrainer.DownButton:      # Switch rear up = lower index       
+                elif TacxTrainer.Buttons == usbTrainer.DownButton:      # Switch rear left (bigger) = lower index       
                             ReductionChanged = True
                             if CassetteIndex >= len(clv.Cassette):
                                 CassetteIndex -= 1
-                                ReductionCassetteX *= 1.1
+                                ReductionCassetteX /= 1.1
                             elif CassetteIndex > 0:
                                 CassetteIndex -= 1
-                            elif ReductionCassetteX < 2:
+                            elif ReductionCassetteX > 0.6:
                                 # Plus 8 extra steps beyond the end of the cassette
                                 CassetteIndex -= 1
-                                ReductionCassetteX *= 1.1
+                                ReductionCassetteX /= 1.1
 
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    # Switch front up (round robin)
                             ReductionChanged = True
@@ -1062,9 +1063,13 @@ def Tacx2DongleSub(self, Restart):
                                          clv.Cassette[CassetteIndex]
 
                 if debug.on(debug.Function):
-                    logfile.Print('gearbox changed: index=%ix%i ratio=%ix%i R=%3.1f*%3.1f*%3.1f=%3.1f' % \
+                    if CassetteIndex >= len(clv.Cassette):
+                        i = len(clv.Cassette) - 1
+                    else:
+                        i = CassetteIndex
+                    logfile.Print('gearbox changed: index=%ix%2i ratio=%ix%i R=%3.1f*%3.1f*%3.1f=%3.1f' % \
                     (   CrancksetIndex, CassetteIndex, \
-                        clv.Cranckset[CrancksetIndex], clv.Cassette[clv.CassetteStart], \
+                        clv.Cranckset[CrancksetIndex], clv.Cassette[i], \
                         ReductionCranckset, ReductionCassette, ReductionCassetteX,\
                         ReductionCranckset * ReductionCassette * ReductionCassetteX))
 

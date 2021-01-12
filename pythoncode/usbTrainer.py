@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-11"
+__version__ = "2021-01-12"
+# 2021-01-12    @TotalReverse comment added on 128866
+#               Power calculation incorrect due to GearboxReduction
 # 2021-01-11    Error-recovery improved on USB_Read
 #                   --> USB_Read(), USB_Read_retry4x40() and _ReceiveFromTrainer_MotorBrake
 # 2021-01-10    Digital gearbox changed to front/rear index
@@ -583,23 +585,25 @@ class clsTacxTrainer():
         #
         # Note that Grade2Power() depends on the VirtualSpeed.
         #-----------------------------------------------------------------------
-        self.VirtualSpeedKmh = self.SpeedKmh * self.GearboxReduction
 
         # No negative value defined for ANT message Page25 (#)
         if self.CurrentPower < 0: self.CurrentPower = 0 
-
         assert (self.TargetMode in (mode_Power, mode_Grade))
-        if self.TargetMode == mode_Power:
-            pass
 
-        elif self.TargetMode == mode_Grade:
-            self._Grade2Power()
+        if  self.TargetMode == mode_Grade:
+            self.VirtualSpeedKmh = self.SpeedKmh * self.GearboxReduction
+            self._Grade2Power()         # Resulting in self.TargetPower
 
         #-----------------------------------------------------------------------
         # Apply GearboxReduction to provided TargetPower
         # Then calculate resistance
+        #
+        # Modifying the VirtualSpeed would not affect the resistance, which is
+        # based upon TargetPower and WheelSpeed.
         #-----------------------------------------------------------------------
-        self.TargetPower = self.TargetPowerProvided * self.GearboxReduction
+        if self.TargetMode == mode_Power:
+            self.VirtualSpeedKmh = self.SpeedKmh
+            self.TargetPower = self.TargetPowerProvided * self.GearboxReduction
 
         #-----------------------------------------------------------------------
         # For all modes: To be implemented by USB-trainers; pass for others
@@ -2491,7 +2495,13 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         if debug.on(debug.Function):logfile.Write ("clsTacxNewUsbTrainer.__init__()")
         self.SpeedScale = 289.75                    # See comment above
         self.PowerResistanceFactor = 128866         # TotalReverse
-
+        #---------------------------------------------------------------------------
+        # @totalreverse Do you know how 128866 was derived?
+        # TotalReverse - 11-1-2021 - https://github.com/WouterJD/FortiusANT/issues/171#issuecomment-758277058
+        # The 128866 was the result of my first "fittings" a long time ago without having a power meter.
+        # I do not know which program and version I used for the test, but I tried to fit the power readings and speed showed by the software with recorded values from the data frames.
+        # At least for the T1941 brakes, the "1/137N" formula fits better.
+        #---------------------------------------------------------------------------
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
         self.OK         = True
