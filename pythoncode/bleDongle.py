@@ -41,6 +41,7 @@ class clsBleInterface():
         self.port      = port
         self.interface = None
         self.jsondata  = None
+        self.clv       = clv
         if UseBluetooth and clv.ble:
             self.Message   = ", Bluetooth interface available"
             #---------------------------------------------------------------
@@ -81,7 +82,7 @@ class clsBleInterface():
                     "server.js"
                 ]
 
-                if clv.steering:
+                if self.clv.steering:
                     command.append("steering")
 
                 directory = Path.cwd().parent / "node"
