@@ -205,6 +205,7 @@ class clsBleCTP(clsBleInterface):
     CurrentSpeed        = 0
     Cadence             = 0
     CurrentPower        = 0
+    SteeringAngle       = 0
 
     #-----------------------------------------------------------------------
     # CTP data
@@ -221,10 +222,11 @@ class clsBleCTP(clsBleInterface):
     def SetAthleteData(self, HeartRate):
         self.HeartRate      = HeartRate
 
-    def SetTrainerData(self, CurrentSpeed, Cadence, CurrentPower):
+    def SetTrainerData(self, CurrentSpeed, Cadence, CurrentPower, SteeringAngle):
         self.CurrentSpeed   = CurrentSpeed
         self.Cadence        = Cadence
         self.CurrentPower   = CurrentPower
+        self.SteeringAngle  = SteeringAngle
     
     def Refresh(self):
         rtn                 = False
@@ -238,6 +240,7 @@ class clsBleCTP(clsBleInterface):
 
             data['watts']       = self.CurrentPower
             data['cadence']     = self.Cadence
+            data['steering_angle'] = self.SteeringAngle
 
             if self.OK and self.Write(data):
                 if self.Read():
@@ -308,7 +311,7 @@ if __name__ == "__main__":
             try:
                 while True:
                     bleCTP.SetAthleteData(135)
-                    bleCTP.SetTrainerData(34.5, 123, 246)
+                    bleCTP.SetTrainerData(34.5, 123, 246, 0)
 
                     if bleCTP.Refresh():
                         print('Target Mode=%s, Power=%s, Grade=%s' % (bleCTP.TargetMode, bleCTP.TargetPower, bleCTP.TargetGrade) )

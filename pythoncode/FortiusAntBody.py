@@ -1015,7 +1015,7 @@ def Tacx2DongleSub(self, Restart):
                 if clv.ble:
                     bleCTP.SetAthleteData(HeartRate)
                     bleCTP.SetTrainerData(TacxTrainer.SpeedKmh, \
-                                    TacxTrainer.Cadence, TacxTrainer.CurrentPower)
+                                    TacxTrainer.Cadence, TacxTrainer.CurrentPower, 5)
                     if bleCTP.Refresh():
                         if bleCTP.TargetMode == mode_Power:
                             TargetPowerTime = time.time()
