@@ -142,6 +142,7 @@ class CommandLineVariables(object):
         parser.add_argument   ('-A','--PedalStrokeAnalysis', help='Pedal Stroke Analysis',                     required=False, action='store_true')
         if UseBluetooth:
            parser.add_argument('-b','--ble',       help='(EXPERIMENTAL) Use Bluetooth LE instead of ANT+',     required=False, action='store_true')
+           parser.add_argument(     '--steering',  help='(EXPERIMENTAL) Use Tacx Steering interface over BLE', required=False, action='store_true')
         parser.add_argument   ('-c','--CalibrateRR',help='calibrate Rolling Resistance for Magnetic Brake',    required=False, default=False)
 #       parser.add_argument   ('-C','--CtrlCommand',help='ANT+ Control Command (#1/#2)',                       required=False, default=False)
         parser.add_argument   ('-C','--CtrlCommand',help=argparse.SUPPRESS,                                    required=False, default=False)
@@ -185,6 +186,7 @@ class CommandLineVariables(object):
         self.autostart              = args.autostart
         if UseBluetooth:
             self.ble                = args.ble
+            self.steering           = args.steering
         if UseGui:
             self.gui                = args.gui
         self.manual                 = args.manual
@@ -202,6 +204,11 @@ class CommandLineVariables(object):
 
         if (self.manual or self.manualGrade) and self.SimulateTrainer:
             logfile.Console("-m/-M and -s both specified, most likely for program test purpose")
+
+        if UseBluetooth:
+            if self.steering and not self.ble:
+                logfile.Console("--steering is specified without -b. Steering requires Bluetooth, forcing it on")
+                self.ble = True
 
         #-----------------------------------------------------------------------
         # Get calibration of Rolling Resistance
