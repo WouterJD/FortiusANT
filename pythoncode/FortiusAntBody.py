@@ -535,6 +535,9 @@ def Axis2Angle(raw_axis, calib_right, calib_middle):
         if abs(angle) < 7:
             angle = 0.0
 
+        # Limit steering angle from -45 to 45 degrees in case we have an invalid reading
+        angle = max(min(45, angle), -45)
+
     return angle
 
 # ------------------------------------------------------------------------------
