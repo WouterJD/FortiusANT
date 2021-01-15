@@ -240,9 +240,15 @@ class clsBleCTP(clsBleInterface):
 
             data['watts']       = self.CurrentPower
             data['cadence']     = self.Cadence
-            data['steering_angle'] = self.SteeringAngle
+            
+            steering = {}
+            steering['steering_angle'] = self.SteeringAngle
 
-            if self.OK and self.Write(data):
+            # We need to send steering information in a separate message, otherwise Zwift will 
+            # not pick it up correctly
+            ok = self.Write(steering)
+
+            if ok and self.OK and self.Write(data):
                 if self.Read():
                     #--------------------------------------------------------
                     # Let's see what we got back
