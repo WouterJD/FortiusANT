@@ -7,7 +7,7 @@ const HeartRateService = require('./heart-rate-service/heart-rate-service');
 const SteeringService = require('./steering-service/steering-service');
 
 class VirtualTrainer extends events {
-  constructor(steerinEnabled) {
+  constructor(steeringEnabled) {
     debug('[VirtualTrainer] constructor');
     super();
 
@@ -19,7 +19,7 @@ class VirtualTrainer extends events {
     this.hrs = new HeartRateService();
     this.ss = new SteeringService();
     this.stopTimer = null;
-    this.steerinEnabled = steerinEnabled;
+    this.steeringEnabled = steeringEnabled;
     
     bleno.on('stateChange', (state) => {
       debug(`[${this.name}] stateChange: ${state}`);
@@ -30,7 +30,7 @@ class VirtualTrainer extends events {
           this.hrs.uuid
         ]
 
-        if (this.steerinEnabled) {
+        if (this.steeringEnabled) {
           uuids.push(this.ss.uuid)
         }
 
@@ -51,7 +51,7 @@ class VirtualTrainer extends events {
           this.hrs
         ]
 
-        if (this.steerinEnabled) {
+        if (this.steeringEnabled) {
           services.push(this.ss)
         }
 
@@ -103,7 +103,7 @@ class VirtualTrainer extends events {
 
     this.ftms.notify(event);
     this.hrs.notify(event);
-    if (this.steerinEnabled) {
+    if (this.steeringEnabled) {
       this.ss.notify(event);
     }
 
