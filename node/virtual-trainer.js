@@ -7,7 +7,7 @@ const HeartRateService = require('./heart-rate-service/heart-rate-service');
 const SteeringService = require('./steering-service/steering-service');
 
 class VirtualTrainer extends events {
-  constructor() {
+  constructor(steerinEnabled) {
     debug('[VirtualTrainer] constructor');
     super();
 
@@ -19,16 +19,22 @@ class VirtualTrainer extends events {
     this.hrs = new HeartRateService();
     this.ss = new SteeringService();
     this.stopTimer = null;
+    this.steerinEnabled = steerinEnabled;
     
     bleno.on('stateChange', (state) => {
       debug(`[${this.name}] stateChange: ${state}`);
       
       if (state === 'poweredOn') {
-        bleno.startAdvertising(this.name, [
+        let uuids = [
           this.ftms.uuid,
-          this.hrs.uuid,
-          this.ss.uuid
-        ]);
+          this.hrs.uuid
+        ]
+
+        if (this.steerinEnabled) {
+          uuids.push(this.ss.uuid)
+        }
+
+        bleno.startAdvertising(this.name, uuids);
       }
       else {
         debug(`[${this.name}] Stopping...`);
@@ -40,11 +46,16 @@ class VirtualTrainer extends events {
       debug(`[${this.name}] advertisingStart: ${(error ? 'error ' + error : 'success')}`);
 
       if (!error) {
-        bleno.setServices([
+        let services = [
           this.ftms,
-          this.hrs,
-          this.ss
-        ],
+          this.hrs
+        ]
+
+        if (this.steerinEnabled) {
+          services.push(this.ss)
+        }
+
+        bleno.setServices(services,
         (error) => {
           debug(`[${this.name}] setServices: ${(error ? 'error ' + error : 'success')}`);
         });
@@ -92,7 +103,9 @@ class VirtualTrainer extends events {
 
     this.ftms.notify(event);
     this.hrs.notify(event);
-    this.ss.notify(event);
+    if (this.steerinEnabled) {
+      this.ss.notify(event);
+    }
 
     if (!('stop' in event)) {
       this.stopTimer = setTimeout(() => {

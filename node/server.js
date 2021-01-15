@@ -5,7 +5,22 @@ const debug = require('debug');
 const trace = debug('fortiusant:server');
 const version = require('./version');
 
-let trainer = new VirtualTrainer();
+const args = process.argv.slice(2);
+
+args.forEach(function (val, index, array) {
+  trace("args[" + index + '] = ' + val)
+})
+
+if (args[0] == "steering") {
+  var steeringEnabled = true
+}
+else {
+  var steeringEnabled = false
+}
+
+trace("Steering is " + (steeringEnabled ? "enabled" : "disabled"))
+
+let trainer = new VirtualTrainer(steeringEnabled);
 let server = express();
 
 server.use(bodyParser.urlencoded({extended: true}));
