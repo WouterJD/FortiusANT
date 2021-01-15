@@ -80,6 +80,10 @@ class clsBleInterface():
                     "node",
                     "server.js"
                 ]
+
+                if clv.steering:
+                    command.append("steering")
+
                 directory = Path.cwd().parent / "node"
                 if debug.on(debug.Ble): logfile.Write("... Popen(%s,%s)" % (directory, command) )
                 try:
