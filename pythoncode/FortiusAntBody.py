@@ -504,6 +504,40 @@ def Runoff(self):
     return True
     
 # ------------------------------------------------------------------------------
+# A x i s 2 A n g l e
+# ------------------------------------------------------------------------------
+# input:        raw steering axis data from the Tacx
+#
+# Description:  Convert the raw steering axis data to an angle using the
+#               steering calibration values.
+#
+# Returns:      The steering angle in degrees
+# ------------------------------------------------------------------------------
+def Axis2Angle(raw_axis, calib_right, calib_middle):
+    if raw_axis == 0x0a0d:
+        # No steering device connected, return a neutral angle.
+        angle = 0.0
+    else:
+        # Steering goes from -45 degrees left to 45 degrees right, 0 degrees is the center
+        # Calibration is done taking two points:
+        # - steer full right
+        # - steer center
+        #
+        # From these values we can calculate any steering angle using the following formulla:
+        #   angle = (raw_axis - right) / ((middle - right) / -45) + 45
+
+        step = (calib_middle - calib_right) / -45
+        angle = (raw_axis - calib_right) / step + 45
+
+        # Only start steering at 7 degress, the center steering is not always 
+        # returning to the same point after steering right or left causing the
+        # idle steering not to be 0.0 degrees.
+        if abs(angle) < 7:
+            angle = 0.0
+
+    return angle
+
+# ------------------------------------------------------------------------------
 # T a c x 2 D o n g l e
 # ------------------------------------------------------------------------------
 # input:        AntDongle, TacxTrainer
@@ -1013,9 +1047,10 @@ def Tacx2DongleSub(self, Restart):
                 # the bleCTP object.
                 #---------------------------------------------------------------
                 if clv.ble:
+                    steering_angle = Axis2Angle(TacxTrainer.Axis, 0x0314, 0x03e6)
                     bleCTP.SetAthleteData(HeartRate)
                     bleCTP.SetTrainerData(TacxTrainer.SpeedKmh, \
-                                    TacxTrainer.Cadence, TacxTrainer.CurrentPower, 5)
+                                    TacxTrainer.Cadence, TacxTrainer.CurrentPower, steering_angle)
                     if bleCTP.Refresh():
                         if bleCTP.TargetMode == mode_Power:
                             TargetPowerTime = time.time()
