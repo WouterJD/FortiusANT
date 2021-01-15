@@ -517,6 +517,9 @@ def Axis2Angle(raw_axis, calib_right, calib_middle):
     if raw_axis == 0x0a0d:
         # No steering device connected, return a neutral angle.
         angle = 0.0
+    elif calib_middle == calib_right:
+        # Calibration values for middle and right cannot be the same, return a neutral angle.
+        angle = 0.0
     else:
         # Steering goes from -45 degrees left to 45 degrees right, 0 degrees is the center
         # Calibration is done taking two points:
@@ -537,6 +540,8 @@ def Axis2Angle(raw_axis, calib_right, calib_middle):
 
         # Limit steering angle from -45 to 45 degrees in case we have an invalid reading
         angle = max(min(45, angle), -45)
+
+    # print(f"middle: 0x{calib_middle:02} right: 0x{calib_right} angle: {angle}")
 
     return angle
 
@@ -730,6 +735,13 @@ def Tacx2DongleSub(self, Restart):
     StartPedaling   = True
     Counter         = 0
 
+    SteerRight      = True
+    SteerMiddle     = True
+    CalibSteeringRight = 0
+    CalibSteeringMiddle = 0
+    LogSteeringCalibration = True
+    StartPedalTime = 0
+
     if TacxTrainer.CalibrateSupported():
         self.SetMessages(Tacx="* * * * G I V E   A   P E D A L   K I C K   T O   S T A R T   C A L I B R A T I O N * * * *")
         if debug.on(debug.Function):
@@ -774,6 +786,38 @@ def Tacx2DongleSub(self, Restart):
                     if debug.on(debug.Function):
                         logfile.Write('Tacx2Dongle; start calibration')
                     StartPedaling = False
+                    StartPedalTime = time.time()
+
+                if clv.steering:
+                    # Calibrate steering while calibrating resistance
+                    if SteerRight and StartPedalTime and time.time() - StartPedalTime > 5:
+                        if LogSteeringCalibration:
+                            self.SetMessages(Tacx="* * * * C A L I B R A T I N G   (Do not pedal) * * * * (Steer right) * * * *")
+                            if debug.on(debug.Function):
+                                logfile.Write('Tacx2Dongle; calibrate steering right')
+                            LogSteeringCalibration = False
+
+                        if time.time() - StartPedalTime > 8:
+                            SteerRight = False
+                            LogSteeringCalibration = True  # For next steering action
+                            CalibSteeringRight = TacxTrainer.Axis
+                            logfile.Write(f'Tacx2Dongle; calibrate steering right: {CalibSteeringRight}')
+
+                    if SteerMiddle and StartPedalTime and time.time() - StartPedalTime > 10:
+                        if LogSteeringCalibration:
+                            self.SetMessages(Tacx="* * * * C A L I B R A T I N G   (Do not pedal) * * * * (Steer middle) * * * *")
+                            if debug.on(debug.Function):
+                                logfile.Write('Tacx2Dongle; calibrate steering middle')
+                            LogSteeringCalibration = False
+                        
+                        if time.time() - StartPedalTime > 13:
+                            SteerMiddle = False
+                            CalibSteeringMiddle = TacxTrainer.Axis
+                            logfile.Write(f'Tacx2Dongle; calibrate steering middle: {CalibSteeringMiddle}')
+                            self.SetMessages(Tacx="* * * * C A L I B R A T I N G   (Do not pedal) * * * *")
+                            if debug.on(debug.Function):
+                                logfile.Write('Tacx2Dongle; continue calibration')
+
 
                 self.SetValues(TacxTrainer.SpeedKmh, int(CountDown/4), \
                         round(TacxTrainer.CurrentPower * -1,0), \
@@ -1050,7 +1094,7 @@ def Tacx2DongleSub(self, Restart):
                 # the bleCTP object.
                 #---------------------------------------------------------------
                 if clv.ble:
-                    steering_angle = Axis2Angle(TacxTrainer.Axis, 0x0314, 0x03e6)
+                    steering_angle = Axis2Angle(TacxTrainer.Axis, CalibSteeringRight, CalibSteeringMiddle)
                     bleCTP.SetAthleteData(HeartRate)
                     bleCTP.SetTrainerData(TacxTrainer.SpeedKmh, \
                                     TacxTrainer.Cadence, TacxTrainer.CurrentPower, steering_angle)
