@@ -1,0 +1,40 @@
+{
+    "ant": {
+        "device ID": ""
+    },
+    "bluetooth": {
+        "enable": false
+    },
+    "general": {
+        "autostart": true,
+        "debug": "",
+        "export TCX-file": false,
+        "gui": false,
+        "hrm": ""
+    },
+    "simulation": {
+        "manual grade": false,
+        "manual power": false,
+        "resistance": false,
+        "simulate": false
+    },
+    "trainer": {
+        "auto calibrate": true,
+        "calibrate rolling resistance": "",
+        "factor": "100",
+        "grade factor": "100",
+        "grade factor downhill": "100",
+        "pedal stroke analysis": true,
+        "power mode": false,
+        "runoff": {
+            "dip": "2",
+            "max speed": "40",
+            "min speed": "1",
+            "power": "100",
+            "time": "7.0"
+        },
+        "transmission": "34-50*x34-30-27-25-23-21-19*-17-15-13-11",
+        "type": ""
+    },
+    "version": "1"
+}

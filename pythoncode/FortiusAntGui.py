@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-08"
+__version__ = "2021-01-18"
+# 2020-01-18    When Setvalues() is called with zeroes, default transmission
+# 2020-01-16    Value of cassette was displayed incorrectly
 # 2021-01-08    Buttons spaced and Panel used for TAB-handling
 #               Drawing done on the panel and speedometers 'disable focus'
 #               #120 cranckset added for virtual front/read shifting
@@ -762,6 +764,15 @@ class frmFortiusAntGui(wx.Frame):
     def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, \
                         iTacx, iHeartRate, \
                         iCrancksetIndex, iCassetteIndex, fReduction):
+
+        # ----------------------------------------------------------------------
+        # When zero, display default setting
+        # ----------------------------------------------------------------------
+        if fReduction == 0:
+            fReduction      = 1  # Aviod DivideByZero
+            iCrancksetIndex = self.clv.CrancksetStart
+            iCassetteIndex  = self.clv.CassetteStart
+
         # ----------------------------------------------------------------------
         # Average power over the last 10 readings
         # ----------------------------------------------------------------------
@@ -909,7 +920,7 @@ class frmFortiusAntGui(wx.Frame):
             else:
                 teeth = self.clv.Cassette[self.CassetteIndex]
 
-            self.txtCassette.SetValue  ("%i" % int(round(teeth * self.Reduction) ) )
+            self.txtCassette.SetValue  ("%i" % int(round(teeth / self.Reduction) ) )
             bRefreshRequired  = True            # So that Cassette is painted
             
         else:

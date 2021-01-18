@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-12"
+__version__ = "2021-01-14"
+# 2021-01-14    Magnetic brake Version message handling modified
+#               #202 Fortius calibration skipped in ANTdongle restart
 # 2021-01-12    Small bu very relevant corrections :-(
 # 2021-01-10    Digital gearbox changed to front/rear index
 # 2021-01-06    settings added (+ missing other files for version check)
@@ -738,7 +740,8 @@ def Tacx2DongleSub(self, Restart):
               and     clv.calibrate \
               and not TacxTrainer.Buttons == usbTrainer.CancelButton \
               and     Calibrate == 0 \
-              and     TacxTrainer.CalibrateSupported():
+              and     TacxTrainer.CalibrateSupported() \
+              and not Restart:
             StartTime = time.time()
             #-------------------------------------------------------------------
             # Receive / Send trainer

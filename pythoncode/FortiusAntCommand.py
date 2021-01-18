@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-10"
+__version__ = "2021-01-18"
+# 2021-01-18    help texts defined as 'constants' to be used for commandline.
 # 2021-01-10    -T transmission added, issue #120
 #               added: trainer type: Magneticbrake, for consistency
 # 2021-01-06    settings added and can be tested from __main__
@@ -53,6 +54,7 @@ import debug
 import logfile
 
 from   constants                    import UseBluetooth, UseGui
+import constants
 
 if UseGui:
     import wx
@@ -143,66 +145,61 @@ class CommandLineVariables(object):
         # Define and process command line
         #-----------------------------------------------------------------------
         parser = argparse.ArgumentParser(description='Program to broadcast data from USB Tacx Fortius trainer, and to receive resistance data for the trainer')
-        parser.add_argument   ('-a','--autostart', help='Automatically start',                                 required=False, action='store_true')
-        parser.add_argument   ('-A','--PedalStrokeAnalysis', help='Pedal Stroke Analysis',                     required=False, action='store_true')
+        parser.add_argument   ('-a','--autostart',          help=constants.help_a,  required=False, action='store_true')
+        parser.add_argument   ('-A','--PedalStrokeAnalysis',help=constants.help_A,  required=False, action='store_true')
         if UseBluetooth:
-           parser.add_argument('-b','--ble',       help='(EXPERIMENTAL) Use Bluetooth LE instead of ANT+',     required=False, action='store_true')
-        parser.add_argument   ('-c','--CalibrateRR',help='calibrate Rolling Resistance for Magnetic Brake',    required=False, default=False)
-#       parser.add_argument   ('-C','--CtrlCommand',help='ANT+ Control Command (#1/#2)',                       required=False, default=False)
-        parser.add_argument   ('-C','--CtrlCommand',help=argparse.SUPPRESS,                                    required=False, default=False)
-        parser.add_argument   ('-d','--debug',     help='Show debugging data',                                 required=False, default=False)
-        parser.add_argument   ('-D','--antDeviceID',help='Use this antDongle type only',                       required=False, default=False)
+           parser.add_argument('-b','--ble',                help=constants.help_b,  required=False, action='store_true')
+        parser.add_argument   ('-c','--CalibrateRR',        help=constants.help_c,  required=False, default=False)
+#       parser.add_argument   ('-C','--CtrlCommand',        help=constants.help_C,  required=False, default=False)
+        parser.add_argument   ('-C','--CtrlCommand',        help=argparse.SUPPRESS, required=False, default=False)
+        parser.add_argument   ('-d','--debug',              help=constants.help_d,  required=False, default=False)
+        parser.add_argument   ('-D','--antDeviceID',        help=constants.help_D,  required=False, default=False)
         if UseGui:
-           parser.add_argument('-g','--gui',       help='Run with graphical user interface',                   required=False, action='store_true')
-        parser.add_argument   ('-G','--GradeAdjust',help='Adjust slope%% in GradeMode (factor/factorDownhill)',required=False, default=False)
-        parser.add_argument   ('-H','--hrm',       help='Pair this ANT+ Heart Rate Monitor (0: any, -1: none); Tacx HRM is used if not specified',
-                                                                                                            required=False, default=False)
-        parser.add_argument   ('-m','--manual',    help='Run manual power (ignore target from ANT+ Dongle)',   required=False, action='store_true')
-        parser.add_argument   ('-M','--manualGrade',help='Run manual grade (ignore target from ANT+ Dongle)',  required=False, action='store_true')
-        parser.add_argument   ('-n','--calibrate', help='Do not calibrate before start',                       required=False, action='store_false')
-        parser.add_argument   ('-p','--factor',    help='Adjust target Power by multiplying by this factor for static calibration',
-                                                                                                            required=False, default=False)
-        parser.add_argument   ('-P','--PowerMode', help='Power mode has preference over Resistance mode (for 30 seconds)',
-                                                                                                            required=False, action='store_true')
-        parser.add_argument   ('-r','--Resistance',help='Target Resistance = Target Power (to create power curve)',
-                                                                                                            required=False, action='store_true')
-        parser.add_argument   ('-R','--Runoff',    help='maxSpeed/dip/minSpeed/targetTime/power',              required=False, default=False)
-        parser.add_argument   ('-s','--simulate',  help='Simulated trainer to test ANT+ connectivity',         required=False, action='store_true')
-#scs    parser.add_argument   ('-S','--scs',       help='Pair this Speed Cadence Sensor (0: default device)',  required=False, default=False)
-        parser.add_argument   ('-T','--Transmission',help=argparse.SUPPRESS,                                   required=False, default=False)
+           parser.add_argument('-g','--gui',                help=constants.help_g,  required=False, action='store_true')
+        parser.add_argument   ('-G','--GradeAdjust',        help=constants.help_G,  required=False, default=False)
+        parser.add_argument   ('-H','--hrm',                help=constants.help_H,  required=False, default=False)
+        parser.add_argument   ('-m','--manual',             help=constants.help_m,  required=False, action='store_true')
+        parser.add_argument   ('-M','--manualGrade',        help=constants.help_M,  required=False, action='store_true')
+        parser.add_argument   ('-n','--calibrate',          help=constants.help_n,  required=False, action='store_false')
+        parser.add_argument   ('-p','--factor',             help=constants.help_p,  required=False, default=False)
+        parser.add_argument   ('-P','--PowerMode',          help=constants.help_P,  required=False, action='store_true')
+        parser.add_argument   ('-r','--Resistance',         help=constants.help_r,  required=False, action='store_true')
+        parser.add_argument   ('-R','--Runoff',             help=constants.help_R,  required=False, default=False)
+        parser.add_argument   ('-s','--simulate',           help=constants.help_s,  required=False, action='store_true')
+#scs    parser.add_argument   ('-S','--scs',                help=constants.help_S,  required=False, default=False)
+        parser.add_argument   ('-T','--Transmission',       help=constants.help_T,  required=False, default=False)
 
         self.ant_tacx_models = ['Bushido', 'Genius', 'Vortex', 'Magneticbrake', 'Motorbrake']
-        ant_tacx_help = 'Specify Tacx Type; default=autodetect.' \
-                      + 'Allowed values are: %s' % ', '.join(self.ant_tacx_models)
-        parser.add_argument('-t', '--TacxType', help=ant_tacx_help, metavar='',                             required=False, default=False, \
+        ant_tacx_help = constants.help_t \
+                      + ' Allowed values are: %s' % ', '.join(self.ant_tacx_models)
+        parser.add_argument('-t', '--TacxType',             help=ant_tacx_help, metavar='', required=False, default=False, \
                 choices=self.ant_tacx_models + ['i-Vortex']) # i-Vortex is still allowed for compatibility
 
-        parser.add_argument   ('-x','--exportTCX', help='Export TCX file',                                     required=False, action='store_true')
+        parser.add_argument   ('-x','--exportTCX',          help=constants.help_x,  required=False, action='store_true')
 
         #-----------------------------------------------------------------------
         # Parse command line
         # Overwrite from json file if present
         #-----------------------------------------------------------------------
-        args                        = parser.parse_args()
-        settings.ReadJsonFile(args)
-        self.args                   = args
+        self.args                   = parser.parse_args()
+        settings.ReadJsonFile(self.args)
 
         #-----------------------------------------------------------------------
         # Booleans; either True or False
         #-----------------------------------------------------------------------
-        self.autostart              = args.autostart
+        self.autostart              = self.args.autostart
         if UseBluetooth:
-            self.ble                = args.ble
+            self.ble                = self.args.ble
         if UseGui:
-            self.gui                = args.gui
-        self.manual                 = args.manual
-        self.manualGrade            = args.manualGrade
-        self.calibrate              = args.calibrate
-        self.PowerMode              = args.PowerMode
-        self.PedalStrokeAnalysis    = args.PedalStrokeAnalysis
-        self.Resistance             = args.Resistance
-        self.SimulateTrainer        = args.simulate
-        self.exportTCX              = args.exportTCX or self.manual or self.manualGrade
+            self.gui                = self.args.gui
+        self.manual                 = self.args.manual
+        self.manualGrade            = self.args.manualGrade
+        self.calibrate              = self.args.calibrate
+        self.PowerMode              = self.args.PowerMode
+        self.PedalStrokeAnalysis    = self.args.PedalStrokeAnalysis
+        self.Resistance             = self.args.Resistance
+        self.SimulateTrainer        = self.args.simulate
+        self.exportTCX              = self.args.exportTCX or self.manual or self.manualGrade
 
         if self.manual and self.manualGrade:
             logfile.Console("-m and -M are mutually exclusive; manual power selected")
@@ -216,17 +213,17 @@ class CommandLineVariables(object):
         # Not limitted to a range here, because can be different for different
         #       types of brakes, although initially only used for Magnetic Brake
         #-----------------------------------------------------------------------
-        if args.CalibrateRR:
+        if self.args.CalibrateRR:
             try:
-                self.CalibrateRR = float(args.CalibrateRR.replace(',', '.'))
+                self.CalibrateRR = float(self.args.CalibrateRR.replace(',', '.'))
             except:
-                logfile.Console('Command line error; -c incorrect calibration of Rolling Resistance=%s' % args.CalibrateRR)
+                logfile.Console('Command line error; -c incorrect calibration of Rolling Resistance=%s' % self.args.CalibrateRR)
 
         #-----------------------------------------------------------------------
         # Get CtrlCommand = Serial#1/Serial#2
         #-----------------------------------------------------------------------
-        if args.CtrlCommand:
-            s = args.CtrlCommand.split("/")
+        if self.args.CtrlCommand:
+            s = self.args.CtrlCommand.split("/")
             try:
                 assert(len(s) <= 2)
 
@@ -236,25 +233,25 @@ class CommandLineVariables(object):
                 assert(self.CTRL_SerialL >= 0)
                 assert(self.CTRL_SerialR >= 0)
             except:
-                logfile.Console('Command line error; -C incorrect SerialNumber in %s' % args.CtrlCommand)
+                logfile.Console('Command line error; -C incorrect SerialNumber in %s' % self.args.CtrlCommand)
 
         #-----------------------------------------------------------------------
         # Get debug-flags, used in debug module
         #-----------------------------------------------------------------------
-        if args.debug:
+        if self.args.debug:
             try:
-                self.debug = int(args.debug)
+                self.debug = int(self.args.debug)
             except:
-                logfile.Console('Command line error; -d incorrect debugging flags=%s' % args.debug)
+                logfile.Console('Command line error; -d incorrect debugging flags=%s' % self.args.debug)
 
         #-----------------------------------------------------------------------
         # Get antDeviceID
         #-----------------------------------------------------------------------
-        if args.antDeviceID:
+        if self.args.antDeviceID:
             try:
-                self.antDeviceID = int(args.antDeviceID)
+                self.antDeviceID = int(self.args.antDeviceID)
             except:
-                logfile.Console('Command line error; -D incorrect antDeviceID=%s' % args.antDeviceID)
+                logfile.Console('Command line error; -D incorrect antDeviceID=%s' % self.args.antDeviceID)
 
         #-----------------------------------------------------------------------
         # Get HRM
@@ -264,11 +261,11 @@ class CommandLineVariables(object):
         # - next: pair with the defined ANT+ HRM monitor
         #             the number can be found with ExplorANT
         #-----------------------------------------------------------------------
-        if args.hrm:
+        if self.args.hrm:
             try:
-                self.hrm = int(args.hrm)
+                self.hrm = int(self.args.hrm)
             except:
-                logfile.Console('Command line error; -H incorrect HRM=%s' % args.hrm)
+                logfile.Console('Command line error; -H incorrect HRM=%s' % self.args.hrm)
 
         #-----------------------------------------------------------------------
         # Get SCS
@@ -277,28 +274,28 @@ class CommandLineVariables(object):
         # - next: pair with the defined ANT+ SCS
         #             the number can be found with ExplorANT
         #-----------------------------------------------------------------------
-#scs    if args.scs:
+#scs    if self.args.scs:
 #scs        try:
-#scs            self.scs = int(args.scs)
+#scs            self.scs = int(self.args.scs)
 #scs        except:
-#scs            logfile.Console('Command line error; -S incorrect SCS=%s' % args.scs)
+#scs            logfile.Console('Command line error; -S incorrect SCS=%s' % self.args.scs)
 
         #-----------------------------------------------------------------------
         # Get powerfactor
         #-----------------------------------------------------------------------
-        if args.factor:
+        if self.args.factor:
             try:
-                self.PowerFactor = max(0.9, min(1.1, int(args.factor)/100 ))
+                self.PowerFactor = max(0.9, min(1.1, int(self.args.factor)/100 ))
             except:
-                logfile.Console('Command line error; -p incorrect power factor=%s' % args.factor)
+                logfile.Console('Command line error; -p incorrect power factor=%s' % self.args.factor)
 
         #-----------------------------------------------------------------------
         # Get GradeAdjust = shift/factor
         # Motor Brake default              = -G 100/100
         # Magnetic Brake suggested (Rouvy) = -G  50/100
         #-----------------------------------------------------------------------
-        if args.GradeAdjust:
-            s = args.GradeAdjust.split("/")
+        if self.args.GradeAdjust:
+            s = self.args.GradeAdjust.split("/")
             self.GradeAdjust = len(s)
             #-------------------------------------------------------------------
             # parameter1: factor (default = 1, allowed = 0...100%)
@@ -319,15 +316,15 @@ class CommandLineVariables(object):
                 if len(s) >= 2 and s[1]: self.GradeFactorDH = max(0, min( 1, int( s[1] ) / 100 ))
                 if len(s) >= 3 and s[2]: self.GradeShift    = max(0, min(20, int( s[2] )       ))
             except:
-                logfile.Console('Command line error; -G incorrect Grade Adjust=%s' % args.GradeAdjust)
+                logfile.Console('Command line error; -G incorrect Grade Adjust=%s' % self.args.GradeAdjust)
                 self.GradeAdjust = 0
 
         #-----------------------------------------------------------------------
         # Get RunOff definition
         # All defined as int (float seems not useful) with exception of Time
         #-----------------------------------------------------------------------
-        if args.Runoff:
-            s = args.Runoff.split("/")
+        if self.args.Runoff:
+            s = self.args.Runoff.split("/")
             try:
                 assert( len(s) <= 5 )
                 if len(s) >= 1 and s[0]: self.RunoffMaxSpeed = max(20, min( 50, int  ( s[0] ) )) # km/hr
@@ -337,13 +334,13 @@ class CommandLineVariables(object):
                 if len(s) >= 5 and s[4]: self.RunoffPower    = max( 0, min(500, int  ( s[4] ) )) # Watt
                 assert(self.RunoffMinSpeed <= self.RunoffMaxSpeed - self.RunoffDip * 2 )
             except:
-                logfile.Console('Command line error; -R incorrect Runoff definition %s' % args.Runoff)
+                logfile.Console('Command line error; -R incorrect Runoff definition %s' % self.args.Runoff)
 
         #-----------------------------------------------------------------------
         # Get TacxType
         #-----------------------------------------------------------------------
-        if args.TacxType:
-            self.TacxType = args.TacxType
+        if self.args.TacxType:
+            self.TacxType = self.args.TacxType
             if 'Vortex' in self.TacxType:
                 self.Tacx_Vortex = True
             elif 'Genius' in  self.TacxType:
@@ -355,8 +352,8 @@ class CommandLineVariables(object):
             elif 'Motorbrake' in self.TacxType:
                 self.Tacx_MotorBrake = True
             else:
-                logfile.Console('Command line error; -t incorrect value=%s' % args.TacxType)
-                args.TacxType = False
+                logfile.Console('Command line error; -t incorrect value=%s' % self.args.TacxType)
+                self.args.TacxType = False
 
         #-----------------------------------------------------------------------
         # Get Transmission
@@ -366,8 +363,7 @@ class CommandLineVariables(object):
         # MTB triple = "22-34-44 x 36-32-28-24-21-19-17-15-13-11"
         # MTB 3 x 13 = "22-34-44 x 50-42-36-32-28-24-21-18-16-14-12-10"
         #-----------------------------------------------------------------------
-        Transmission = "34-50* x 34-30-27-25-23-21-19*-17-15-13-11"
-        if not args.Transmission: args.Transmission = Transmission
+        self.Transmission = self.args.Transmission
         while True:
             #-------------------------------------------------------------------
             # Use command-line value, if fails - use default
@@ -381,11 +377,11 @@ class CommandLineVariables(object):
                 self.CassetteStart  = 0  # The initial value of index
                 self.CassetteMax    = 0  # Corresponds to full WH of the drawing area
 
-                args.Transmission   = args.Transmission.replace(' ', '')
+                self.Transmission    = self.Transmission.replace(' ', '')
                 #---------------------------------------------------------------
                 # Split in crackset and cassette
                 #---------------------------------------------------------------
-                s1 = args.Transmission.split("x")
+                s1 = self.Transmission.split("x")
                 assert( len(s1) == 2 )
                 #---------------------------------------------------------------
                 # Split cranckset into chainrings (max 3)
@@ -412,9 +408,9 @@ class CommandLineVariables(object):
                     if int(sprocket) > self.CassetteMax: self.CassetteMax = int(sprocket)
                     if i == 12: break
             except:
-                logfile.Console('Command line error; -T incorrect Transmission=%s' % args.GradeAdjust)
-                args.Transmission = Transmission
-                break
+                if self.Transmission:
+                    logfile.Console('Command line error; -T incorrect Transmission=%s' % self.args.Transmission)
+                self.Transmission = constants.Transmission
             else:
                 break
         #-----------------------------------------------------------------------
@@ -426,7 +422,7 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         # Check pedal stroke analysis
         #-----------------------------------------------------------------------
-        if args.PedalStrokeAnalysis and (not args.gui or self.Tacx_Vortex or
+        if self.args.PedalStrokeAnalysis and (not self.args.gui or self.Tacx_Vortex or
                                          self.Tacx_Genius or self.Tacx_Bushido):
             logfile.Console("Pedal stroke analysis is not possible in console mode or this Tacx type")
             self.PedalStrokeAnalysis = False
@@ -495,8 +491,9 @@ class CommandLineVariables(object):
             if      self.args.simulate:      logfile.Console("-s")
 #scs        if v or self.args.scs:           logfile.Console("-S %s" % self.scs )
             if v or self.args.TacxType:      logfile.Console("-t %s" % self.TacxType)
-            if True or v or self.args.Transmission:
-                                             logfile.Console('-T %s x %s (start=%sx%s)' % \
+#           if v or self.args.Transmission != constants.Transmission:
+            if v or self.args.Transmission:
+                                            logfile.Console('-T %s x %s (start=%sx%s)' % \
                                                                     (self.Cranckset, self.Cassette, \
                                                                      self.Cranckset[self.CrancksetStart], \
                                                                      self.Cassette [self.CassetteStart]) )

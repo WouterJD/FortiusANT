@@ -2729,6 +2729,17 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         # Data buffer depends on trainer_type
         # Refer to TotalReverse; "Newer protocol"
         #-----------------------------------------------------------------------
+        # 2021-01-14 Description appears to be extended as follows:
+        # 0	0x01	command number (1 = control command)
+        # 1	0x08	payload message size (0 = no payload)
+        # 2	0x01	payload type (0x01 = control data?)
+        # 3	0x00	never seen anything else than 0x00 - maybe high byte of little endian 16 bit?
+        #
+        # Therefore USB_ControlCommand  = 0x00010801 ==> CommandNumber = 1
+        #       and USB_VersionRequest  = 0x00000002 ==> CommandNumber = 2
+        # I do not change the code accordingly (just for sake of beauty?)
+        #       in favor of stability
+        #-----------------------------------------------------------------------
         fControlCommand     = sc.unsigned_int       # 0...3
         fTarget             = sc.short              # 4, 5      Resistance for Power=50...1000Watt
         fPedalecho          = sc.unsigned_char      # 6
@@ -2824,6 +2835,17 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         # 2020-11-18 sleep() only done when too short buffer received
         #   As said this SHOULD occur seldomly; if frequently it's bad behaviour
         #   at this location. It is logged so that we don't mis it.
+        #-----------------------------------------------------------------------
+        # 2021-01-14 Description appears to be extended as follows:
+        # Header			Size: 4 bytes
+        # 24	0	0x03	command number (answer command)
+        # 25	1	0x13	payload data size 19
+        # 26	2	0x02	payload type number (0x02 = control answer)
+        # 27	3	0x00	never seen anything else than 0x00 - maybe high byte of little endian 16 bit?
+        #
+        # Therefore USB_ControlResponse = 0x00021303 ==> CommandResponse = 3
+        #       and USB_VersionResponse = 0x00000c03 ==> CommandResponse = 3
+        # As in SendToTrainerUSBData() I do not change the code accordingly.
         #-----------------------------------------------------------------------
         data  = self.USB_Read_retry4x40()
 
@@ -3045,11 +3067,16 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             #-----------------------------------------------------------------------
             # Important enough; always display
             #-----------------------------------------------------------------------
-            logfile.Console ("Motor Brake Unit Firmware=%s Serial=%5s year=%s type=T19%s Version2=%s MotorBrake=%s" % \
-                            (   self.MotorBrakeUnitFirmware, Serial, \
-                                self.MotorBrakeUnitYear + 2000, self.MotorBrakeUnitType, \
-                                self.Version2, self.MotorBrake) \
-                            )
+            if self.MotorBrakeUnitSerial == 0:
+                logfile.Console ("Motor Brake Unit Firmware=%s Serial=%s MotorBrake=%s" % \
+                                (   hex(self.MotorBrakeUnitFirmware), Serial, self.MotorBrake) \
+                                )
+            else:
+                logfile.Console ("Motor Brake Unit Firmware=%s Serial=%5s year=%s type=T19%s Version2=%s MotorBrake=%s" % \
+                                (   hex(self.MotorBrakeUnitFirmware), Serial, \
+                                    self.MotorBrakeUnitYear + 2000, self.MotorBrakeUnitType, \
+                                    self.Version2, self.MotorBrake) \
+                                )
 
             #-----------------------------------------------------------------------
             # Correct message received
