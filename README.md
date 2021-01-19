@@ -18,7 +18,7 @@ Communication with a Cycling Training Program (CTP) can be done using an ANT- or
 
 The CTP can be run on another computer or Smartphone.
 
-**ANT dongles made by CYCPLUS (identical-looking ones sold as Anself and probably others) have been known to cause problems. Refer to #61**
+**ANT dongles made by CYCPLUS (identical-looking ones sold as Anself and probably others) have been known to cause problems. Refer to issue #61 (#97, #207 and others)**
 
 # User manual and version information
 Refer [wiki](https://github.com/WouterJD/FortiusANT/wiki) first, then ask questions raising an issue. Succes!
