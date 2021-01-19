@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-18"
+__version__ = "2021-01-19"
+# 2021-01-19    PowerFactor limit changed to 0.5 ... 1.5 (50 ... 150)
 # 2021-01-18    help texts defined as 'constants' to be used for commandline.
 #               texts in Json file different from variable name
 #               unknown variables are reported, but remain present
@@ -1001,7 +1002,7 @@ if constants.UseGui:
         # Checkbox -p
         # --------------------------------------------------------------------------
         def EVT_KILL_FOCUS_txt_p (self, event):
-            EVT_KILL_FOCUS_int_range(self.txt_p, event, 90, 110, 100)
+            EVT_KILL_FOCUS_int_range(self.txt_p, event, 50, 150, 100)
             
         # --------------------------------------------------------------------------
         # Checkbox -R

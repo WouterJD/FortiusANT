@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-18"
+__version__ = "2021-01-19"
+# 2021-01-19    PowerFactor limit changed to 0.5 ... 1.5
 # 2021-01-18    help texts defined as 'constants' to be used for commandline.
 # 2021-01-10    -T transmission added, issue #120
 #               added: trainer type: Magneticbrake, for consistency
@@ -285,7 +286,7 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         if self.args.factor:
             try:
-                self.PowerFactor = max(0.9, min(1.1, int(self.args.factor)/100 ))
+                self.PowerFactor = max(0.5, min(1.5, int(self.args.factor)/100 ))
             except:
                 logfile.Console('Command line error; -p incorrect power factor=%s' % self.args.factor)
 

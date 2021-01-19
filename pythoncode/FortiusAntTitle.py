@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v5.1 test V" # Double quotes, see below!
+WindowTitle = "Fortius Antifier v5.1 test VI" # Double quotes, see below!
 # 2020-01-11    Version 5.1     settings can be modified interactively
 #                               #120 font/rear changing
 #                               #195 power changing from headunit
