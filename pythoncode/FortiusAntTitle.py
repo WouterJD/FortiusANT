@@ -1,8 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v5.1 test VI" # Double quotes, see below!
-# 2020-01-11    Version 5.1     settings can be modified interactively
+WindowTitle = "Fortius Antifier v5.1" # Double quotes, see below!
+# 2020-01-21    Version 5.1     Published
+#                               settings can be modified interactively
 #                               #120 font/rear changing
 #                               #195 power changing from headunit
 # 2020-01-04                    master branch (5.0) merged into 4.2 Quality upgrade branch
