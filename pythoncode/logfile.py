@@ -127,7 +127,7 @@ class clsLogfileJson():
 #-------------------------------------------------------------------------------
 # O p e n
 #-------------------------------------------------------------------------------
-def Open(prefix='FortiusANT', suffix=''):
+def Open(prefix='FortiusAnt', suffix=''):
     global fLogfile, LogfileJson
 
     if debug.on():
@@ -136,7 +136,7 @@ def Open(prefix='FortiusANT', suffix=''):
         filename = prefix + '.' + datetime.now().strftime('%Y-%m-%d %H-%M-%S') + suffix + ".log"
         fLogfile = open(filename,"w+")
 
-        if debug.on(debug.LogfileJson) and prefix == 'FortiusANT':
+        if debug.on(debug.LogfileJson) and prefix == 'FortiusAnt':
             LogfileJson = clsLogfileJson(filename.replace('.log', '.json'))
 
 def IsOpen():

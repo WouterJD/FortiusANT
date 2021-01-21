@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-20"
+__version__ = "2021-01-18"
+# 2021-01-18    help texts defined as 'constants' to be used for commandline.
+# 2021-01-07    UseMultiProcessing moved here
 # 2020-12-20    Constants moved to constants.py
 #-------------------------------------------------------------------------------
 mode_Basic          = 0     # Basic Resistance
@@ -12,5 +14,34 @@ mode_Grade          = 2     # Target Resistance
 # 'directives' to exclude parts from the code
 # For example for small footprint implementations
 #-------------------------------------------------------------------------------
-UseBluetooth   = True
-UseGui         = True      # Not yet tested
+UseBluetooth        = True
+UseGui              = True      # Not yet tested
+UseMultiProcessing  = True      # Production version can be either False or True
+
+#-------------------------------------------------------------------------------
+# Commandline / Settings constants
+#-------------------------------------------------------------------------------
+Transmission = "34-50*x34-30-27-25-23-21-19*-17-15-13-11"      # No spaces here!
+
+help_A = "Pedal Stroke Analysis."
+help_C = "ANT+ Control Command (#1/#2)"
+help_D = "Select one specific antDongle (perhaps with a non-standard deviceID)."
+help_G = "Modify the requested grade with a factor/factorDownhill."
+help_H = "Pair this Heart Rate Monitor (0: any, -1: none). Tacx HRM is used if not specified."
+help_M = "Run manual grade (ignore target from ANT+ Dongle)."
+help_P = "Power mode has preference over Resistance mode (for 30 seconds)."
+help_S = "Pair this Speed Cadence Sensor (0: default device)"
+help_R = "The runoff procedure can be customized: maxSpeed/dip/minSpeed/targetTime/power."
+help_a = "Automatically start; “Locate HW” and “Start” if the required devices were found."
+help_b = "Advertise FortiusAnt as “FortiusAnt Trainer” on a Bluetooth Low Energy dongle."
+help_c = "Calibrate the rolling resistance for magnetic brake."
+help_d = "Create logfile with debugging data."
+help_g = "Run with graphical user interface."
+help_m = "Run manual power (ignore target from ANT+ Dongle)."
+help_n = "Do not calibrate before start."
+help_p = "Adjust target Power by multiplying by this factor for static calibration."
+help_r = "Target Resistance = Target Power (to create power curve)."
+help_s = "Simulate trainer to test ANT+ connectivity."
+help_t = "Specify Tacx Type; if not specified, USB-trainers will be detected automatically."
+help_T = "Transmission, default value = " + Transmission
+help_x = "Export TCX file to upload into Strava, Sporttracks, Training peaks."

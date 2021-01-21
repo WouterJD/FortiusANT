@@ -1,20 +1,25 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-12-18"
-# 2020-12-18        First version, obtained from @MarcoVeeneman
+__version__ = "2021-01-04"
+# 2021-01-04    lib_programname used to get correct dirname
+#               ./node was searched relative to current path
+#               https://github.com/WouterJD/FortiusANT/issues/103#issuecomment-753359525
+# 2020-12-18    First version, obtained from @MarcoVeeneman
 #---------------------------------------------------------------------------
-from   constants                    import mode_Power, mode_Grade, UseBluetooth
+from   constants import mode_Power, mode_Grade, UseBluetooth
 
 import debug
+import lib_programname
 import logfile
+import os
+import sys
 import time
 
 if UseBluetooth:
     import json
     import requests
     import subprocess
-from   pathlib                      import Path
 import atexit
 
 import FortiusAntCommand    as cmd
@@ -74,13 +79,28 @@ class clsBleInterface():
                 if debug.on(debug.Ble): logfile.Write('... already open')
             else:
                 #-----------------------------------------------------------
+                # path to find ./node (in the parent of the directory where
+                # 'we' are located) assuming directory structure:
+                # ./node
+                # ./pythoncode
+                # ./WindowsExecutable
+                #-----------------------------------------------------------
+                if getattr(sys, 'frozen', False):
+                    dirname = os.path.realpath(sys.argv[0])		# the started executable
+                else:
+                    dirname = str(lib_programname.get_path_executed_script())  # type: pathlib.Path
+                dirname = os.path.dirname(dirname)				# Remove /filename.py or /filename.exe
+                dirname = dirname.replace('\\', '/')			# Unify separator = / 
+                dirname = dirname[0:dirname.rfind('/')]			# Remove last level
+
+                #-----------------------------------------------------------
                 # Create interface as sub-process
                 #-----------------------------------------------------------
                 command = [
                     "node",
                     "server.js"
                 ]
-                directory = Path.cwd().parent / "node"
+                directory = dirname + "/node"
                 if debug.on(debug.Ble): logfile.Write("... Popen(%s,%s)" % (directory, command) )
                 try:
                     if debug.on(debug.Any):

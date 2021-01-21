@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-07"
+__version__ = "2020-12-28"
+# 2020-12-28    AccumulatedPower not negative
+# 2020-12-27    Interleave and EventCount more according specification
+#               see comment in antPWR.py for more info.
 # 2020-05-07    devAntDongle not needed, not used
 # 2020-05-07    pylint error free
 # 2020-02-18    First version, split-off from FortiusAnt.py
@@ -10,10 +13,11 @@ import time
 import antDongle         as ant
 
 def Initialize():
-    global EventCounter, AccumulatedPower, AccumulatedTimeCounter, DistanceTravelled, AccumulatedLastTime
-    EventCounter            = 0
+    global Interleave, EventCount, AccumulatedPower, AccumulatedTime, DistanceTravelled, AccumulatedLastTime
+    Interleave              = 0
+    EventCount              = 0
     AccumulatedPower        = 0
-    AccumulatedTimeCounter  = 0
+    AccumulatedTime         = 0
     DistanceTravelled       = 0
     AccumulatedLastTime     = time.time()
 
@@ -25,12 +29,12 @@ def Initialize():
 # Description:  Create next message to be sent for FE-C device.
 #               Refer to D000001231_-_ANT+_Device_Profile_-_Fitness_Equipment_-_Rev_5.0_(6).pdf
 #
-# Output:       EventCounter, AccumulatedPower, AccumulatedTimeCounter, DistanceTravelled
+# Output:       Interleave, AccumulatedPower, AccumulatedTime, DistanceTravelled
 #
 # Returns:      fedata; next message to be broadcasted on ANT+ channel
 # ------------------------------------------------------------------------------
 def BroadcastTrainerDataMessage (Cadence, CurrentPower, SpeedKmh, HeartRate):
-    global EventCounter, AccumulatedPower, AccumulatedTimeCounter, DistanceTravelled, AccumulatedLastTime
+    global Interleave, EventCount, AccumulatedPower, AccumulatedTime, DistanceTravelled, AccumulatedLastTime
     #---------------------------------------------------------------------------
     # Prepare data to be sent to ANT+
     #---------------------------------------------------------------------------
@@ -38,10 +42,7 @@ def BroadcastTrainerDataMessage (Cadence, CurrentPower, SpeedKmh, HeartRate):
     CurrentPower = min(4093, CurrentPower)      # Limit to 4093
     Cadence      = min( 253, Cadence)           # Limit to 253
     
-    AccumulatedPower += CurrentPower
-    if AccumulatedPower >= 65536: AccumulatedPower = 0
-
-    if   EventCounter % 64 in (30, 31):     # After 10 blocks of three messages, then 2 = 32 messages
+    if   Interleave % 64 in (30, 31):     # After 10 blocks of three messages, then 2 = 32 messages
         #-----------------------------------------------------------------------
         # Send first and second manufacturer's info packet
         #      FitSDKRelease_20.50.00.zip
@@ -54,7 +55,7 @@ def BroadcastTrainerDataMessage (Cadence, CurrentPower, SpeedKmh, HeartRate):
                     ant.HWrevision_FE, ant.Manufacturer_tacx, ant.ModelNumber_FE)
         fedata  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
         
-    elif EventCounter % 64 in (62, 63):     # After 10 blocks of three messages, then 2 = 32 messages
+    elif Interleave % 64 in (62, 63):     # After 10 blocks of three messages, then 2 = 32 messages
         #-----------------------------------------------------------------------
         # Send first and second product info packet
         #-----------------------------------------------------------------------
@@ -63,39 +64,45 @@ def BroadcastTrainerDataMessage (Cadence, CurrentPower, SpeedKmh, HeartRate):
                     ant.SWrevisionSupp_FE, ant.SWrevisionMain_FE, ant.SerialNumber_FE)
         fedata  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
     
-    elif EventCounter % 3 == 0:                                                                             
+    elif Interleave % 3 == 0:                                                                             
         #-----------------------------------------------------------------------
         # Send general fe data every 3 packets
         #-----------------------------------------------------------------------
-        AccumulatedTimeCounter += 1
-        AccumulatedTime         = int(time.time() - AccumulatedLastTime)    # time since start
-        Distance                = AccumulatedTime * SpeedKmh * 1000/3600    # SpeedKmh reported in kmh- convert to m/s
-        DistanceTravelled      += Distance
-        
-        if AccumulatedTimeCounter >= 256 or  DistanceTravelled >= 256:      # rollover at 64 seconds (256 quarter secs)
-            AccumulatedTimeCounter  = 0
-            AccumulatedLastTime     = time.time()                           # Reset last loop time
-            DistanceTravelled       = 0
+        t                       = time.time()
+        ElapsedTime             = t - AccumulatedLastTime # time since previous event
+        AccumulatedLastTime     = t
+        AccumulatedTime        += ElapsedTime * 4         # in 0.25s
+
+        Speed                   = SpeedKmh * 1000/3600    # convert SpeedKmh to m/s
+        Distance                = ElapsedTime * Speed     # meters
+        DistanceTravelled      += Distance                # meters
+
+        AccumulatedTime        = int(AccumulatedTime)   & 0xff # roll-over at 255 (64 seconds)
+        DistanceTravelled      = int(DistanceTravelled) & 0xff # roll-over at 255
 
         # comment = "(General fe data)"
-        # Note: AccumulatedTimeCounter as first parameter,
-        #       To be checked whether it should be AccumulatedTime (in 0.25 s)
-        info    = ant.msgPage16_GeneralFEdata (ant.channel_FE, AccumulatedTimeCounter, DistanceTravelled, SpeedKmh*1000*1000/3600, HeartRate)
+        info    = ant.msgPage16_GeneralFEdata (ant.channel_FE, AccumulatedTime, DistanceTravelled, Speed * 1000, HeartRate)
         fedata  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
 
     else:
+        EventCount       += 1
+        AccumulatedPower += max(0, CurrentPower)            # No decrement allowed
+
+        EventCount        = int(EventCount)       & 0xff    # roll-over at 255
+        AccumulatedPower  = int(AccumulatedPower) & 0xffff  # roll-over at 65535
+
         #-----------------------------------------------------------------------
         # Send specific trainer data
         #-----------------------------------------------------------------------
         # comment = "(Specific trainer data)"
-        info    = ant.msgPage25_TrainerData(ant.channel_FE, EventCounter, Cadence, AccumulatedPower, CurrentPower)
+        info    = ant.msgPage25_TrainerData(ant.channel_FE, EventCount, Cadence, AccumulatedPower, CurrentPower)
         fedata  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
 
     #-------------------------------------------------------------------------
     # Prepare for next event
     #-------------------------------------------------------------------------
-    EventCounter += 1           # Increment and ...
-    EventCounter &= 0xff        # maximize to 255
+    Interleave += 1           # Increment and ...
+    Interleave &= 0xff        # maximize to 255
 
     #-------------------------------------------------------------------------
     # Return message to be sent

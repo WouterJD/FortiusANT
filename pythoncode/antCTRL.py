@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-14"
+__version__ = "2020-12-27"
+# 2020-12-27    Interleave like antPWR.py
 # 2020-12-14    First version, obtained from switchable
 #-------------------------------------------------------------------------------
 import antDongle         as ant
@@ -38,19 +39,21 @@ CommandName = {
 }
 
 def Initialize():
-    global ControlEventCount
-    ControlEventCount        = 0
+    global Interleave
+    Interleave = 0
 
 def BroadcastControlMessage ():
-    global ControlEventCount
+    global Interleave
 
-    if ControlEventCount == 64:  # Transmit page 0x50 = 80
+    if Interleave == 64:  # Transmit page 0x50 = 80
         info = ant.msgPage80_ManufacturerInfo(ant.channel_CTRL, 0xff, 0xff, \
                                               ant.HWrevision_CTRL, ant.Manufacturer_dev, ant.ModelNumber_CTRL)
 
-    elif ControlEventCount == 129:  # Transmit page 0x51 = 81
+    elif Interleave == 129:  # Transmit page 0x51 = 81
         info = ant.msgPage81_ProductInformation(ant.channel_CTRL, 0xff, \
                                                 ant.SWrevisionSupp_CTRL, ant.SWrevisionMain_CTRL, ant.SerialNumber_CTRL)
+
+        Interleave = 0              # Restart after the last interleave message
 
     else:
         # support generic control only
@@ -61,8 +64,7 @@ def BroadcastControlMessage ():
     #-------------------------------------------------------------------------
     # Prepare for next event
     #-------------------------------------------------------------------------
-    ControlEventCount += 1           # Increment and ...
-    ControlEventCount = ControlEventCount % 130
+    Interleave += 1
 
     #-------------------------------------------------------------------------
     # Return message to be sent

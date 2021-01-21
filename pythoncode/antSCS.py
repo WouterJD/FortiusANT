@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-06-16"
+__version__ = "2020-12-27"
+# 2020-12-27    Rollover more according specification
 # 2020-06-16    Modified: device-by-zero due to zero Cadence/SpeedKmh
 # 2020-06-09    First version, based upon antHRM.py
 #-------------------------------------------------------------------------------
@@ -23,7 +24,7 @@ def BroadcastMessage (_PedalEchoTime, PedalEchoCount, SpeedKmh, Cadence):
     #-------------------------------------------------------------------------
     # If pedal passed the magnet, calculate new values
     # Otherwise repeat previous message
-    # Avoid device-by-zero!
+    # Avoid devide-by-zero!
     #-------------------------------------------------------------------------
     if PedalEchoCount != PedalEchoPreviousCount and Cadence > 0 and SpeedKmh > 0:
         #---------------------------------------------------------------------
@@ -54,9 +55,10 @@ def BroadcastMessage (_PedalEchoTime, PedalEchoCount, SpeedKmh, Cadence):
     #-------------------------------------------------------------------------
     # Rollover after 0xffff
     #-------------------------------------------------------------------------
-    if CadenceEventTime > 0xffff or CadenceEventCount > 0xffff or \
-         SpeedEventTime > 0xffff or   SpeedEventCount > 0xffff:
-        Initialize()
+    CadenceEventTime  = int(CadenceEventTime)  & 0xffff  # roll-over at 65535 = 64 seconds
+    CadenceEventCount = int(CadenceEventCount) & 0xffff  # roll-over at 65535
+    SpeedEventTime    = int(SpeedEventTime)    & 0xffff  # roll-over at 65535 = 64 seconds
+    SpeedEventCount   = int(SpeedEventCount)   & 0xffff  # roll-over at 65535
 
     #-------------------------------------------------------------------------
     # Prepare for next event

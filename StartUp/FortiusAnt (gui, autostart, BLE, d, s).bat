@@ -1,3 +1,3 @@
-del *.log *.json *.tcx
+del *.log FortiusAnt.*.json *.tcx
 ..\pythoncode\FortiusAnt.py -a -g -b -d64 -n -s
 pause

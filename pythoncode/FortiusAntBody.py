@@ -1,8 +1,14 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-30"
+__version__ = "2021-01-14"
+# 2021-01-14    Magnetic brake Version message handling modified
+#               #202 Fortius calibration skipped in ANTdongle restart
+# 2021-01-12    Small bu very relevant corrections :-(
+# 2021-01-10    Digital gearbox changed to front/rear index
+# 2021-01-06    settings added (+ missing other files for version check)
 # 2020-12-30    Tacx Genius and Bushido implemented
+# 2020-12-27    Inform user of (de)activation of ANT/BLE devices
 # 2020-12-24    usage of UseGui implemented
 #               If -b is expected, antDongle is optional.
 # 2020-12-20    Constants used from constants.py
@@ -255,6 +261,28 @@ def IdleFunction(self):
     return rtn
 
 # ------------------------------------------------------------------------------
+# S e t t i n g s
+# ------------------------------------------------------------------------------
+# input:        pRestartApplication, pclv
+#
+# Description:  data provided by the GUI/Settings interface
+#               NOTE: only dynamic parameters of clv may be changed, otherwise
+#                     the application must be restarted.
+#                     If important parameters are changed (without restart)
+#                     this may cause unchecked inconsistencies!
+#
+# Output:       new clv adopted
+#
+# Returns:      True
+# ------------------------------------------------------------------------------
+def Settings(self, pRestartApplication, pclv):
+    global clv
+    clv = pclv
+    if debug.on(debug.Function):
+        logfile.Write ("FortiusAntBody.Settings(%s, %s)" % (pRestartApplication, pclv.debug))
+    return True
+
+# ------------------------------------------------------------------------------
 # L o c a t e H W
 # ------------------------------------------------------------------------------
 # input:        TacxTrainer, AntDongle
@@ -390,14 +418,14 @@ def Runoff(self):
         # Show what happens
         #-----------------------------------------------------------------------
         if TacxTrainer.Message == "Not Found":
-            self.SetValues(0, 0, 0, 0, 0, 0, 0, 0, 0)
+            self.SetValues(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
             self.SetMessages(Tacx="Check if trainer is powered on")
         else:
             self.SetValues( TacxTrainer.SpeedKmh,         TacxTrainer.Cadence, \
                             TacxTrainer.CurrentPower,     TacxTrainer.TargetMode, \
                             TacxTrainer.TargetPower,      TacxTrainer.TargetGrade, \
                             TacxTrainer.TargetResistance, TacxTrainer.HeartRate, \
-                            0)
+                            0, 0, 0)
             #---------------------------------------------------------------------
             # SpeedKmh up to 40 km/h and then let wheel rolldown
             #---------------------------------------------------------------------
@@ -495,7 +523,7 @@ def Runoff(self):
     #---------------------------------------------------------------------------
     # Finalize
     #---------------------------------------------------------------------------
-    self.SetValues( 0, 0, 0, TacxTrainer.TargetMode, 0, 0, 0, 0, 0 )
+    self.SetValues( 0, 0, 0, TacxTrainer.TargetMode, 0, 0, 0, 0, 0, 0, 0 )
     if not rolldown:
         self.SetMessages(Tacx=TacxTrainer.Message)
     if debug.on(debug.Any) and PowerCount > 0:
@@ -542,6 +570,15 @@ def Tacx2DongleSub(self, Restart):
     assert(bleCTP)                          # The class must be created
 
     AntHRMpaired = False
+
+    #---------------------------------------------------------------------------
+    # Front/rear shifting
+    #---------------------------------------------------------------------------
+    ReductionCranckset = 1                  # ratio between selected/start (front)
+    ReductionCassette  = 1                  # same, rear
+    ReductionCassetteX = 1                  # same, beyond cassette range
+    CrancksetIndex = clv.CrancksetStart
+    CassetteIndex  = clv.CassetteStart
 
     #---------------------------------------------------------------------------
     # Command status data
@@ -703,7 +740,8 @@ def Tacx2DongleSub(self, Restart):
               and     clv.calibrate \
               and not TacxTrainer.Buttons == usbTrainer.CancelButton \
               and     Calibrate == 0 \
-              and     TacxTrainer.CalibrateSupported():
+              and     TacxTrainer.CalibrateSupported() \
+              and not Restart:
             StartTime = time.time()
             #-------------------------------------------------------------------
             # Receive / Send trainer
@@ -740,7 +778,7 @@ def Tacx2DongleSub(self, Restart):
 
                 self.SetValues(TacxTrainer.SpeedKmh, int(CountDown/4), \
                         round(TacxTrainer.CurrentPower * -1,0), \
-                        mode_Power, 0, 0, TacxTrainer.CurrentResistance * -1, 0, 0)
+                        mode_Power, 0, 0, TacxTrainer.CurrentResistance * -1, 0, 0, 0, 0)
 
                 # --------------------------------------------------------------
                 # Average power over the last 20 readings
@@ -792,14 +830,14 @@ def Tacx2DongleSub(self, Restart):
             TacxTrainer.SetGrade(0)
         else:
             TacxTrainer.SetPower(100)
-        TacxTrainer.ResetPowercurveFactor()
+        TacxTrainer.SetGearboxReduction(1)
 
     TargetPowerTime         = 0             # Time that last TargetPower received
     PowerModeActive         = ''            # Text showing in userinterface
     
     LastANTtime             = 0             # ANT+ interface is sent/received only
                                             # every 250ms
-    
+
     #---------------------------------------------------------------------------
     # Initialize antHRM and antFE module
     #---------------------------------------------------------------------------
@@ -818,6 +856,18 @@ def Tacx2DongleSub(self, Restart):
         if debug.on(debug.Any): logfile.Console("Tacx2Dongle; Pedal Stroke Analysis active")
     else:
         CycleTime = CycleTimeANT    # Seconds, default = 0.25 (inspired by 4Hz ANT+)
+
+    #---------------------------------------------------------------------------
+    # ANT-, BLE- devices are active from here (after calibration!)
+    #---------------------------------------------------------------------------
+    s = ''
+    if AntDongle.OK: s = 'ANT-'
+    if clv.ble:
+        if s: s += ' and '
+        s += 'BLE-'
+    ActivationMsg = '---------- %sdevices are activated ----------' % s
+    if not Restart:
+        logfile.Console (ActivationMsg)
 
     #---------------------------------------------------------------------------
     # Our main loop!
@@ -874,7 +924,8 @@ def Tacx2DongleSub(self, Restart):
                             TacxTrainer.TargetGrade, \
                             TacxTrainer.TargetResistance, \
                             HeartRate, \
-                            TacxTrainer.Teeth)
+                            CrancksetIndex, \
+                            CassetteIndex, ReductionCassetteX)
 
             #-------------------------------------------------------------------
             # Add trackpoint
@@ -939,6 +990,7 @@ def Tacx2DongleSub(self, Restart):
             # TargetMode  is set here (manual mode) or received from ANT+ (Zwift)
             # TargetPower and TargetGrade are set in this section only!
             #-------------------------------------------------------------------
+            ReductionChanged = False
             if clv.manual:
                 if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
                 elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddPower(-50)
@@ -954,12 +1006,77 @@ def Tacx2DongleSub(self, Restart):
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
                 else:                                                   pass
             else:
-                if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
-                elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.SetPowercurveFactorDown()
-                elif TacxTrainer.Buttons == usbTrainer.OKButton:        TacxTrainer.ResetPowercurveFactor()
-                elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.SetPowercurveFactorUp()
-                elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
+                if   TacxTrainer.Buttons == usbTrainer.EnterButton \
+                or   TacxTrainer.Buttons == usbTrainer.OKButton:
+                            ReductionChanged = True
+                            CrancksetIndex = clv.CrancksetStart         # Reset both front
+                            CassetteIndex  = clv.CassetteStart          # and rear
+
+                elif TacxTrainer.Buttons == usbTrainer.UpButton:        # Switch rear right (smaller) = higher index
+                            ReductionChanged = True
+                            if CassetteIndex < 0:
+                                CassetteIndex += 1
+                                ReductionCassetteX *= 1.1
+                            elif CassetteIndex < len(clv.Cassette) - 1:
+                                CassetteIndex += 1
+                            elif ReductionCassetteX < 2:
+                                # Plus 7 extra steps beyond the end of the cassette
+                                CassetteIndex += 1
+                                ReductionCassetteX *= 1.1
+
+                elif TacxTrainer.Buttons == usbTrainer.DownButton:      # Switch rear left (bigger) = lower index       
+                            ReductionChanged = True
+                            if CassetteIndex >= len(clv.Cassette):
+                                CassetteIndex -= 1
+                                ReductionCassetteX /= 1.1
+                            elif CassetteIndex > 0:
+                                CassetteIndex -= 1
+                            elif ReductionCassetteX > 0.6:
+                                # Plus 8 extra steps beyond the end of the cassette
+                                CassetteIndex -= 1
+                                ReductionCassetteX /= 1.1
+
+                elif TacxTrainer.Buttons == usbTrainer.CancelButton:    # Switch front up (round robin)
+                            ReductionChanged = True
+                            #self.RunningSwitch = False
+                            CrancksetIndex += 1
+                            if CrancksetIndex == len(clv.Cranckset):
+                                CrancksetIndex = 0
+
                 else:                                                   pass
+
+            #-------------------------------------------------------------------
+            # Calculate Reduction
+            #
+            # Note that, the VIRTUAL gearbox has Reduction = 1 when the indexes
+            #      are in the initial position (not when front = rear!).
+            #
+            # ReductionCranckset: >1 when chainring > start-value
+            # ReductionCassette:  >1 when sprocket  < start-value
+            # ReductionCassetteX: is a factor when index outside the cassette!
+            #-------------------------------------------------------------------
+            if ReductionChanged:
+                if 0 <= CrancksetIndex < len(clv.Cranckset):
+                    ReductionCranckset = clv.Cranckset[CrancksetIndex] / \
+                                         clv.Cranckset[clv.CrancksetStart]
+
+                if 0 <= CassetteIndex < len(clv.Cassette):
+                    ReductionCassetteX = 1
+                    ReductionCassette  = clv.Cassette[clv.CassetteStart] / \
+                                         clv.Cassette[CassetteIndex]
+
+                if debug.on(debug.Function):
+                    if CassetteIndex >= len(clv.Cassette):
+                        i = len(clv.Cassette) - 1
+                    else:
+                        i = CassetteIndex
+                    logfile.Print('gearbox changed: index=%ix%2i ratio=%ix%i R=%3.1f*%3.1f*%3.1f=%3.1f' % \
+                    (   CrancksetIndex, CassetteIndex, \
+                        clv.Cranckset[CrancksetIndex], clv.Cassette[i], \
+                        ReductionCranckset, ReductionCassette, ReductionCassetteX,\
+                        ReductionCranckset * ReductionCassette * ReductionCassetteX))
+
+                TacxTrainer.SetGearboxReduction(ReductionCranckset * ReductionCassette * ReductionCassetteX)
 
             #-------------------------------------------------------------------
             # Do ANT/BLE work every 1/4 second
@@ -1446,12 +1563,14 @@ def Tacx2DongleSub(self, Restart):
     # - Create TCXexport
     # - Close  connection with bluetooth CTP
     # - Stop the Tacx trainer
+    # - Inform user that ANT/BLE is deactivated
     #---------------------------------------------------------------------------
     if not AntDongle.DongleReconnected:
         if clv.exportTCX: tcx.Stop()
         if clv.ble:       bleCTP.Close()
         self.SetMessages(Dongle=AntDongle.Message + bleCTP.Message)
         TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
+        logfile.Console (ActivationMsg.replace('activated', 'deactivated'))
 
     #---------------------------------------------------------------------------
     # Stop devices

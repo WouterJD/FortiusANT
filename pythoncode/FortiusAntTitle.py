@@ -1,8 +1,15 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v5.0"              # Double quotes, see below!
+WindowTitle = "Fortius Antifier v5.1" # Double quotes, see below!
+# 2020-01-21    Version 5.1     Published
+#                               settings can be modified interactively
+#                               #120 font/rear changing
+#                               #195 power changing from headunit
+# 2020-01-04                    master branch (5.0) merged into 4.2 Quality upgrade branch
 # 2020-01-04    Version 5.0     #117 Tacx Bushido and #101 Genius implemented
+# 2020-12-20    Version 4.2     #173 Version 4.0 Communicates Much Higher Power vs. 3.8
+#                               #184 Power in Rouvy issue
 # 2020-12-20    Version 4.1.1   #137 Improvements for Raspberry PI
 # 2020-12-20    Version 4.1.c   #103 Implement Bluetooth support
 # 2020-12-15    Version 4.1.b   #147 Improve run-off procedure
