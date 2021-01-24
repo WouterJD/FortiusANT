@@ -813,9 +813,9 @@ class frmFortiusAntGui(wx.Frame):
         if delta >= 1:                        # Refresh once per second
             self.LastFields = time.time()     # Time in seconds
 
-            self.Speed.SetSpeedValue(float(min(max(0, fSpeed),     self.SpeedMax)))
-            self.Revs.SetSpeedValue (float(min(max(0, iRevs),      self.RevsMax )))
-            self.Power.SetSpeedValue(float(min(max(0, iPowerMean), self.PowerMax)))
+            wx.CallAfter(self.Speed.SetSpeedValue, float(min(max(0, fSpeed), self.SpeedMax)))
+            wx.CallAfter(self.Revs.SetSpeedValue, float(min(max(0, iRevs), self.RevsMax )))
+            wx.CallAfter(self.Power.SetSpeedValue, float(min(max(0, iPowerMean), self.PowerMax)))
 
             if True:
                 # Alternating suffix makes the texts being refreshed
@@ -1193,9 +1193,10 @@ class frmFortiusAntGui(wx.Frame):
         self.callRunoff()
         self.OnTimerEnabled = True
         self.RunningSwitch = False              # Just to be sure
-        self.OnClick_btnStop()                  # Thread may stop for any reason
+        wx.CallAfter(self.OnClick_btnStop)      # Thread may stop for any reason
                                                 # Do GUI actions to enable the
                                                 # correct buttons.
+                                                # And do it via wx.CallAfter since we are not the GUI thread.
 
         if self.CloseButtonPressed == True:
             self.CloseButtonPressed = False     # Otherwise self.Close() is blocked
@@ -1233,10 +1234,10 @@ class frmFortiusAntGui(wx.Frame):
         self.callTacx2Dongle()
         self.OnTimerEnabled= True
         self.RunningSwitch = False              # Just to be sure
-        self.OnClick_btnStop()                  # Thread may stop for any reason
+        wx.CallAfter(self.OnClick_btnStop)      # Thread may stop for any reason
                                                 # Do GUI actions to enable the
                                                 # correct buttons.
-
+                                                # And do it via wx.CallLater since we our not the GUI thread.
         if self.CloseButtonPressed == True:
             self.CloseButtonPressed = False     # Otherwise self.Close() is blocked
             self.Close()

@@ -289,15 +289,17 @@ if UseGui:
                 # while we are waiting for the response on cmd_Runoff or cmd_Tacx2Dongle
                 # we ignore the response here and cmd_StopButton does not start wait-loop
                 # to avoid some sort of nesting or so.
+                # Note: since GuiMessageToMain is called from the RunOffThread and the Tacx2DongleThread
+                # we may not call self.setValues() or self.SetMessages() directly. 
                 # ------------------------------------------------------------------
                 if cmd == command:
                     break                   # command is ready
                 elif cmd == cmd_StopButton:
                     pass
                 elif cmd == cmd_SetValues:
-                    self.SetValues(rtn[0], rtn[1], rtn[2], rtn[3], rtn[4], rtn[5], rtn[6], rtn[7], rtn[8], rtn[9], rtn[10])# rtn is tuple
+                    wx.CallAfter(self.SetValues, rtn[0], rtn[1], rtn[2], rtn[3], rtn[4], rtn[5], rtn[6], rtn[7], rtn[8], rtn[9], rtn[10])# rtn is tuple
                 elif cmd == cmd_SetMessages:
-                    self.SetMessages(rtn[0], rtn[1], rtn[2])# rtn is (Tacx, Dongle, HRM) tuple
+                    wx.CallAfter(self.SetMessages, rtn[0], rtn[1], rtn[2])# rtn is (Tacx, Dongle, HRM) tuple
                 elif cmd == cmd_PedalStrokeAnalysis:
                     self.PedalStrokeAnalysis(rtn[0], rtn[1])# rtn is (info, Cadence) tuple
                     pass
