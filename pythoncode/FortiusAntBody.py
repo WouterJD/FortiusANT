@@ -1215,11 +1215,11 @@ def Tacx2DongleSub(self, Restart):
                             TacxTrainer.SetWind(0.51, 0.0, 1.0)
 
                             p71_LastReceivedCommandID   = DataPageNumber
-                            p71_SequenceNr              = int(p71_SequenceNr + 1) & 0xff
+                            p71_SequenceNr              = (p71_SequenceNr + 1) % 255
                             p71_CommandStatus           = 0xff
                             p71_Data2                   = 0xff
                             p71_Data3                   = 0xff
-                            p71_Data4                   = 0xff
+                            p71_Data4                   = info[8]
                             
                         #-------------------------------------------------------
                         # Data page 49 (0x31) Target Power
@@ -1231,11 +1231,11 @@ def Tacx2DongleSub(self, Restart):
                                 logfile.Write('PowerMode: TargetPower info received - timestamp set')
 
                             p71_LastReceivedCommandID   = DataPageNumber
-                            p71_SequenceNr              = int(p71_SequenceNr + 1) & 0xff
+                            p71_SequenceNr              = (p71_SequenceNr + 1) % 255
                             p71_CommandStatus           = 0
                             p71_Data2                   = 0xff
-                            p71_Data3                   =  int(TacxTrainer.TargetPower) & 0x00ff
-                            p71_Data4                   = (int(TacxTrainer.TargetPower) & 0xff00) >> 8
+                            p71_Data3                   = info[7]
+                            p71_Data4                   = info[8]
 
                         #-------------------------------------------------------
                         # Data page 50 (0x32) Wind Resistance
@@ -1246,11 +1246,11 @@ def Tacx2DongleSub(self, Restart):
                             TacxTrainer.SetWind(WindResistance, WindSpeed, DraftingFactor)
 
                             p71_LastReceivedCommandID   = DataPageNumber
-                            p71_SequenceNr              = int(p71_SequenceNr + 1) & 0xff
+                            p71_SequenceNr              = (p71_SequenceNr + 1) % 255
                             p71_CommandStatus           = 0
-                            p71_Data2                   = WindResistance
-                            p71_Data3                   = WindSpeed
-                            p71_Data4                   = DraftingFactor
+                            p71_Data2                   = info[6]
+                            p71_Data3                   = info[7]
+                            p71_Data4                   = info[8]
 
                         #-------------------------------------------------------
                         # Data page 51 (0x33) Track resistance
@@ -1296,11 +1296,11 @@ def Tacx2DongleSub(self, Restart):
                                 PowerModeActive       = ''
 
                             p71_LastReceivedCommandID   = DataPageNumber
-                            p71_SequenceNr              = int(p71_SequenceNr + 1) & 0xff
+                            p71_SequenceNr              = (p71_SequenceNr + 1) % 255
                             p71_CommandStatus           = 0
-                            p71_Data2                   =  int(TacxTrainer.TargetPower) & 0x00ff
-                            p71_Data3                   = (int(TacxTrainer.TargetPower) & 0xff00) >> 8
-                            p71_Data4                   = RollingResistance
+                            p71_Data2                   = info[6]
+                            p71_Data3                   = info[7]
+                            p71_Data4                   = info[8]
 
                         #-------------------------------------------------------
                         # Data page 55 User configuration
