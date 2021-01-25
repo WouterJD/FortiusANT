@@ -2,8 +2,22 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2021-01-25"
-# 2020-01-25    SetValues(), SetMessages() and PedalStrokeAnalysis() made
-#               thread safe, using wx.CallAfter(). See issue #216
+# 2020-01-25    Random cranckset was 0...2; should be 0..1
+#
+#               SetValues(), SetMessages() and PedalStrokeAnalysis() made
+#               thread safe, using wx.CallAfter(). See issue #216.
+#               Ref: https://www.blog.pythonlibrary.org/2010/05/22/wxpython-and-threads/
+#
+#               Also, after thread-completion (Runoff and Tacx2Dongle), wx.CallAfter()
+#               called to perform the post-thread actions in the GUI.
+#
+#               And as a reference for multi-threading (unchanged in this version):
+#                    https://wiki.wxpython.org/LongRunningTasks
+#
+#               Although the threads should properly end, "daemon=True" is
+#               added so that the threads will be killed when the main
+#               program stops, just as back-stop to avoid hangups.
+#               Ref: https://docs.python.org/3/library/threading.html#thread-objects
 # 2020-01-18    When Setvalues() is called with zeroes, default transmission
 # 2020-01-16    Value of cassette was displayed incorrectly
 # 2021-01-08    Buttons spaced and Panel used for TAB-handling
@@ -676,7 +690,7 @@ class frmFortiusAntGui(wx.Frame):
 #           tr -= 5
 #           self.SetValues(r * self.SpeedMax, r * self.RevsMax, r * self.PowerMax, t[5], t[0] + t[5])
 #           self.SetValues(35.6, 234, 123, mode_Grade, 345, 19.5, 2345, 123)
-            self.SetValues(r * 35.6, r * 234, r * 123, mode_Grade, r * 345, r * 19.5, r * 2345, r * 123, random.randint(0,2), random.randint(0,12), 1)
+            self.SetValues(r * 35.6, r * 234, r * 123, mode_Grade, r * 345, r * 19.5, r * 2345, r * 123, random.randint(0,1), random.randint(0,12), 1)
 
             if self.clv.PedalStrokeAnalysis:
                 for i, p in enumerate(self.power):
@@ -1196,7 +1210,7 @@ class frmFortiusAntGui(wx.Frame):
         self.btnRunoff.Disable()
         self.btnStop.SetFocus()
 
-        thread = threading.Thread(target=self.OnClick_btnRunoff_Thread)
+        thread = threading.Thread(target=self.OnClick_btnRunoff_Thread, daemon=True)
         thread.start()
 
     def OnClick_btnRunoff_Thread(self):
@@ -1206,11 +1220,18 @@ class frmFortiusAntGui(wx.Frame):
         self.CloseButtonPressed = False
         self.OnTimerEnabled = False
         self.callRunoff()
-        self.OnTimerEnabled = True
+        wx.CallAfter(self.OnClick_btnRunoff_Done)
+
+    def OnClick_btnRunoff_Done(self):
+        self.OnTimerEnabled= True
         self.RunningSwitch = False              # Just to be sure
-        self.OnClick_btnStop()                  # Thread may stop for any reason
-                                                # Do GUI actions to enable the
-                                                # correct buttons.
+
+        self.ResetValues()
+        self.btnSettings.Enable()
+        self.btnRunoff.Enable()
+        self.btnStart.Enable()
+        self.btnStop.Disable()
+        self.btnRunoff.SetFocus()
 
         if self.CloseButtonPressed == True:
             self.CloseButtonPressed = False     # Otherwise self.Close() is blocked
@@ -1236,7 +1257,7 @@ class frmFortiusAntGui(wx.Frame):
         self.btnRunoff.Disable()
         self.btnStop.SetFocus()
 
-        thread = threading.Thread(target=self.OnClick_btnStart_Thread)
+        thread = threading.Thread(target=self.OnClick_btnStart_Thread, daemon=True)
         thread.start()
 
     def OnClick_btnStart_Thread(self):
@@ -1246,11 +1267,18 @@ class frmFortiusAntGui(wx.Frame):
         self.CloseButtonPressed = False
         self.OnTimerEnabled = False
         self.callTacx2Dongle()
+        wx.CallAfter(self.OnClick_btnStart_Done)
+
+    def OnClick_btnStart_Done(self):
         self.OnTimerEnabled= True
         self.RunningSwitch = False              # Just to be sure
-        self.OnClick_btnStop()                  # Thread may stop for any reason
-                                                # Do GUI actions to enable the
-                                                # correct buttons.
+
+        self.ResetValues()
+        self.btnSettings.Enable()
+        self.btnRunoff.Enable()
+        self.btnStart.Enable()
+        self.btnStop.Disable()
+        self.btnStart.SetFocus()
 
         if self.CloseButtonPressed == True:
             self.CloseButtonPressed = False     # Otherwise self.Close() is blocked
@@ -1269,12 +1297,7 @@ class frmFortiusAntGui(wx.Frame):
     def OnClick_btnStop(self, event=False):
         if __name__ == "__main__": print ("OnClick_btnStop()")
         self.RunningSwitch = False
-        self.ResetValues()
-        self.btnSettings.Enable()
-        self.btnRunoff.Enable()
-        self.btnStart.Enable()
         self.btnStop.Disable()
-        self.btnStart.SetFocus()            # SetFocus in thread would be nicer, setting focus to either Runoff or Start
 
     # --------------------------------------------------------------------------
     # O n C l o s e
