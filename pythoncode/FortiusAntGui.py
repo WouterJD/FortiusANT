@@ -1290,7 +1290,6 @@ class frmFortiusAntGui(wx.Frame):
     # input:        [STOP] pressed
     #
     # Description:  Stop RunningThread; when that was not running, no effect
-    #               Enable [SETTINGS], [START] and [RUNOFF], Disable [STOP]
     #
     # Output:       self.RunningSwitch
     # --------------------------------------------------------------------------
