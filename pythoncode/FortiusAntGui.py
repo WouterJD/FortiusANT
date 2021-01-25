@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-18"
+__version__ = "2021-01-25"
+# 2020-01-25    SetValues(), SetMessages() and PedalStrokeAnalysis() made
+#               thread safe, using wx.CallAfter(). See issue #216
 # 2020-01-18    When Setvalues() is called with zeroes, default transmission
 # 2020-01-16    Value of cassette was displayed incorrectly
 # 2021-01-08    Buttons spaced and Panel used for TAB-handling
@@ -761,7 +763,17 @@ class frmFortiusAntGui(wx.Frame):
     # --------------------------------------------------------------------------
     def ResetValues(self):
         self.SetValues(0,0,0,0,0,0,0,0,0,0,0)
+
     def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, \
+                    iTacx, iHeartRate, \
+                    iCrancksetIndex, iCassetteIndex, fReduction):  # Tread safe
+        wx.CallAfter(
+                    self.SetValuesGUI, \
+                    fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, \
+                    iTacx, iHeartRate, \
+                    iCrancksetIndex, iCassetteIndex, fReduction)
+
+    def SetValuesGUI(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, \
                         iTacx, iHeartRate, \
                         iCrancksetIndex, iCassetteIndex, fReduction):
 
@@ -933,7 +945,10 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
         if bRefreshRequired: self.panel.Refresh()
 
-    def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
+    def SetMessages(self, Tacx=None, Dongle=None, HRM=None):       # Tread safe
+        wx.CallAfter(self.SetMessagesGUI, Tacx, Dongle, HRM)
+
+    def SetMessagesGUI(self, Tacx=None, Dongle=None, HRM=None):
         if Tacx   != None:
             if Tacx[:4] == '* * ': self.txtUsbTrainer.SetForegroundColour(wx.BLUE)
             else:                  self.txtUsbTrainer.SetForegroundColour(wx.BLACK)
@@ -956,8 +971,8 @@ class frmFortiusAntGui(wx.Frame):
     #
     # Output:       None
     # --------------------------------------------------------------------------
-    def PedalStrokeAnalysis(self, info, Cadence):
-        self.RadarGraph.PedalStrokeAnalysis(info, Cadence)
+    def PedalStrokeAnalysis(self, info, Cadence):                   # Tread safe
+        wx.CallAfter(self.RadarGraph.PedalStrokeAnalysis, info, Cadence)
 
     # --------------------------------------------------------------------------
     # O n P a i n t
