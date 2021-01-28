@@ -31,3 +31,8 @@ Refer [wiki](https://github.com/WouterJD/FortiusANT/wiki) first, then ask questi
 GPLv3
 
 Copyright (c) 2020 [Wouter Dubbeldam](https://github.com/WouterJD). Please have a look at the [LICENSE](LICENSE) for more details.
+
+# Sponsor
+[![Custom badge](https://github.com/WouterJD/FortiusANT/blob/master/pythoncode/sponsor36.bmp)](https://github.com/sponsors/WouterJD)
+
+If you like to use FortiusAnt; please leave a note on the [put yourself on the FortiusAnt map](https://github.com/WouterJD/FortiusANT/issues/14) page; thereby a sponsorship would be another great acknowledgement! Questions, problems and suggestions can be reported as an issue on github.
