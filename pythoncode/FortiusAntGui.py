@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-25"
+__version__ = "2021-01-28"
+# 2020-01-28    During calibration, the Cadence speedometer will display 
+#               "Calibration countdown"
+#               Help and Sponsor button added (#189)
 # 2020-01-25    Random cranckset was 0...2; should be 0..1
 #
 #               SetValues(), SetMessages() and PedalStrokeAnalysis() made
@@ -18,6 +21,13 @@ __version__ = "2021-01-25"
 #               added so that the threads will be killed when the main
 #               program stops, just as back-stop to avoid hangups.
 #               Ref: https://docs.python.org/3/library/threading.html#thread-objects
+#
+#               Now that the threads work properly ForceRefreshDC=False can be used.
+#               ForceRefreshDC=True was used untill now and remains True, because the
+#                                   screen is more stable.
+#               Little test: there seems to be no difference between StaticText and
+#                            TextCtrl() from screen-stability point of view
+#
 # 2020-01-18    When Setvalues() is called with zeroes, default transmission
 # 2020-01-16    Value of cassette was displayed incorrectly
 # 2021-01-08    Buttons spaced and Panel used for TAB-handling
@@ -79,6 +89,7 @@ import random
 import sys
 import threading
 import time
+import webbrowser
 import wx
 import wx.lib.agw.speedmeter as SM
 
@@ -93,6 +104,11 @@ import settings
 #-------------------------------------------------------------------------------
 # constants
 #-------------------------------------------------------------------------------
+ForceRefresh        = True  # More stable with self.panel.Refresh()
+ForceRefreshDC      = False # add DOT/COMMA to force refresh
+_UseStaticText      = False # There appears to be no difference in behaviour
+                            # for StaticText() or TextCtrl() with appropriate style
+
 LargeTexts          = True  # 2020-02-07
 
 bg                  = wx.Colour(220,220,220) # Background colour [for self.Speedometers]
@@ -118,6 +134,7 @@ Margin              = 4
 #               callTacx2Dongle(self)
 # ------------------------------------------------------------------------------
 class frmFortiusAntGui(wx.Frame):
+    Calibrating = False         # Flag that we're calibrating
     clv        = None
     LastFields = 0  # Time when SetValues() updated the fields
     LastHeart  = 0  # Time when heartbeat image was updated
@@ -153,6 +170,7 @@ class frmFortiusAntGui(wx.Frame):
         FortiusAnt_jpg = os.path.join(dirname, "FortiusAnt.jpg")
         Heart_jpg      = os.path.join(dirname, "heart.jpg"     )
         settings_bmp   = os.path.join(dirname, "settings.bmp"  )
+        sponsor_bmp    = os.path.join(dirname, "sponsor.bmp"   )
 
         try:
             ico = wx.Icon(FortiusAnt_ico, wx.BITMAP_TYPE_ICO)
@@ -596,29 +614,49 @@ class frmFortiusAntGui(wx.Frame):
         b = wx.Bitmap(b)
 
         self.btnSettings = wx.BitmapButton(self.panel, bitmap=b, size=(ButtonW, -1), style=0) # wx.NO_BORDER)
+        self.btnSettings.SetToolTip ("Modify settings and optionally save for next session")
         self.btnSettings.SetPosition((ButtonX, self.btnSettings.Size[1]))
         self.btnSettings.SetFocus()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnSettings, self.btnSettings)
 
         self.btnLocateHW = wx.Button(self.panel, label="Locate HW", size=(ButtonW, -1))
+        self.btnLocateHW.SetToolTip ("Connect to USB-devices (Tacx trainer and/or ANTdongle)")
         self.btnLocateHW.SetPosition((ButtonX, self.btnSettings.Position[1] + self.btnSettings.Size[1] + Margin))
         self.btnLocateHW.SetFocus()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnLocateHW, self.btnLocateHW)
 
         self.btnRunoff   = wx.Button(self.panel, label="Runoff", size=(ButtonW, -1))
+        self.btnRunoff.SetToolTip ("Execute runoff-procedure (recommended for magnetic brake trainers)")
         self.btnRunoff.SetPosition((ButtonX, self.btnLocateHW.Position[1] + self.btnLocateHW.Size[1] + Margin))
         self.btnRunoff.Disable()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnRunoff, self.btnRunoff)
 
         self.btnStart    = wx.Button(self.panel, label="Start", size=(ButtonW, -1))
+        self.btnStart.SetToolTip ("Start communication with Cycle Training Program")
         self.btnStart.SetPosition((ButtonX, self.btnRunoff.Position[1] + self.btnRunoff.Size[1] + Margin))
         self.btnStart.Disable()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnStart, self.btnStart)
 
         self.btnStop     = wx.Button(self.panel, label="Stop", size=(ButtonW, -1))
+        self.btnStop.SetToolTip ("Stop FortiusAnt bridge")
         self.btnStop.SetPosition((ButtonX, self.btnStart.Position[1] + self.btnStart.Size[1] + Margin))
         self.btnStop.Disable()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnStop, self.btnStop)
+
+        b = wx.Image(sponsor_bmp)       # Must fit, no rescale
+        b = wx.Bitmap(b)
+        self.btnSponsor = wx.BitmapButton(self.panel, bitmap=b, size=(ButtonW, -1), style=0) # wx.NO_BORDER)
+        self.btnSponsor.SetToolTip ("Become a sponsor for FortiusAnt")
+        self.Bind(wx.EVT_BUTTON, self.OnClick_btnSponsor, self.btnSponsor)
+
+        self.btnHelp     = wx.Button(self.panel, label="Help", size=(ButtonW, -1))
+        self.btnHelp.SetToolTip ("Open the manual on github")
+        self.Bind(wx.EVT_BUTTON, self.OnClick_btnHelp, self.btnHelp)
+
+        # Move Help button above the texts
+        self.btnHelp.SetPosition((ButtonX, self.txtUsbTrainer.Position[1] - self.txtUsbTrainer.Size[1] - Margin))
+        # Move Sponsor button above Help
+        self.btnSponsor.SetPosition((ButtonX, self.btnHelp.Position[1] - self.btnHelp.Size[1] - Margin))
 
         # ----------------------------------------------------------------------
 		# Set initial values
@@ -839,11 +877,15 @@ class frmFortiusAntGui(wx.Frame):
         if delta >= 1:                        # Refresh once per second
             self.LastFields = time.time()     # Time in seconds
 
+            if self.Calibrating:
+                self.Revs.SetMiddleText("Calibration countdown")
+            else:
+                self.Revs.SetMiddleText("Cadence")
             self.Speed.SetSpeedValue(float(min(max(0, fSpeed),     self.SpeedMax)))
             self.Revs.SetSpeedValue (float(min(max(0, iRevs),      self.RevsMax )))
             self.Power.SetSpeedValue(float(min(max(0, iPowerMean), self.PowerMax)))
 
-            if True:
+            if ForceRefreshDC:
                 # Alternating suffix makes the texts being refreshed
                 suffix1 = '.'                       # str(0x32) # space
                 suffix2 = ','                       # str(0xa0) # no break space
@@ -855,9 +897,15 @@ class frmFortiusAntGui(wx.Frame):
 
             # 2020-02-07: LargeTexts implemented
             if LargeTexts:
-                self.txtSpeed.SetValue ("%4.1fkm/h"   % fSpeed  + suffix)
-                self.txtRevs.SetValue  ("%i/min"      % iRevs   + suffix)
-                self.txtPower.SetValue ("%iW"         % iPower  + suffix)
+                self.txtSpeed.SetValue      ("%4.1fkm/h"% fSpeed  + suffix)
+
+                if self.Calibrating:
+                    self.txtRevs.SetValue   ("%i"       % iRevs   + suffix)
+                else:
+                    self.txtRevs.SetValue   ("%i/min"   % iRevs   + suffix)
+
+                self.txtPower.SetValue      ("%iW"      % iPower  + suffix)
+
                 if iTacx == 0:
                     self.txtTacx.SetValue  ("")
                 else:
@@ -928,7 +976,7 @@ class frmFortiusAntGui(wx.Frame):
                 self.txtCranckset.Show()
 
             self.txtCranckset.SetValue  ("%i" % self.clv.Cranckset[self.CrancksetIndex])
-            bRefreshRequired  = True            # So that Cassette is painted
+            bRefreshRequired  = True            # So that Cranckset is painted
             
         else:
             if self.txtCranckset.IsShown():
@@ -957,16 +1005,19 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
         # Refresh if required; so that JPGs are drawn in the OnPaint() event
         # ----------------------------------------------------------------------
-        if bRefreshRequired: self.panel.Refresh()
+        if ForceRefresh and bRefreshRequired: self.panel.Refresh()
 
     def SetMessages(self, Tacx=None, Dongle=None, HRM=None):       # Tread safe
         wx.CallAfter(self.SetMessagesGUI, Tacx, Dongle, HRM)
 
     def SetMessagesGUI(self, Tacx=None, Dongle=None, HRM=None):
         if Tacx   != None:
-            if Tacx[:4] == '* * ': self.txtUsbTrainer.SetForegroundColour(wx.BLUE)
-            else:                  self.txtUsbTrainer.SetForegroundColour(wx.BLACK)
-            self.txtUsbTrainer.SetBackgroundColour(bg)
+            if Tacx[:4] == '* * ':                         # We're calibrating!
+                self.Calibrating = True
+                self.txtUsbTrainer.SetForegroundColour(wx.BLUE)
+            else:                  
+                self.Calibrating = False
+                self.txtUsbTrainer.SetForegroundColour(wx.BLACK)
             self.txtUsbTrainer.SetValue(Tacx)
 
         if Dongle != None:
@@ -1297,6 +1348,32 @@ class frmFortiusAntGui(wx.Frame):
         if __name__ == "__main__": print ("OnClick_btnStop()")
         self.RunningSwitch = False
         self.btnStop.Disable()
+
+    # --------------------------------------------------------------------------
+    # O n C l i c k _ b t n S p o n s o r
+    # --------------------------------------------------------------------------
+    # input:        [SPONSOR] pressed
+    #
+    # Description:  Open sponsor page
+    #
+    # Output:       None
+    # --------------------------------------------------------------------------
+    def OnClick_btnSponsor(self, event=False):
+        if __name__ == "__main__": print ("OnClick_btnSponsor()")
+        webbrowser.open_new_tab('https://github.com/sponsors/WouterJD')
+
+    # --------------------------------------------------------------------------
+    # O n C l i c k _ b t n H e l p 
+    # --------------------------------------------------------------------------
+    # input:        [Help] pressed
+    #
+    # Description:  Open manual
+    #
+    # Output:       None
+    # --------------------------------------------------------------------------
+    def OnClick_btnHelp(self, event=False):
+        if __name__ == "__main__": print ("OnClick_btnHelp()")
+        webbrowser.open_new_tab('https://github.com/WouterJD/FortiusANT/blob/master/doc/FortiusANTUserManual.pdf')
 
     # --------------------------------------------------------------------------
     # O n C l o s e
