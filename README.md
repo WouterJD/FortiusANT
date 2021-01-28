@@ -1,6 +1,7 @@
-# FortiusANT
 [![Custom badge](https://img.shields.io/endpoint?logo=Strava&logoColor=orange&style=for-the-badge&url=https%3A%2F%2Fmarcoveeneman-badges.herokuapp.com%2Fstrava)](https://www.strava.com/clubs/804672)
+[![Custom badge](https://github.com/WouterJD/FortiusANT/blob/master/pythoncode/sponsor36.bmp)](https://github.com/sponsors/WouterJD)
 
+# FortiusANT
 FortiusANT enables a pre-smart Tacx trainer (usb- or ANT-connected) to communicate with TrainerRoad, Rouvy or Zwift through ANT.
 
 FortiusANT is running on the computer (Windows, Linux or MacOS) where the trainer is connected and broadcasts the ANT+ signal, using a dongle, to another computer or tablet.
