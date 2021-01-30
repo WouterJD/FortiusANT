@@ -177,6 +177,8 @@ class CommandLineVariables(object):
                 choices=self.ant_tacx_models + ['i-Vortex']) # i-Vortex is still allowed for compatibility
 
         parser.add_argument   ('-x','--exportTCX',          help=constants.help_x,  required=False, action='store_true')
+        parser.add_argument   ('-L','--LED',      help='Status-LED for Raspi headless',                         required=False, action='store_true')
+
 
         #-----------------------------------------------------------------------
         # Parse command line
@@ -201,6 +203,7 @@ class CommandLineVariables(object):
         self.Resistance             = self.args.Resistance
         self.SimulateTrainer        = self.args.simulate
         self.exportTCX              = self.args.exportTCX or self.manual or self.manualGrade
+        self.Raspi_LED              = self.args.LED
 
         if self.manual and self.manualGrade:
             logfile.Console("-m and -M are mutually exclusive; manual power selected")
@@ -286,9 +289,11 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         if self.args.factor:
             try:
-                self.PowerFactor = max(0.5, min(1.5, int(self.args.factor)/100 ))
+               self.PowerFactor = max(0.5, min(1.5, int(self.args.factor)/100 ))
+               
             except:
                 logfile.Console('Command line error; -p incorrect power factor=%s' % self.args.factor)
+            if not (50<= int(self.args.factor) <= 150) : logfile.Console('Command line error; -p out of range power factor=%s' % args.factor)
 
         #-----------------------------------------------------------------------
         # Get GradeAdjust = shift/factor
@@ -499,7 +504,7 @@ class CommandLineVariables(object):
                                                                      self.Cranckset[self.CrancksetStart], \
                                                                      self.Cassette [self.CassetteStart]) )
             if      self.exportTCX:          logfile.Console("-x")
-
+            if      self.args.LED:           logfile.Console("-L")
         except:
             pass # May occur when incorrect command line parameters, error already given before
 

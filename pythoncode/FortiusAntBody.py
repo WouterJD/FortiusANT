@@ -220,6 +220,8 @@ import usbTrainer
 
 import bleDongle
 
+import LED_IO #JPS
+
 PrintWarnings = False   # Print warnings even when logging = off
 CycleTimeFast = 0.02    # TRAINER- SHOULD WRITE THEN READ 70MS LATER REALLY
 CycleTimeANT  = 0.25
@@ -316,7 +318,11 @@ def LocateHW(self):
              if clv.manual:      AntDongle.Message += ' (manual power)'
              if clv.manualGrade: AntDongle.Message += ' (manual grade)'
         self.SetMessages(Dongle=AntDongle.Message + bleCTP.Message)
-
+        
+        if AntDongle.OK:
+             LED_IO.Set_LED_Dongle(1.0) #JPS
+        else:  
+             LED_IO.Set_LED_Dongle(0.0) #JPS
     #---------------------------------------------------------------------------
     # Get Trainer and find trainer model for Windows and Linux
     #---------------------------------------------------------------------------
@@ -325,6 +331,11 @@ def LocateHW(self):
         pass
     else:
         TacxTrainer = usbTrainer.clsTacxTrainer.GetTrainer(clv, AntDongle)
+        if TacxTrainer.OK:  
+            LED_IO.Set_LED_Tacx(1.0) #JPS
+        else:
+            LED_IO.Set_LED_Tacx(0.0) #JPS
+            
         self.SetMessages(Tacx=TacxTrainer.Message)
 
     #---------------------------------------------------------------------------

@@ -19,6 +19,8 @@ __version__ = "2021-01-10"
 from   constants import mode_Power, mode_Grade, UseGui, UseBluetooth, UseMultiProcessing
 import constants                        #  for __version__
 
+import LED_IO #JPS
+
 import argparse
 from datetime                           import datetime
 import multiprocessing
@@ -224,6 +226,12 @@ class clsFortiusAntConsole:
             msg = "Target=%s Speed=%4.1fkmh hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f T=%2s %2s %s" % \
                   (sTarget,       fSpeed,  iHeartRate,       iPower,    iRevs,  iTacx, iCrancksetIndex, iCassetteIndex, fReduction)
             logfile.Console (msg)
+            
+
+        if iRevs > 0:
+           LED_IO. Set_LED_Cadence(1.0)  #JPS
+        else:
+           LED_IO.Set_LED_Cadence(0.0)   #JPS
 
     def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
         if Tacx   != None:

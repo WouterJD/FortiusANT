@@ -130,6 +130,7 @@ __version__ = "2021-01-12"
 # 2020-01-08    Grade2Resistance() modified; test-version to be removed
 # 2019-12-25    Target grade implemented; modes defined
 #-------------------------------------------------------------------------------
+import LED_IO #JPS
 import array
 import lib_programname
 from enum import Enum
@@ -2188,10 +2189,13 @@ class clsTacxUsbTrainer(clsTacxTrainer):
             else:
                 logfile.Console('To resolve, check all (signal AND power) cabling for loose contacts.')
 
-        elif self.Header != expectedHeader:
-            logfile.Console('Tacx head unit returns incorrect header %s (expected: %s)' % \
+        else:
+            if self.Header != expectedHeader:
+                logfile.Console('Tacx head unit returns incorrect header %s (expected: %s)' % \
                                         (hex(expectedHeader), hex(self.Header)))
-
+            else:
+                pass
+                LED_IO.Toggle_LED_Tacx() #jps
         return data
 
     #---------------------------------------------------------------------------
