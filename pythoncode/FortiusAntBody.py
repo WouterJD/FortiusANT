@@ -584,7 +584,7 @@ def Tacx2DongleSub(self, Restart):
     # Command status data
     #---------------------------------------------------------------------------
     p71_LastReceivedCommandID   = 255
-    p71_SequenceNr              = 0
+    p71_SequenceNr              = 255
     p71_CommandStatus           = 255
     p71_Data1                   = 0xff
     p71_Data2                   = 0xff
@@ -1214,12 +1214,15 @@ def Tacx2DongleSub(self, Restart):
                             TacxTrainer.SetRollingResistance(0.004)
                             TacxTrainer.SetWind(0.51, 0.0, 1.0)
 
+                            # Update "last command" data in case page 71 is requested later
                             p71_LastReceivedCommandID   = DataPageNumber
+                            # wrap around after 254 (255 = no command received)
                             p71_SequenceNr              = (p71_SequenceNr + 1) % 255
-                            p71_CommandStatus           = 0xff
+                            p71_CommandStatus           = 0     # successfully processed
+                            # echo raw command data (cannot use unpage, unpage does unit conversion etc)
                             p71_Data2                   = 0xff
                             p71_Data3                   = 0xff
-                            p71_Data4                   = info[8]
+                            p71_Data4                   = info[8]      # target resistance
                             
                         #-------------------------------------------------------
                         # Data page 49 (0x31) Target Power
@@ -1230,12 +1233,15 @@ def Tacx2DongleSub(self, Restart):
                             if False and clv.PowerMode and debug.on(debug.Application):
                                 logfile.Write('PowerMode: TargetPower info received - timestamp set')
 
+                            # Update "last command" data in case page 71 is requested later
                             p71_LastReceivedCommandID   = DataPageNumber
+                            # wrap around after 254 (255 = no command received)
                             p71_SequenceNr              = (p71_SequenceNr + 1) % 255
-                            p71_CommandStatus           = 0
+                            p71_CommandStatus           = 0     # successfully processed
+                            # echo raw command data (cannot use unpage, unpage does unit conversion etc)
                             p71_Data2                   = 0xff
-                            p71_Data3                   = info[7]
-                            p71_Data4                   = info[8]
+                            p71_Data3                   = info[7]       # target power (LSB)
+                            p71_Data4                   = info[8]       # target power (MSB)
 
                         #-------------------------------------------------------
                         # Data page 50 (0x32) Wind Resistance
@@ -1245,12 +1251,15 @@ def Tacx2DongleSub(self, Restart):
                                 ant.msgUnpage50_WindResistance(info)
                             TacxTrainer.SetWind(WindResistance, WindSpeed, DraftingFactor)
 
+                            # Update "last command" data in case page 71 is requested later
                             p71_LastReceivedCommandID   = DataPageNumber
+                            # wrap around after 254 (255 = no command received)
                             p71_SequenceNr              = (p71_SequenceNr + 1) % 255
-                            p71_CommandStatus           = 0
-                            p71_Data2                   = info[6]
-                            p71_Data3                   = info[7]
-                            p71_Data4                   = info[8]
+                            p71_CommandStatus           = 0     # successfully processed
+                            # echo raw command data (cannot use unpage, unpage does unit conversion etc)
+                            p71_Data2                   = info[6]       # wind resistance coefficient
+                            p71_Data3                   = info[7]       # wind speed
+                            p71_Data4                   = info[8]       # drafting factor
 
                         #-------------------------------------------------------
                         # Data page 51 (0x33) Track resistance
@@ -1295,12 +1304,15 @@ def Tacx2DongleSub(self, Restart):
                                 TacxTrainer.SetRollingResistance(RollingResistance)
                                 PowerModeActive       = ''
 
+                            # Update "last command" data in case page 71 is requested later
                             p71_LastReceivedCommandID   = DataPageNumber
+                            # wrap around after 254 (255 = no command received)
                             p71_SequenceNr              = (p71_SequenceNr + 1) % 255
-                            p71_CommandStatus           = 0
-                            p71_Data2                   = info[6]
-                            p71_Data3                   = info[7]
-                            p71_Data4                   = info[8]
+                            p71_CommandStatus           = 0     # successfully processed
+                            # echo raw command data (cannot use unpage, unpage does unit conversion etc)
+                            p71_Data2                   = info[6]       # target grade (LSB)
+                            p71_Data3                   = info[7]       # target grade (MSB)
+                            p71_Data4                   = info[8]       # rolling resistance coefficient
 
                         #-------------------------------------------------------
                         # Data page 55 User configuration
@@ -1376,9 +1388,10 @@ def Tacx2DongleSub(self, Restart):
                             ctrl_SlaveSerialNumber, ctrl_SlaveManufacturerID, SequenceNr, ctrl_CommandNr =\
                                 ant.msgUnpage73_GenericCommand(info)
 
+                            # Update "last command" data in case page 71 is requested later
                             ctrl_p71_LastReceivedCommandID = DataPageNumber
                             ctrl_p71_SequenceNr = SequenceNr
-                            ctrl_p71_CommandStatus = 0
+                            ctrl_p71_CommandStatus = 0      # successfully processed
                             ctrl_p71_Data1 =  ctrl_CommandNr & 0x00ff
                             ctrl_p71_Data2 = (ctrl_CommandNr & 0xff00) >> 8
                             ctrl_p71_Data3 = 0xFF
