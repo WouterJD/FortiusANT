@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-10"
+__version__ = "2021-01-29"
+# 2021-01-29    Added: cadence switches Status-LED on
 # 2021-01-10    Digital gearbox changed to front/rear index
 # 2021-01-06    settings added (+ missing other files for version check)
 # 2020-12-24    usage of UseGui implemented
@@ -19,7 +20,7 @@ __version__ = "2021-01-10"
 from   constants import mode_Power, mode_Grade, UseGui, UseBluetooth, UseMultiProcessing
 import constants                        #  for __version__
 
-import LED_IO #JPS
+import LED_IO                           # module for hardware acces Raspi
 
 import argparse
 from datetime                           import datetime
@@ -229,9 +230,9 @@ class clsFortiusAntConsole:
             
 
         if iRevs > 0:
-           LED_IO. Set_LED_Cadence(1.0)  #JPS
+           LED_IO. Set_LED_Cadence(1.0)  # switch the cadence LED on when the candence greater zero 
         else:
-           LED_IO.Set_LED_Cadence(0.0)   #JPS
+           LED_IO.Set_LED_Cadence(0.0)   # switch the cadence LED off
 
     def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
         if Tacx   != None:

@@ -1,7 +1,8 @@
-#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------deprecated
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-19"
+__version__ = "2021-01-29"
+# 2021-01-29    Added: -L Status-LED for Raspi headless
 # 2021-01-19    PowerFactor limit changed to 0.5 ... 1.5
 # 2021-01-18    help texts defined as 'constants' to be used for commandline.
 # 2021-01-10    -T transmission added, issue #120
@@ -177,7 +178,7 @@ class CommandLineVariables(object):
                 choices=self.ant_tacx_models + ['i-Vortex']) # i-Vortex is still allowed for compatibility
 
         parser.add_argument   ('-x','--exportTCX',          help=constants.help_x,  required=False, action='store_true')
-        parser.add_argument   ('-L','--LED',      help='Status-LED for Raspi headless',                         required=False, action='store_true')
+        parser.add_argument   ('-L','--LED',      help='Status-LED for Raspi headless',  required=False, action='store_true')
 
 
         #-----------------------------------------------------------------------

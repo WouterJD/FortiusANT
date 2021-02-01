@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-14"
+__version__ = "2021-01-29"
+# 2021-01-29    Added: Status for LED Dongle and Tacx-Trainer
 # 2021-01-14    Magnetic brake Version message handling modified
 #               #202 Fortius calibration skipped in ANTdongle restart
 # 2021-01-12    Small bu very relevant corrections :-(
@@ -220,7 +221,7 @@ import usbTrainer
 
 import bleDongle
 
-import LED_IO #JPS
+import LED_IO                      # module for hardware acces Raspi
 
 PrintWarnings = False   # Print warnings even when logging = off
 CycleTimeFast = 0.02    # TRAINER- SHOULD WRITE THEN READ 70MS LATER REALLY
@@ -320,9 +321,9 @@ def LocateHW(self):
         self.SetMessages(Dongle=AntDongle.Message + bleCTP.Message)
         
         if AntDongle.OK:
-             LED_IO.Set_LED_Dongle(1.0) #JPS
+             LED_IO.Set_LED_Dongle(1.0) #Status LED für Dongle einschalten
         else:  
-             LED_IO.Set_LED_Dongle(0.0) #JPS
+             LED_IO.Set_LED_Dongle(0.0) #Status LED für Tongle ausschalten
     #---------------------------------------------------------------------------
     # Get Trainer and find trainer model for Windows and Linux
     #---------------------------------------------------------------------------
@@ -332,9 +333,9 @@ def LocateHW(self):
     else:
         TacxTrainer = usbTrainer.clsTacxTrainer.GetTrainer(clv, AntDongle)
         if TacxTrainer.OK:  
-            LED_IO.Set_LED_Tacx(1.0) #JPS
+            LED_IO.Set_LED_Tacx(1.0)  #Status LED für Dongle einschalten
         else:
-            LED_IO.Set_LED_Tacx(0.0) #JPS
+            LED_IO.Set_LED_Tacx(0.0)  #Status LED für Dongle ausschalten
             
         self.SetMessages(Tacx=TacxTrainer.Message)
 

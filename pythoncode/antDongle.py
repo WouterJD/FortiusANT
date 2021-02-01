@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-12-30"
+__version__ = "2021-01-29"
+# 2021-01-29    Added: When ANT+ Dongle ready, it switches Status-LED for Dongle on
 # 2020-12-30    Tacx Genius/Bushido data pages, constants and channel
 #               configuration implemented
 #               Added: msg44_ChannelSearchTimeout
@@ -83,7 +84,7 @@ __version__ = "2020-12-30"
 # 2020-01-15    hexlify/unhexlify removed, buffers are all of type 'bytes' now
 # 2019-12-30    strings[] replaced by messages[]
 #---------------------------------------------------------------------------
-import LED_IO #JPS
+import LED_IO                      # module for hardware acces Raspi
 import binascii
 import glob
 import os
@@ -612,13 +613,13 @@ class clsAntDongle():
         # the caller must redo the channels.
         # ----------------------------------------------------------------------
         while failed:
-            LED_IO. Set_LED_Dongle(0.0)
+            LED_IO. Set_LED_Dongle(0.0) # Switch off donge status LED
             logfile.Console('ANT Dongle not available; try to reconnect after 1 second')
             time.sleep(1)
             if self.__GetDongle():
                 failed = False       # Exception resolved
                 self.DongleReconnected = True
-                LED_IO. Set_LED_Dongle(1.0)
+                LED_IO. Set_LED_Dongle(1.0)   # Switch on donge status LED
                 logfile.Console('ANT Dongle reconnected, application restarts')
 
         return trv
