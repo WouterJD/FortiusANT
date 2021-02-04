@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-14"
+__version__ = "2021-02-03"
+# 2021-02-04    Fix ANT command status response (page 71) #222 by @switchabl
 # 2021-01-14    Magnetic brake Version message handling modified
 #               #202 Fortius calibration skipped in ANTdongle restart
 # 2021-01-12    Small bu very relevant corrections :-(
