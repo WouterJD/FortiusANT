@@ -29,7 +29,6 @@ jobs:
       with:
         python-version: 3.7
     - name: Build macOS Executable
-      shell: cmd
       run: |
         ci/macos/build
     - uses: actions/upload-artifact@v2
