@@ -1,0 +1,20 @@
+#!/bin/bash
+
+set -e
+
+pushd pythoncode
+
+python3 -m venv ./build-env
+source ./build-env/bin/activate
+
+python -m pip install --upgrade pip
+pip install pyinstaller
+pip install -r requirements.txt
+
+pyinstaller --clean FortiusANT-macos.spec --onefile --windowed --clean --noconfirm
+
+deactivate
+
+popd
+
+echo Done
