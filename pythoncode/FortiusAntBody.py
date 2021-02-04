@@ -3,9 +3,14 @@
 #-------------------------------------------------------------------------------
 __version__ = "2021-02-03"
 # 2021-02-04    Fix ANT command status response (page 71) #222 by @switchabl
+# 2021-01-28    We're bravely calibrating BUT since in the split of 2020-04-23
+#               'Calibrate' was not replaced by TacxTrainer.Calibrate
+#               it was never used!!
+#               Note that initiating the calibration value (-c) is not usefull;
+#                    calibration not only measures but also warms the tire.
 # 2021-01-14    Magnetic brake Version message handling modified
 #               #202 Fortius calibration skipped in ANTdongle restart
-# 2021-01-12    Small bu very relevant corrections :-(
+# 2021-01-12    Small but very relevant corrections :-(
 # 2021-01-10    Digital gearbox changed to front/rear index
 # 2021-01-06    settings added (+ missing other files for version check)
 # 2020-12-30    Tacx Genius and Bushido implemented
@@ -721,13 +726,17 @@ def Tacx2DongleSub(self, Restart):
     # Calibrate trainer
     #
     # Note, that there is no ANT+ loop active here!
-    # - Calibration is currently implemented for Tacx Fortius (matorbrake) only.
+    # - Calibration is currently implemented for Tacx Fortius (motorbrake) only.
     # - ANT+ Controller cannot be used here
     #---------------------------------------------------------------------------
-    CountDown       = 120 * 4 # 8 minutes; 120 is the max on the cadence meter
+    CountDownX      = 1 # If calibration takes more than two minutes
+                        # Extend countdown: 2 ==> 4 minutes, 4 ==> 8 minutes
+                        # This will not cause the countdown to take longer,
+                        # it only extends the maximum time untill a stable reading.
+    CountDown       = 120 * CountDownX # 2 minutes; 120 is the max on the cadence meter
     ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for calculating running average
     AvgResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for collating running averages
-    Calibrate       = 0
+    TacxTrainer.Calibrate  = 0
     StartPedaling   = True
     Counter         = 0
 
@@ -740,7 +749,7 @@ def Tacx2DongleSub(self, Restart):
         while         self.RunningSwitch \
               and     clv.calibrate \
               and not TacxTrainer.Buttons == usbTrainer.CancelButton \
-              and     Calibrate == 0 \
+              and     TacxTrainer.Calibrate == 0 \
               and     TacxTrainer.CalibrateSupported() \
               and not Restart:
             StartTime = time.time()
@@ -777,7 +786,7 @@ def Tacx2DongleSub(self, Restart):
                         logfile.Write('Tacx2Dongle; start calibration')
                     StartPedaling = False
 
-                self.SetValues(TacxTrainer.SpeedKmh, int(CountDown/4), \
+                self.SetValues(TacxTrainer.SpeedKmh, int(CountDown / CountDownX), \
                         round(TacxTrainer.CurrentPower * -1,0), \
                         mode_Power, 0, 0, TacxTrainer.CurrentResistance * -1, 0, 0, 0, 0)
 
@@ -793,11 +802,12 @@ def Tacx2DongleSub(self, Restart):
                 AvgResistanceArray = numpy.append(AvgResistanceArray, numpy.average(ResistanceArray)) # Add new running average value to array
                 AvgResistanceArray = numpy.delete(AvgResistanceArray, 0) # Remove oldest from array
                 
-                if CountDown < (120 * 4 - 30) and numpy.min(ResistanceArray) > 0:
+                if CountDown < (120 * CountDownX - 30) and numpy.min(ResistanceArray) > 0:
                     if (numpy.max(AvgResistanceArray) - numpy.min(AvgResistanceArray) ) < 2 or CountDown <= 0:
-                        Calibrate = numpy.average(AvgResistanceArray)
+                        TacxTrainer.Calibrate = int(numpy.average(AvgResistanceArray))
                         if debug.on(debug.Function):
-                            logfile.Write('Tacx2Dongle; calibration ended %s' % Calibrate)
+                            logfile.Write( "Calibration stopped with resistance=%s after %s seconds" % \
+                                           (TacxTrainer.Calibrate, int(120 * CountDownX - CountDown) ) )
 
                 CountDown -= 0.25                   # If not started, no count down!
                 

@@ -147,7 +147,6 @@ class clsBleInterface():
         # function  Data is obtained from Bluetooth interface
         #
         # returns   rtn = False/True
-        #           msg = received data
         #-------------------------------------------------------------------
         def Read(self):
             if debug.on(debug.Ble): logfile.Write ("BleInterface.Read() ...")

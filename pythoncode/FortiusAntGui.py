@@ -1,7 +1,35 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-18"
+__version__ = "2021-02-01"
+# 2020-02-03    Test values updated in callTacx2Dongle(self)
+#               When no heartrate shown, cassette/cranckset
+# 2020-01-28    During calibration, the Cadence speedometer will display 
+#               "Calibration countdown"
+#               Help and Sponsor button added (#189)
+# 2020-01-25    Random cranckset was 0...2; should be 0..1
+#
+#               SetValues(), SetMessages() and PedalStrokeAnalysis() made
+#               thread safe, using wx.CallAfter(). See issue #216.
+#               Ref: https://www.blog.pythonlibrary.org/2010/05/22/wxpython-and-threads/
+#
+#               Also, after thread-completion (Runoff and Tacx2Dongle), wx.CallAfter()
+#               called to perform the post-thread actions in the GUI.
+#
+#               And as a reference for multi-threading (unchanged in this version):
+#                    https://wiki.wxpython.org/LongRunningTasks
+#
+#               Although the threads should properly end, "daemon=True" is
+#               added so that the threads will be killed when the main
+#               program stops, just as back-stop to avoid hangups.
+#               Ref: https://docs.python.org/3/library/threading.html#thread-objects
+#
+#               Now that the threads work properly ForceRefreshDC=False can be used.
+#               ForceRefreshDC=True was used untill now and remains True, because the
+#                                   screen is more stable.
+#               Little test: there seems to be no difference between StaticText and
+#                            TextCtrl() from screen-stability point of view
+#
 # 2020-01-18    When Setvalues() is called with zeroes, default transmission
 # 2020-01-16    Value of cassette was displayed incorrectly
 # 2021-01-08    Buttons spaced and Panel used for TAB-handling
@@ -63,6 +91,7 @@ import random
 import sys
 import threading
 import time
+import webbrowser
 import wx
 import wx.lib.agw.speedmeter as SM
 
@@ -77,6 +106,11 @@ import settings
 #-------------------------------------------------------------------------------
 # constants
 #-------------------------------------------------------------------------------
+ForceRefresh        = True  # More stable with self.panel.Refresh()
+ForceRefreshDC      = False # add DOT/COMMA to force refresh
+_UseStaticText      = False # There appears to be no difference in behaviour
+                            # for StaticText() or TextCtrl() with appropriate style
+
 LargeTexts          = True  # 2020-02-07
 
 bg                  = wx.Colour(220,220,220) # Background colour [for self.Speedometers]
@@ -102,6 +136,7 @@ Margin              = 4
 #               callTacx2Dongle(self)
 # ------------------------------------------------------------------------------
 class frmFortiusAntGui(wx.Frame):
+    Calibrating = False         # Flag that we're calibrating
     clv        = None
     LastFields = 0  # Time when SetValues() updated the fields
     LastHeart  = 0  # Time when heartbeat image was updated
@@ -137,6 +172,7 @@ class frmFortiusAntGui(wx.Frame):
         FortiusAnt_jpg = os.path.join(dirname, "FortiusAnt.jpg")
         Heart_jpg      = os.path.join(dirname, "heart.jpg"     )
         settings_bmp   = os.path.join(dirname, "settings.bmp"  )
+        sponsor_bmp    = os.path.join(dirname, "sponsor.bmp"   )
 
         try:
             ico = wx.Icon(FortiusAnt_ico, wx.BITMAP_TYPE_ICO)
@@ -530,6 +566,8 @@ class frmFortiusAntGui(wx.Frame):
         self.txtHeartRate = wx.TextCtrl(self.panel, value="123", size=(int(self.HeartRateWH*2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY)
         self.txtHeartRate.SetBackgroundColour(bg)
         self.txtHeartRate.SetPosition(( self.HeartRateX + self.HeartRateWH + Margin, self.HeartRateY))
+        self.txtHeartRateShown = True
+        self.txtHeartRateSpace = ((self.HeartRateY - self.CassetteY)/2)
 
         # ----------------------------------------------------------------------
 		# self.Cranckset, shown to the right of the Cranckset image
@@ -580,29 +618,49 @@ class frmFortiusAntGui(wx.Frame):
         b = wx.Bitmap(b)
 
         self.btnSettings = wx.BitmapButton(self.panel, bitmap=b, size=(ButtonW, -1), style=0) # wx.NO_BORDER)
+        self.btnSettings.SetToolTip ("Modify settings and optionally save for next session")
         self.btnSettings.SetPosition((ButtonX, self.btnSettings.Size[1]))
         self.btnSettings.SetFocus()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnSettings, self.btnSettings)
 
         self.btnLocateHW = wx.Button(self.panel, label="Locate HW", size=(ButtonW, -1))
+        self.btnLocateHW.SetToolTip ("Connect to USB-devices (Tacx trainer and/or ANTdongle)")
         self.btnLocateHW.SetPosition((ButtonX, self.btnSettings.Position[1] + self.btnSettings.Size[1] + Margin))
         self.btnLocateHW.SetFocus()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnLocateHW, self.btnLocateHW)
 
         self.btnRunoff   = wx.Button(self.panel, label="Runoff", size=(ButtonW, -1))
+        self.btnRunoff.SetToolTip ("Execute runoff-procedure (recommended for magnetic brake trainers)")
         self.btnRunoff.SetPosition((ButtonX, self.btnLocateHW.Position[1] + self.btnLocateHW.Size[1] + Margin))
         self.btnRunoff.Disable()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnRunoff, self.btnRunoff)
 
         self.btnStart    = wx.Button(self.panel, label="Start", size=(ButtonW, -1))
+        self.btnStart.SetToolTip ("Start communication with Cycle Training Program")
         self.btnStart.SetPosition((ButtonX, self.btnRunoff.Position[1] + self.btnRunoff.Size[1] + Margin))
         self.btnStart.Disable()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnStart, self.btnStart)
 
         self.btnStop     = wx.Button(self.panel, label="Stop", size=(ButtonW, -1))
+        self.btnStop.SetToolTip ("Stop FortiusAnt bridge")
         self.btnStop.SetPosition((ButtonX, self.btnStart.Position[1] + self.btnStart.Size[1] + Margin))
         self.btnStop.Disable()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnStop, self.btnStop)
+
+        b = wx.Image(sponsor_bmp)       # Must fit, no rescale
+        b = wx.Bitmap(b)
+        self.btnSponsor = wx.BitmapButton(self.panel, bitmap=b, size=(ButtonW, -1), style=0) # wx.NO_BORDER)
+        self.btnSponsor.SetToolTip ("Become a sponsor for FortiusAnt")
+        self.Bind(wx.EVT_BUTTON, self.OnClick_btnSponsor, self.btnSponsor)
+
+        self.btnHelp     = wx.Button(self.panel, label="Help", size=(ButtonW, -1))
+        self.btnHelp.SetToolTip ("Open the manual on github")
+        self.Bind(wx.EVT_BUTTON, self.OnClick_btnHelp, self.btnHelp)
+
+        # Move Help button above the texts
+        self.btnHelp.SetPosition((ButtonX, self.txtUsbTrainer.Position[1] - self.txtUsbTrainer.Size[1] - Margin))
+        # Move Sponsor button above Help
+        self.btnSponsor.SetPosition((ButtonX, self.btnHelp.Position[1] - self.btnHelp.Size[1] - Margin))
 
         # ----------------------------------------------------------------------
 		# Set initial values
@@ -665,6 +723,7 @@ class frmFortiusAntGui(wx.Frame):
     def callTacx2Dongle(self):
         print("callTacx2Dongle not defined by application class")
 #       tr = 255                                    # experimental purpose only
+        FixedForDocu = False
         while self.RunningSwitch == True:
             #t = time.localtime()
             r = (90 + random.randint(1,20)) / 100   # 0.9 ... 1.1
@@ -673,12 +732,19 @@ class frmFortiusAntGui(wx.Frame):
 #           self.Speed.SetTransparent(tr)           # control on frame cannot be made transparent
 #           tr -= 5
 #           self.SetValues(r * self.SpeedMax, r * self.RevsMax, r * self.PowerMax, t[5], t[0] + t[5])
-#           self.SetValues(35.6, 234, 123, mode_Grade, 345, 19.5, 2345, 123)
-            self.SetValues(r * 35.6, r * 234, r * 123, mode_Grade, r * 345, r * 19.5, r * 2345, r * 123, random.randint(0,2), random.randint(0,12), 1)
+            if FixedForDocu: # Fixed value for documentation screen
+                #             (km/hr, /min, W,       mode, T=Watt, Grade, Resistance, iHeartRate, Cranck, Cassette, Factor)
+                self.SetValues(34.5,  89, 123, mode_Grade,    345,   8.5,       2345,        123,      1,        5,      1)
+                #elf.SetValues(34.5,  89, 123, mode_Power,    345,   8.5,       2345,        123,      1,        5,      1)
+            else:    # Random value for moving GUI test
+                self.SetValues(r * 35.6, r * 234, r * 123, mode_Grade, r * 345, r * 19.5, r * 2345, r * 123, random.randint(0,1), random.randint(0,12), 1)
 
             if self.clv.PedalStrokeAnalysis:
                 for i, p in enumerate(self.power):
-                    self.power[i] = (p[0], p[1] + random.uniform(-15, 15))
+                    if FixedForDocu:
+                        self.power[i] = (p[0], p[1])
+                    else:
+                        self.power[i] = (p[0], p[1] + random.uniform(-15, 15))
                 self.RadarGraph.ShowRadarGraph(self.power)
 
             time.sleep(0.250)                       # sleep 0.250 second (like Tacx2Dongle)
@@ -761,7 +827,17 @@ class frmFortiusAntGui(wx.Frame):
     # --------------------------------------------------------------------------
     def ResetValues(self):
         self.SetValues(0,0,0,0,0,0,0,0,0,0,0)
+
     def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, \
+                    iTacx, iHeartRate, \
+                    iCrancksetIndex, iCassetteIndex, fReduction):  # Tread safe
+        wx.CallAfter(
+                    self.SetValuesGUI, \
+                    fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, \
+                    iTacx, iHeartRate, \
+                    iCrancksetIndex, iCassetteIndex, fReduction)
+
+    def SetValuesGUI(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, \
                         iTacx, iHeartRate, \
                         iCrancksetIndex, iCassetteIndex, fReduction):
 
@@ -813,11 +889,15 @@ class frmFortiusAntGui(wx.Frame):
         if delta >= 1:                        # Refresh once per second
             self.LastFields = time.time()     # Time in seconds
 
+            if self.Calibrating:
+                self.Revs.SetMiddleText("Calibration countdown")
+            else:
+                self.Revs.SetMiddleText("Cadence")
             self.Speed.SetSpeedValue(float(min(max(0, fSpeed),     self.SpeedMax)))
             self.Revs.SetSpeedValue (float(min(max(0, iRevs),      self.RevsMax )))
             self.Power.SetSpeedValue(float(min(max(0, iPowerMean), self.PowerMax)))
 
-            if True:
+            if ForceRefreshDC:
                 # Alternating suffix makes the texts being refreshed
                 suffix1 = '.'                       # str(0x32) # space
                 suffix2 = ','                       # str(0xa0) # no break space
@@ -829,9 +909,15 @@ class frmFortiusAntGui(wx.Frame):
 
             # 2020-02-07: LargeTexts implemented
             if LargeTexts:
-                self.txtSpeed.SetValue ("%4.1fkm/h"   % fSpeed  + suffix)
-                self.txtRevs.SetValue  ("%i/min"      % iRevs   + suffix)
-                self.txtPower.SetValue ("%iW"         % iPower  + suffix)
+                self.txtSpeed.SetValue      ("%4.1fkm/h"% fSpeed  + suffix)
+
+                if self.Calibrating:
+                    self.txtRevs.SetValue   ("%i"       % iRevs   + suffix)
+                else:
+                    self.txtRevs.SetValue   ("%i/min"   % iRevs   + suffix)
+
+                self.txtPower.SetValue      ("%iW"      % iPower  + suffix)
+
                 if iTacx == 0:
                     self.txtTacx.SetValue  ("")
                 else:
@@ -872,7 +958,14 @@ class frmFortiusAntGui(wx.Frame):
             self.LastHeart = time.time()     # Time in seconds
             if self.HeartRate > 0:
                 if not self.txtHeartRate.IsShown():
+                    # If txtHeartrate not shown; move the cassette/crankset up
+                    if self.txtHeartRateShown == False:
+                        self.CassetteY  -= self.txtHeartRateSpace
+                        self.CrancksetY -= self.txtHeartRateSpace
+                        self.txtCranckset.SetPosition(( self.txtCranckset.Position[0], self.CrancksetY))
+                        self.txtCassette .SetPosition(( self.txtCassette .Position[0], self.CassetteY ))
                     self.txtHeartRate.Show()
+                    self.txtHeartRateShown = True
                 self.txtHeartRate.SetValue  ("%i" % self.HeartRate)
 
                 if self.HeartRateWH  == 40:             # Show 36x36 on every other passage
@@ -889,7 +982,14 @@ class frmFortiusAntGui(wx.Frame):
 
             else:
                 if self.txtHeartRate.IsShown():
+                    # If txtHeartrate not shown; move the cassette/crankset down
+                    if self.txtHeartRateShown == True:
+                        self.CassetteY  += self.txtHeartRateSpace
+                        self.CrancksetY += self.txtHeartRateSpace
+                        self.txtCranckset.SetPosition(( self.txtCranckset.Position[0], self.CrancksetY))
+                        self.txtCassette .SetPosition(( self.txtCassette .Position[0], self.CassetteY ))
                     self.txtHeartRate.Hide()
+                    self.txtHeartRateShown = False
                     bRefreshRequired  = True
 
         # ----------------------------------------------------------------------
@@ -902,7 +1002,7 @@ class frmFortiusAntGui(wx.Frame):
                 self.txtCranckset.Show()
 
             self.txtCranckset.SetValue  ("%i" % self.clv.Cranckset[self.CrancksetIndex])
-            bRefreshRequired  = True            # So that Cassette is painted
+            bRefreshRequired  = True            # So that Cranckset is painted
             
         else:
             if self.txtCranckset.IsShown():
@@ -931,13 +1031,19 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
         # Refresh if required; so that JPGs are drawn in the OnPaint() event
         # ----------------------------------------------------------------------
-        if bRefreshRequired: self.panel.Refresh()
+        if ForceRefresh and bRefreshRequired: self.panel.Refresh()
 
-    def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
+    def SetMessages(self, Tacx=None, Dongle=None, HRM=None):       # Tread safe
+        wx.CallAfter(self.SetMessagesGUI, Tacx, Dongle, HRM)
+
+    def SetMessagesGUI(self, Tacx=None, Dongle=None, HRM=None):
         if Tacx   != None:
-            if Tacx[:4] == '* * ': self.txtUsbTrainer.SetForegroundColour(wx.BLUE)
-            else:                  self.txtUsbTrainer.SetForegroundColour(wx.BLACK)
-            self.txtUsbTrainer.SetBackgroundColour(bg)
+            if Tacx[:4] == '* * ':                         # We're calibrating!
+                self.Calibrating = True
+                self.txtUsbTrainer.SetForegroundColour(wx.BLUE)
+            else:                  
+                self.Calibrating = False
+                self.txtUsbTrainer.SetForegroundColour(wx.BLACK)
             self.txtUsbTrainer.SetValue(Tacx)
 
         if Dongle != None:
@@ -956,8 +1062,8 @@ class frmFortiusAntGui(wx.Frame):
     #
     # Output:       None
     # --------------------------------------------------------------------------
-    def PedalStrokeAnalysis(self, info, Cadence):
-        self.RadarGraph.PedalStrokeAnalysis(info, Cadence)
+    def PedalStrokeAnalysis(self, info, Cadence):                   # Tread safe
+        wx.CallAfter(self.RadarGraph.PedalStrokeAnalysis, info, Cadence)
 
     # --------------------------------------------------------------------------
     # O n P a i n t
@@ -1181,7 +1287,7 @@ class frmFortiusAntGui(wx.Frame):
         self.btnRunoff.Disable()
         self.btnStop.SetFocus()
 
-        thread = threading.Thread(target=self.OnClick_btnRunoff_Thread)
+        thread = threading.Thread(target=self.OnClick_btnRunoff_Thread, daemon=True)
         thread.start()
 
     def OnClick_btnRunoff_Thread(self):
@@ -1191,11 +1297,18 @@ class frmFortiusAntGui(wx.Frame):
         self.CloseButtonPressed = False
         self.OnTimerEnabled = False
         self.callRunoff()
-        self.OnTimerEnabled = True
+        wx.CallAfter(self.OnClick_btnRunoff_Done)
+
+    def OnClick_btnRunoff_Done(self):
+        self.OnTimerEnabled= True
         self.RunningSwitch = False              # Just to be sure
-        self.OnClick_btnStop()                  # Thread may stop for any reason
-                                                # Do GUI actions to enable the
-                                                # correct buttons.
+
+        self.ResetValues()
+        self.btnSettings.Enable()
+        self.btnRunoff.Enable()
+        self.btnStart.Enable()
+        self.btnStop.Disable()
+        self.btnRunoff.SetFocus()
 
         if self.CloseButtonPressed == True:
             self.CloseButtonPressed = False     # Otherwise self.Close() is blocked
@@ -1221,7 +1334,7 @@ class frmFortiusAntGui(wx.Frame):
         self.btnRunoff.Disable()
         self.btnStop.SetFocus()
 
-        thread = threading.Thread(target=self.OnClick_btnStart_Thread)
+        thread = threading.Thread(target=self.OnClick_btnStart_Thread, daemon=True)
         thread.start()
 
     def OnClick_btnStart_Thread(self):
@@ -1231,11 +1344,18 @@ class frmFortiusAntGui(wx.Frame):
         self.CloseButtonPressed = False
         self.OnTimerEnabled = False
         self.callTacx2Dongle()
+        wx.CallAfter(self.OnClick_btnStart_Done)
+
+    def OnClick_btnStart_Done(self):
         self.OnTimerEnabled= True
         self.RunningSwitch = False              # Just to be sure
-        self.OnClick_btnStop()                  # Thread may stop for any reason
-                                                # Do GUI actions to enable the
-                                                # correct buttons.
+
+        self.ResetValues()
+        self.btnSettings.Enable()
+        self.btnRunoff.Enable()
+        self.btnStart.Enable()
+        self.btnStop.Disable()
+        self.btnStart.SetFocus()
 
         if self.CloseButtonPressed == True:
             self.CloseButtonPressed = False     # Otherwise self.Close() is blocked
@@ -1247,19 +1367,39 @@ class frmFortiusAntGui(wx.Frame):
     # input:        [STOP] pressed
     #
     # Description:  Stop RunningThread; when that was not running, no effect
-    #               Enable [SETTINGS], [START] and [RUNOFF], Disable [STOP]
     #
     # Output:       self.RunningSwitch
     # --------------------------------------------------------------------------
     def OnClick_btnStop(self, event=False):
         if __name__ == "__main__": print ("OnClick_btnStop()")
         self.RunningSwitch = False
-        self.ResetValues()
-        self.btnSettings.Enable()
-        self.btnRunoff.Enable()
-        self.btnStart.Enable()
         self.btnStop.Disable()
-        self.btnStart.SetFocus()            # SetFocus in thread would be nicer, setting focus to either Runoff or Start
+
+    # --------------------------------------------------------------------------
+    # O n C l i c k _ b t n S p o n s o r
+    # --------------------------------------------------------------------------
+    # input:        [SPONSOR] pressed
+    #
+    # Description:  Open sponsor page
+    #
+    # Output:       None
+    # --------------------------------------------------------------------------
+    def OnClick_btnSponsor(self, event=False):
+        if __name__ == "__main__": print ("OnClick_btnSponsor()")
+        webbrowser.open_new_tab('https://github.com/sponsors/WouterJD')
+
+    # --------------------------------------------------------------------------
+    # O n C l i c k _ b t n H e l p 
+    # --------------------------------------------------------------------------
+    # input:        [Help] pressed
+    #
+    # Description:  Open manual
+    #
+    # Output:       None
+    # --------------------------------------------------------------------------
+    def OnClick_btnHelp(self, event=False):
+        if __name__ == "__main__": print ("OnClick_btnHelp()")
+        webbrowser.open_new_tab('https://github.com/WouterJD/FortiusANT/blob/master/doc/FortiusANTUserManual.pdf')
 
     # --------------------------------------------------------------------------
     # O n C l o s e

@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-19"
+__version__ = "2021-02-01"
+# 2021-02-01    Standard welcome message changed
 # 2021-01-19    PowerFactor limit changed to 0.5 ... 1.5
 # 2021-01-18    help texts defined as 'constants' to be used for commandline.
 # 2021-01-10    -T transmission added, issue #120
@@ -447,14 +448,14 @@ class CommandLineVariables(object):
             print('For more info, please refer to the wiki on github.')
             print('Succes!')
             print('---------------------------------------------------------------')
-            print('FortiusANT is open source and can freely be used.')
+            print('FortiusANT is open source and can be used freely.')
             print('')
-            print('A free gift would be appreciated:')
-            print('Put yourself on the FortiusANT map by making yourself known')
+            print('Just for the fun of knowing where you all are training,')
+            print('put yourself on the FortiusANT map by making yourself known')
             print('by leaving a message with name/location/trainer on')
             print('https://github.com/WouterJD/FortiusANT/issues/14')
             print('')
-            print('Just for the fun of knowing where we are training.')
+            print('or visit the sponsoring page https://github.com/sponsors/WouterJD')
             print('---------------------------------------------------------------')
             self.autostart              = True
             self.gui                    = UseGui    # Show gui
