@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-28"
+__version__ = "2021-02-01"
+# 2020-02-03    Test values updated in callTacx2Dongle(self)
+#               When no heartrate shown, cassette/cranckset
 # 2020-01-28    During calibration, the Cadence speedometer will display 
 #               "Calibration countdown"
 #               Help and Sponsor button added (#189)
@@ -564,6 +566,8 @@ class frmFortiusAntGui(wx.Frame):
         self.txtHeartRate = wx.TextCtrl(self.panel, value="123", size=(int(self.HeartRateWH*2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY)
         self.txtHeartRate.SetBackgroundColour(bg)
         self.txtHeartRate.SetPosition(( self.HeartRateX + self.HeartRateWH + Margin, self.HeartRateY))
+        self.txtHeartRateShown = True
+        self.txtHeartRateSpace = ((self.HeartRateY - self.CassetteY)/2)
 
         # ----------------------------------------------------------------------
 		# self.Cranckset, shown to the right of the Cranckset image
@@ -719,6 +723,7 @@ class frmFortiusAntGui(wx.Frame):
     def callTacx2Dongle(self):
         print("callTacx2Dongle not defined by application class")
 #       tr = 255                                    # experimental purpose only
+        FixedForDocu = False
         while self.RunningSwitch == True:
             #t = time.localtime()
             r = (90 + random.randint(1,20)) / 100   # 0.9 ... 1.1
@@ -727,12 +732,19 @@ class frmFortiusAntGui(wx.Frame):
 #           self.Speed.SetTransparent(tr)           # control on frame cannot be made transparent
 #           tr -= 5
 #           self.SetValues(r * self.SpeedMax, r * self.RevsMax, r * self.PowerMax, t[5], t[0] + t[5])
-#           self.SetValues(35.6, 234, 123, mode_Grade, 345, 19.5, 2345, 123)
-            self.SetValues(r * 35.6, r * 234, r * 123, mode_Grade, r * 345, r * 19.5, r * 2345, r * 123, random.randint(0,1), random.randint(0,12), 1)
+            if FixedForDocu: # Fixed value for documentation screen
+                #             (km/hr, /min, W,       mode, T=Watt, Grade, Resistance, iHeartRate, Cranck, Cassette, Factor)
+                self.SetValues(34.5,  89, 123, mode_Grade,    345,   8.5,       2345,        123,      1,        5,      1)
+                #elf.SetValues(34.5,  89, 123, mode_Power,    345,   8.5,       2345,        123,      1,        5,      1)
+            else:    # Random value for moving GUI test
+                self.SetValues(r * 35.6, r * 234, r * 123, mode_Grade, r * 345, r * 19.5, r * 2345, r * 123, random.randint(0,1), random.randint(0,12), 1)
 
             if self.clv.PedalStrokeAnalysis:
                 for i, p in enumerate(self.power):
-                    self.power[i] = (p[0], p[1] + random.uniform(-15, 15))
+                    if FixedForDocu:
+                        self.power[i] = (p[0], p[1])
+                    else:
+                        self.power[i] = (p[0], p[1] + random.uniform(-15, 15))
                 self.RadarGraph.ShowRadarGraph(self.power)
 
             time.sleep(0.250)                       # sleep 0.250 second (like Tacx2Dongle)
@@ -946,7 +958,14 @@ class frmFortiusAntGui(wx.Frame):
             self.LastHeart = time.time()     # Time in seconds
             if self.HeartRate > 0:
                 if not self.txtHeartRate.IsShown():
+                    # If txtHeartrate not shown; move the cassette/crankset up
+                    if self.txtHeartRateShown == False:
+                        self.CassetteY  -= self.txtHeartRateSpace
+                        self.CrancksetY -= self.txtHeartRateSpace
+                        self.txtCranckset.SetPosition(( self.txtCranckset.Position[0], self.CrancksetY))
+                        self.txtCassette .SetPosition(( self.txtCassette .Position[0], self.CassetteY ))
                     self.txtHeartRate.Show()
+                    self.txtHeartRateShown = True
                 self.txtHeartRate.SetValue  ("%i" % self.HeartRate)
 
                 if self.HeartRateWH  == 40:             # Show 36x36 on every other passage
@@ -963,7 +982,14 @@ class frmFortiusAntGui(wx.Frame):
 
             else:
                 if self.txtHeartRate.IsShown():
+                    # If txtHeartrate not shown; move the cassette/crankset down
+                    if self.txtHeartRateShown == True:
+                        self.CassetteY  += self.txtHeartRateSpace
+                        self.CrancksetY += self.txtHeartRateSpace
+                        self.txtCranckset.SetPosition(( self.txtCranckset.Position[0], self.CrancksetY))
+                        self.txtCassette .SetPosition(( self.txtCassette .Position[0], self.CassetteY ))
                     self.txtHeartRate.Hide()
+                    self.txtHeartRateShown = False
                     bRefreshRequired  = True
 
         # ----------------------------------------------------------------------
