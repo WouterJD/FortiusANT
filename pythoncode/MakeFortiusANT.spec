@@ -3,7 +3,8 @@
 # used with command: pyinstaller MakeFortiusANT.spec
 #
 # Version info
-# 2021-01-07    Settings.bmp added
+# 2021-02-04    sponsor.bmp added
+# 2021-01-07    settings.bmp added
 # 2020-03-02    Firmware.hex added
 # 2020-04-08    Gearbox.jpg added
 
@@ -19,6 +20,7 @@ a = Analysis(['FortiusAnt.py'],
                 ( './FortiusAnt.jpg',                '.' ),
                 ( './heart.jpg',                     '.' ),
                 ( './settings.bmp',                  '.' ),
+                ( './sponsor.bmp',                   '.' ),
                 ( './tacxfortius_1942_firmware.hex', '.' ),
                 ( './tacximagic_1902_firmware.hex',  '.' )
              ],
