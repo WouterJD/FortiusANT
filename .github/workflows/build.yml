@@ -31,9 +31,8 @@ jobs:
     - name: Build macOS Executable
       run: |
         ci/macos/build
-        ls pythoncode\dist
     - uses: actions/upload-artifact@v2
       with:
         name: macOS artifacts
         path: |
-          pythoncode\dist\FortiusAnt.app\
+          pythoncode/dist/FortiusAnt.app
