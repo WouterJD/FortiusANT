@@ -35,4 +35,4 @@ jobs:
       with:
         name: macOS artifacts
         path: |
-          pythoncode/dist/FortiusAnt.app
+          pythoncode/dist
