@@ -10,7 +10,7 @@ __version__ = "2021-02-03"
 #                    calibration not only measures but also warms the tire.
 # 2021-01-14    Magnetic brake Version message handling modified
 #               #202 Fortius calibration skipped in ANTdongle restart
-# 2021-01-12    Small bu very relevant corrections :-(
+# 2021-01-12    Small but very relevant corrections :-(
 # 2021-01-10    Digital gearbox changed to front/rear index
 # 2021-01-06    settings added (+ missing other files for version check)
 # 2020-12-30    Tacx Genius and Bushido implemented
