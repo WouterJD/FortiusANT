@@ -16,7 +16,7 @@ jobs:
         ci/windows/build.bat
     - uses: actions/upload-artifact@v2
       with:
-        name: Artifacts
+        name: Windows artifacts
         path: |
           pythoncode\dist\FortiusANT.exe
           pythoncode\dist\ExplorANT.exe
@@ -33,6 +33,6 @@ jobs:
         ci/macos/build
     - uses: actions/upload-artifact@v2
       with:
-        name: Artifacts
+        name: macOS artifacts
         path: |
-          pythoncode\dist\FortiusANT.app
+          pythoncode\dist\FortiusAnt.app
