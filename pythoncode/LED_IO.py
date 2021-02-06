@@ -13,7 +13,7 @@ import FortiusAntCommand    as cmd
 clv = cmd.CommandLineVariables()
 
 if clv.Raspi_LED: 
-      import sys
+     import sys
      from gpiozero import LED          # this module is a preinstalled module on Raspbian
 
 # ==============================================================================
@@ -42,6 +42,7 @@ if clv.Raspi_LED:
 #    GND              39  40  GPIO 21
 #
 # ==============================================================================
+
 if clv.Raspi_LED:           # if LED option is anabled these Pins were inizialized as outputs
     LED_Dongle = LED(23)    # the numbers are the numbers of the IO-Pins of the Raspi         
     LED_Cadence = LED(24)   # Don't forget to add the series resisor of 470 Ohm
