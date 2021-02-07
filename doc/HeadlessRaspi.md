@@ -171,7 +171,7 @@ Assignment of the IO's for the status LED's
 Access to the graphical user interface via RealVNC.
 Start the raspi-config program and activate the VNC server
 
-    pi@raspberrypi:~ $ sudo raspi-config
+        sudo raspi-config
 
 3 Interface Options    Configure connections to peripherals
 P3 VNC         Enable/disable graphical remote access using RealVNC  
@@ -179,7 +179,7 @@ P3 VNC         Enable/disable graphical remote access using RealVNC
 Change monitor setting for VNC without monitor. Otherwise the VNC server will not work if no monitor is connected.
 
 
-    Sudo nano /boot/config.txt
+    sudo nano /boot/config.txt
     
 Remove the commet marks in the “/boot/config.txt” file for the following options.
 
