@@ -48,6 +48,7 @@ Start the raspi-config program and activate the SSH server
     sudo raspi-config
 
 3 Interface Options    Configure connections to peripherals
+
 P2 SSH         Enable/disable remote command line access using SSH 
 
 ### Install updates first
