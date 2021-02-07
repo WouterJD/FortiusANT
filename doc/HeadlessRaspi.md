@@ -178,6 +178,7 @@ Start the raspi-config program and activate the VNC server
         sudo raspi-config
 
 3 Interface Options    Configure connections to peripherals
+
 P3 VNC         Enable/disable graphical remote access using RealVNC  
 
 Change monitor setting for VNC without monitor. Otherwise the VNC server will not work if no monitor is connected.
