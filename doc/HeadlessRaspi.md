@@ -125,7 +125,7 @@ Since wxPython has to be recompiled for the Raspberry the required dev packages 
 
 Make the startupscript executable
 
-        chmod +x /home/pi/FortiusANT-Raspi-Status-LED/FortiusAntHeadless.sh
+        chmod +x /home/pi/FortiusANT-Raspi-Status-LED/StartUp/FortiusAntHeadless.sh
     
 Create a file with the editor and insert the code:
 
