@@ -1,8 +1,11 @@
 
 # Headless Raspi
 In these instructions the operating system is installed and configured for headless operation
+
 Python software FortiusAnt downloaded (with LED support) and installed
+
 Autostart set up
+
 LEDs connected
 
 Hardware Requirements:
