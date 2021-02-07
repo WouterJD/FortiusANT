@@ -131,12 +131,13 @@ Create a file with the editor and insert the code:
     sudo nano /etc/xdg/autostart/antifier_.desktop
  
 Text einfügen
-    [Desktop Entry]
-    Type=Application
-    Name=Antifier
-    Comment=USB_Ant+
-    NoDisplay=false
-    Exec=/home/pi/FortiusANT-Raspi-Status-LED/FortiusAntHeadless.sh
+        
+        [Desktop Entry]
+        Type=Application
+        Name=Antifier
+        Comment=USB_Ant+
+        NoDisplay=false
+        Exec=/home/pi/FortiusANT-Raspi-Status-LED/FortiusAntHeadless.sh
 
 # Connection of the LED's
 Assignment of the IO's for the status LED's
