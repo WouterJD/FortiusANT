@@ -138,7 +138,7 @@ Text einfügen
         Name=Antifier
         Comment=USB_Ant+
         NoDisplay=false
-        Exec=/home/pi/FortiusANT-Raspi-Status-LED/FortiusAntHeadless.sh
+        Exec=/home/pi/FortiusANT-Raspi-Status-LED/StartUp/FortiusAntHeadless.sh
 
 # Connection of the LED's
 Assignment of the IO's for the status LED's
