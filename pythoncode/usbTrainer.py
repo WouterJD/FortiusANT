@@ -2,6 +2,9 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2021-01-12"
+# 2021-02-11    Vortex HU: request mode switch whenever wrong mode detected
+#                          increase keep-alive interval to 10s
+#               Vortex brake: handle alarm status (errors/warnings)
 # 2021-01-12    @TotalReverse comment added on 128866
 #               Power calculation incorrect due to GearboxReduction
 # 2021-01-11    Error-recovery improved on USB_Read
@@ -163,7 +166,7 @@ EnterButton     =  1
 DownButton      =  2
 UpButton        =  4
 CancelButton    =  8
-OKButton        = 16        # Non-existant for USB-trainers, for i-Vortex only
+OKButton        = 16        # Non-existant for USB-trainers, for Vortex only
 
 modeStop        = 0         # USB Tacx modes
 modeResistance  = 2
@@ -196,7 +199,7 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 # -----------------
 # clsTacxTrainer                            = Base class with attributes
 #       -> clsSimulatedTrainer              = Simulated trainer
-#       -> clsTacxAntVortexTrainer          = Tacx i-Vortex
+#       -> clsTacxAntVortexTrainer          = Tacx Vortex
 #       -> clsTacxUsbTrainer
 #             -> clsTacxLegacyUsbTrainer    = Tacx iMagic
 #             -> clsTacxNewUsbTrainer       = Tacx Fortius
@@ -1010,11 +1013,12 @@ class clsSimulatedTrainer(clsTacxTrainer):
 #-------------------------------------------------------------------------------
 class clsTacxAntVortexTrainer(clsTacxTrainer):
     def __init__(self, clv, AntDevice):
-        super().__init__(clv, "Pair with Tacx i-Vortex and Headunit")
+        super().__init__(clv, "Pair with Tacx Vortex and Headunit")
         if debug.on(debug.Function):logfile.Write ("clsTacxAntVortexTrainer.__init__()")
         self.AntDevice         = AntDevice
         self.OK                = True           # The AntDevice is there,
                                                 # the trainer not yet paired!
+        self.__VHUmode = ant.VHU_Normal         # current HU mode
 
         self.__ResetTrainer()
 
@@ -1031,9 +1035,14 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
 
         self.__VortexID        = 0              # provided by datapage 3
 
-        self.__iVortexButtons  = 0              # provided by datapage 221
+        self.__VortexButtons  = 0               # provided by datapage 221
 
-        self.Message = 'Pair with Tacx i-Vortex and Headunit'
+        self.__VTX_AlarmStatus = 0              # brake errors/warnings (page 1)
+
+        # time of last keep-alive message
+        self.__KeepAliveTime   = time.time()
+
+        self.Message = 'Pair with Tacx Vortex and Headunit'
 
     #---------------------------------------------------------------------------
     # R e c e i v e F r o m T r a i n e r
@@ -1059,28 +1068,36 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
         self.SpeedKmh     = self.WheelSpeed / 10    # Speed = in 0.1 km/hr
 
         # ----------------------------------------------------------------------
-        # Translate i-Vortex buttons to TacxTrainer.Buttons.
+        # Translate Vortex buttons to TacxTrainer.Buttons.
         # Mapping according TotalReverse:
         # https://github.com/totalreverse/ttyT1941/issues/9#issuecomment-624360140
         # ----------------------------------------------------------------------
-        if   self.__iVortexButtons == ant.VHU_Button_None:  self.Buttons = 0
-        elif self.__iVortexButtons == ant.VHU_Button_Left:  self.Buttons = CancelButton
-        elif self.__iVortexButtons == ant.VHU_Button_Up:    self.Buttons = UpButton
-        elif self.__iVortexButtons == ant.VHU_Button_Enter: self.Buttons = OKButton
-        elif self.__iVortexButtons == ant.VHU_Button_Down:  self.Buttons = DownButton
-        elif self.__iVortexButtons == ant.VHU_Button_Right: self.Buttons = EnterButton
-        self.__iVortexButtons = ant.VHU_Button_None
+        if   self.__VortexButtons == ant.VHU_Button_None:  self.Buttons = 0
+        elif self.__VortexButtons == ant.VHU_Button_Left:  self.Buttons = CancelButton
+        elif self.__VortexButtons == ant.VHU_Button_Up:    self.Buttons = UpButton
+        elif self.__VortexButtons == ant.VHU_Button_Enter: self.Buttons = OKButton
+        elif self.__VortexButtons == ant.VHU_Button_Down:  self.Buttons = DownButton
+        elif self.__VortexButtons == ant.VHU_Button_Right: self.Buttons = EnterButton
+        self.__VortexButtons = ant.VHU_Button_None
 
         # ----------------------------------------------------------------------
         # Compose displayable message
         # ----------------------------------------------------------------------
         if self.__DeviceNumberVTX:
-            self.Message = 'Tacx i-Vortex paired: %s' % self.__DeviceNumberVTX
+            self.Message = 'Tacx Vortex paired: %d' % self.__DeviceNumberVTX
+
         else:
-            self.Message = "Pair with Tacx i-Vortex"
+            msg = "Pair with Tacx Vortex"
+            if self.__VTX_AlarmStatus == ant.VTX_Alarm_WrongMainsVoltage:
+                msg += " WRONG MAINS VOLTAGE!"
+            if self.__VTX_AlarmStatus == ant.VTX_Alarm_TemperatureHigh:
+                msg += " TEMPERATURE HIGH!"
+            if self.__VTX_AlarmStatus == ant.VTX_Alarm_NoBrakeCoils:
+                msg += " NO BRAKE COILS!"
+            self.Message = msg
 
         if self.__DeviceNumberVHU:
-            self.Message += ', Headunit: %s' % self.__DeviceNumberVHU
+            self.Message += ', Headunit: %d' % self.__DeviceNumberVHU
         else:
             self.Message += ', Headunit'
 
@@ -1102,7 +1119,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                 # TargetResistance is used, so that virtual gearbox works!
                 #---------------------------------------------------------------
                 if self.__AntVTXpaired and self.__VortexID:
-                    info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s, \
+                    info = ant.msgPage16_TacxVortexSetPower (ant.channel_VTX_s,
                                 self.__VortexID, self.TargetResistance)
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     messages.append ( msg )
@@ -1111,19 +1128,50 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                 # Avoid power off on headunit
                 #---------------------------------------------------------------
                 if self.__AntVHUpaired:
-                    info = ant.msgPage000_TacxVortexHU_StayAlive (ant.channel_VHU_s)
-                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
-                    messages.append ( msg )
+                    # Head-unit powers off after 3 minutes
+                    KeepAliveInterval = 10  # in s
+                    TimeElapsed = time.time() - self.__KeepAliveTime
+
+                    if TimeElapsed > KeepAliveInterval:
+                        info = ant.msgPage000_TacxVortexHU_StayAlive (ant.channel_VHU_s)
+                        msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                        messages.append ( msg )
+
+                        if debug.on(debug.Function):
+                            logfile.Write("Vortex HU page 0 (OUT) Keep-alive")
+
+                        # reset keep-alive timer
+                        self.__KeepAliveTime = time.time()
+
+                    # ---------------------------------------------------------------
+                    #  Request PC-mode (repeat until confirmation)
+                    # ---------------------------------------------------------------
+                    elif self.__VHUmode != ant.VHU_PCmode:
+                        info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (
+                            ant.channel_VHU_s, ant.VHU_PCmode)
+                        msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
+                        messages.append ( msg )
+
+                        if debug.on(debug.Function):
+                            logfile.Write(
+                                "Vortex HU page 172/0x03 (OUT)  Mode=%d" % \
+                                ant.VHU_PCmode)
 
             elif TacxMode ==  modeStop:
                 #---------------------------------------------------------------
                 # Switch headunit to trainer control mode
                 #---------------------------------------------------------------
+                # TODO: ANT is turned off when training is stopped, so this does not work
                 if self.__AntVHUpaired:
-                    info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (\
+                    info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (
                                               ant.channel_VHU_s, ant.VHU_Normal)
                     msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
                     messages.append ( msg )
+
+                    if debug.on(debug.Function):
+                        logfile.Write(
+                            "Vortex HU page 172/0x03 (OUT)  Mode=%d" % \
+                            ant.VHU_Normal)
 
             #-------------------------------------------------------------------
             # Send messages, leave receiving to the outer loop
@@ -1134,7 +1182,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
     #---------------------------------------------------------------------------
     # TargetPower2Resistance
     #
-    # TargetResistance is used for the i-Vortex, even when expressed in Watt, so
+    # TargetResistance is used for the Vortex, even when expressed in Watt, so
     # that PowerFactor and GearboxReduction apply; see clsUsbTrainer.Refresh().
     #---------------------------------------------------------------------------
     def TargetPower2Resistance(self):
@@ -1143,7 +1191,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
     #---------------------------------------------------------------------------
     # Refresh()
     # No special actions required
-    # Note that TargetResistance=0 for the i-Vortex; TargetPower is sent!
+    # Note that TargetResistance=0 for the Vortex; TargetPower is sent!
     #---------------------------------------------------------------------------
     # def Refresh(self, QuarterSecond, TacxMode):
     #     super().Refresh(QuarterSecond, TacxMode)
@@ -1156,19 +1204,18 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
     def HandleANTmessage(self, msg):
         _synch, _length, id, info, _checksum, _rest, Channel, DataPageNumber = \
                                                        ant.DecomposeMessage(msg)
+        SubPageNumber = info[2] if len(info) > 2 else None
         dataHandled = False
         messages    = []
+
         #-----------------------------------------------------------------------
-        # VTX_s = Tacx i-Vortex trainer
+        # VTX_s = Tacx Vortex trainer
         #-----------------------------------------------------------------------
         if Channel == ant.channel_VTX_s:
-            if id == ant.msgID_AcknowledgedData:
-                dataHandled = True
-
             #-------------------------------------------------------------------
             # BroadcastData - info received from the master device
             #-------------------------------------------------------------------
-            elif id == ant.msgID_BroadcastData:
+            if id == ant.msgID_BroadcastData:
                 #---------------------------------------------------------------
                 # Ask what device is paired
                 #---------------------------------------------------------------
@@ -1180,44 +1227,40 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                 # Data page 00 msgUnpage00_TacxVortexDataSpeed
                 #---------------------------------------------------------------
                 if DataPageNumber == 0:
-                    dataHandled = True
-                    VTX_UsingVirtualSpeed, self.__CurrentPower, self.__WheelSpeed, \
-                        VTX_CalibrationState, self.__Cadence = \
+                    UsingVirtualSpeed, self.__CurrentPower, self.__WheelSpeed, \
+                        CalibrationState, self.__Cadence = \
                         ant.msgUnpage00_TacxVortexDataSpeed(info)
                     if debug.on(debug.Function):
-                        logfile.Write ('i-Vortex Page=%s UsingVirtualSpeed=%s Power=%s Speed=%s State=%s Cadence=%s' % \
-                            (DataPageNumber, VTX_UsingVirtualSpeed, self.__CurrentPower, \
-                                self.__SpeedKmh, VTX_CalibrationState, self.__Cadence) )
+                        logfile.Write ('Vortex Page=%d (IN) UsingVirtualSpeed=%d Power=%d Speed=%d CalState=%d Cadence=%d' % \
+                            (DataPageNumber, UsingVirtualSpeed, self.__CurrentPower,
+                                self.__WheelSpeed, CalibrationState, self.__Cadence) )
 
                 #---------------------------------------------------------------
                 # Data page 01 msgUnpage01_TacxVortexDataSerial
                 #---------------------------------------------------------------
                 elif DataPageNumber == 1:
-                    dataHandled = True
-                    VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm = ant.msgUnpage01_TacxVortexDataSerial(info)
+                    DeviceType, Year, DeviceNumber, self.__VTX_AlarmStatus = ant.msgUnpage01_TacxVortexDataSerial(info)
                     if debug.on(debug.Function):
-                        logfile.Write ('i-Vortex Page=%s S1=%s S2=%s Serial=%s Alarm=%s' % \
-                            (DataPageNumber, VTX_S1, VTX_S2, VTX_Serial, VTX_Alarm) )
+                        logfile.Write ('Vortex Page=%d (IN) DeviceType=%d Year=%d DeviceNumber=%d Alarm=%d' % \
+                                       (DataPageNumber, DeviceType, Year, DeviceNumber, self.__VTX_AlarmStatus))
 
                 #---------------------------------------------------------------
                 # Data page 02 msgUnpage02_TacxVortexDataVersion
                 #---------------------------------------------------------------
                 elif DataPageNumber == 2:
-                    dataHandled = True
-                    VTX_Major, VTX_Minor, VTX_Build = ant.msgUnpage02_TacxVortexDataVersion(info)
+                    MajorVersion, MinorVersion, Build = ant.msgUnpage02_TacxVortexDataVersion(info)
                     if debug.on(debug.Function):
-                        logfile.Write ('i-Vortex Page=%s Major=%s Minor=%s Build=%s' % \
-                            (DataPageNumber, VTX_Major, VTX_Minor, VTX_Build))
+                        logfile.Write ('Vortex Page=%d (IN) MajorVersion=%d MinorVersion=%d Build=%d' % \
+                            (DataPageNumber, MajorVersion, MinorVersion, Build))
 
                 #---------------------------------------------------------------
                 # Data page 03 msgUnpage03_TacxVortexDataCalibration
                 #---------------------------------------------------------------
                 elif DataPageNumber == 3:
-                    dataHandled = True
-                    VTX_Calibration, self.__VortexID = ant.msgUnpage03_TacxVortexDataCalibration(info)
+                    CalValue, self.__VortexID = ant.msgUnpage03_TacxVortexDataCalibration(info)
                     if debug.on(debug.Function):
-                        logfile.Write ('i-Vortex Page=%s Calibration=%s VortexID=%s' % \
-                            (DataPageNumber, VTX_Calibration, self.__VortexID))
+                        logfile.Write ('Vortex Page=%d (IN) CalValue=%d VortexID=%d' % \
+                            (DataPageNumber, CalValue, self.__VortexID))
 
             #-------------------------------------------------------------------
             # ChannelID - the info that a master on the network is paired
@@ -1227,7 +1270,6 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                     ant.unmsg51_ChannelID(info)
 
                 if DeviceTypeID == ant.DeviceTypeID_VTX:
-                    dataHandled = True
                     self.__AntVTXpaired    = True
                     self.__DeviceNumberVTX = DeviceNumber
 
@@ -1237,7 +1279,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
             dataHandled = True
 
         #-----------------------------------------------------------------------
-        # VHU_s = Tacx i-Vortex headunit
+        # VHU_s = Tacx Vortex headunit
         #-----------------------------------------------------------------------
         elif Channel == ant.channel_VHU_s:
             if id == ant.msgID_AcknowledgedData:
@@ -1245,9 +1287,11 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                 # Data page 221 TacxVortexHU_ButtonPressed
                 #---------------------------------------------------------------
                 if DataPageNumber == 221:
-                    dataHandled = True
-                    self.__iVortexButtons = \
+                    self.__VortexButtons = \
                               ant.msgUnpage221_TacxVortexHU_ButtonPressed (info)
+                    if debug.on(debug.Function):
+                        logfile.Write ('Vortex HU Page=%d (IN) Buttons=%d' % \
+                                       (DataPageNumber, self.__VortexButtons))
 
             #-------------------------------------------------------------------
             # BroadcastData - info received from the master device
@@ -1261,10 +1305,15 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                     messages.append ( msg )
 
                 #---------------------------------------------------------------
-                # Data page 173 frames containing the serial number of the device
+                # Data page 173 containing the serial number/mode of the device
                 #---------------------------------------------------------------
-                if DataPageNumber == 173: # 0xad:
-                    dataHandled = True
+                if DataPageNumber == 173 and SubPageNumber == 0x01: # 0xad:
+                    self.__VHUmode, Year, DeviceType, DeviceNumber = \
+                        ant.msgUnpage173_01_TacxVortexHU_SerialMode (info)
+                    if debug.on(debug.Function):
+                        logfile.Write ('Vortex HU Page=%d/%#x (IN) Mode=%d Year=%d DeviceType=%d DeviceNumber=%d' % \
+                                       (DataPageNumber, SubPageNumber, self.__VHUmode, Year,
+                                        DeviceType, DeviceNumber))
 
             #-------------------------------------------------------------------
             # ChannelID - the info that a master on the network is paired
@@ -1274,17 +1323,8 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                     ant.unmsg51_ChannelID(info)
 
                 if DeviceTypeID == ant.DeviceTypeID_VHU:
-                    dataHandled = True
                     self.__AntVHUpaired    = True
                     self.__DeviceNumberVHU = DeviceNumber
-
-                    #-----------------------------------------------------------
-                    # And tell to switch to PC-mode
-                    #-----------------------------------------------------------
-                    info = ant.msgPage172_TacxVortexHU_ChangeHeadunitMode (\
-                                             ant.channel_VHU_s, ant.VHU_PCmode)
-                    msg  = ant.ComposeMessage (ant.msgID_BroadcastData, info)
-                    messages.append ( msg )
 
             #-------------------------------------------------------------------
             # Outer loop does not need to handle channel_VHU_s messages
