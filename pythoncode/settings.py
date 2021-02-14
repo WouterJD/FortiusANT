@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-19"
+__version__ = "2021-02-12"
+# 2021-02-21    Return load result from ReadJsonFile
 # 2021-01-19    PowerFactor limit changed to 0.5 ... 1.5 (50 ... 150)
 # 2021-01-18    help texts defined as 'constants' to be used for commandline.
 #               texts in Json file different from variable name
@@ -108,12 +109,15 @@ def JsonFileExists():
 #               
 # Output:       args, data
 #
-# Returns:      None
+# Returns:      loaded successfully (bool)
 # ------------------------------------------------------------------------------
 def ReadJsonFile (args):
     global data
     if debug.on(debug.Function):
         logfile.Write ("ReadJsonFile () ...")
+
+    jsonLoaded = False
+
     # --------------------------------------------------------------------------
     # Open json file
     # --------------------------------------------------------------------------
@@ -237,19 +241,24 @@ def ReadJsonFile (args):
                     args.Runoff = False
                 else:
                     args.Runoff = "%s/%s/%s/%s/%s" % (RunoffMaxSpeed, RunoffDip, RunoffMinSpeed, RunoffTime, RunoffPower)
+
+            jsonLoaded = True
+
         # ----------------------------------------------------------------------
         # Close json file
         # ----------------------------------------------------------------------
         if debug.on(debug.Function):
             logfile.Write   ("... completed")
 
-        jsonFile.close
+        jsonFile.close()
 
     # --------------------------------------------------------------------------
     # Done
     # --------------------------------------------------------------------------
     if debug.on(debug.Function):
         logfile.Write ("... completed")
+
+    return jsonLoaded
 
 if constants.UseGui:
     # ------------------------------------------------------------------------------
@@ -371,7 +380,7 @@ if constants.UseGui:
             logfile.Console ("Json file cannot be written: " + JsonFileName())
         else:
             json.dump(data, jsonFile, sort_keys=True, indent=4)
-            jsonFile.close
+            jsonFile.close()
 
         if debug.on(debug.Function):
             logfile.Write ("... completed")
