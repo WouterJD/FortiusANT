@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-02-01"
+__version__ = "2021-02-12"
+# 2021-02-12    Apply default settings only if no json file loaded
 # 2021-02-01    Standard welcome message changed
 # 2021-01-19    PowerFactor limit changed to 0.5 ... 1.5
 # 2021-01-18    help texts defined as 'constants' to be used for commandline.
@@ -184,7 +185,44 @@ class CommandLineVariables(object):
         # Overwrite from json file if present
         #-----------------------------------------------------------------------
         self.args                   = parser.parse_args()
-        settings.ReadJsonFile(self.args)
+        jsonLoaded = settings.ReadJsonFile(self.args)
+
+        #-----------------------------------------------------------------------
+        # If nothing specified at all, use sensible defaults
+        #-----------------------------------------------------------------------
+        if len(sys.argv) == 1 and not jsonLoaded:
+            pgm = max(sys.argv[0].rfind('/'), sys.argv[0].rfind('\\')) + 1
+            pgm = sys.argv[0][pgm:]
+            print('---------------------------------------------------------------')
+            print('Hello!')
+            print('You have started FortiusANT without command-line parameters.')
+            print(' ')
+            print('Therefore we start with a best-practice setting:')
+            print('     %s -a -g -H0 -A' % pgm)
+            print(' ')
+            print('If you want to start without the graphical user interface:')
+            print('     %s -a' % pgm)
+            print(' ')
+            print('For more info, please refer to the wiki on github.')
+            print('Succes!')
+            self.args.autostart              = True
+            self.args.gui                    = UseGui    # Show gui
+            self.args.hrm                    = 0         # Pair with HRM
+            self.args.PedalStrokeAnalysis    = True      # Show it
+
+        #-----------------------------------------------------------------------
+        # Display welcome message
+        #-----------------------------------------------------------------------
+        print('---------------------------------------------------------------')
+        print('FortiusANT is open source and can be used freely.')
+        print('')
+        print('Just for the fun of knowing where you all are training,')
+        print('put yourself on the FortiusANT map by making yourself known')
+        print('by leaving a message with name/location/trainer on')
+        print('https://github.com/WouterJD/FortiusANT/issues/14')
+        print('')
+        print('or visit the sponsoring page https://github.com/sponsors/WouterJD')
+        print('---------------------------------------------------------------')
 
         #-----------------------------------------------------------------------
         # Booleans; either True or False
@@ -429,38 +467,6 @@ class CommandLineVariables(object):
             logfile.Console("Pedal stroke analysis is not possible in console mode or this Tacx type")
             self.PedalStrokeAnalysis = False
 
-        #-----------------------------------------------------------------------
-        # If nothing specified at all, help the poor windows-users
-        #-----------------------------------------------------------------------
-        if len(sys.argv) == 1:
-            pgm = max(sys.argv[0].rfind('/'), sys.argv[0].rfind('\\')) + 1
-            pgm = sys.argv[0][pgm:]
-            print('---------------------------------------------------------------')
-            print('Hello!')
-            print('You have started FortiusANT without command-line parameters.')
-            print(' ')
-            print('Therefore we start with a best-practice setting:')
-            print('     %s -a -g -H0 -A' % pgm)
-            print(' ')
-            print('If you want to start without the graphical user interface:')
-            print('     %s -a' % pgm)
-            print(' ')
-            print('For more info, please refer to the wiki on github.')
-            print('Succes!')
-            print('---------------------------------------------------------------')
-            print('FortiusANT is open source and can be used freely.')
-            print('')
-            print('Just for the fun of knowing where you all are training,')
-            print('put yourself on the FortiusANT map by making yourself known')
-            print('by leaving a message with name/location/trainer on')
-            print('https://github.com/WouterJD/FortiusANT/issues/14')
-            print('')
-            print('or visit the sponsoring page https://github.com/sponsors/WouterJD')
-            print('---------------------------------------------------------------')
-            self.autostart              = True
-            self.gui                    = UseGui    # Show gui
-            self.hrm                    = 0         # Pair with HRM
-            self.PedalStrokeAnalysis    = True      # Show it
 
     def print(self):
         try:
