@@ -1084,17 +1084,16 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
         # Compose displayable message
         # ----------------------------------------------------------------------
         if self.__DeviceNumberVTX:
-            self.Message = 'Tacx Vortex paired: %d' % self.__DeviceNumberVTX
-
-        else:
-            msg = "Pair with Tacx Vortex"
-            if self.__VTX_AlarmStatus == ant.VTX_Alarm_WrongMainsVoltage:
+            msg = 'Tacx Vortex paired: %d' % self.__DeviceNumberVTX
+			if self.__VTX_AlarmStatus == ant.VTX_Alarm_WrongMainsVoltage:
                 msg += " WRONG MAINS VOLTAGE!"
             if self.__VTX_AlarmStatus == ant.VTX_Alarm_TemperatureHigh:
                 msg += " TEMPERATURE HIGH!"
             if self.__VTX_AlarmStatus == ant.VTX_Alarm_NoBrakeCoils:
                 msg += " NO BRAKE COILS!"
-            self.Message = msg
+			self.Message = msg
+        else:
+            self.Message = "Pair with Tacx Vortex"
 
         if self.__DeviceNumberVHU:
             self.Message += ', Headunit: %d' % self.__DeviceNumberVHU
