@@ -130,6 +130,7 @@ __version__ = "2021-01-12"
 # 2020-01-08    Grade2Resistance() modified; test-version to be removed
 # 2019-12-25    Target grade implemented; modes defined
 #-------------------------------------------------------------------------------
+import PowerCalibTab as cal
 import LED_IO #JPS
 import array
 import lib_programname
@@ -624,10 +625,11 @@ class clsTacxTrainer():
         # Just for antifier upwards compatibility; usage unknown.
         #-----------------------------------------------------------------------
         if self.clv.PowerFactor:
-            self.TargetResistance  *= self.clv.PowerFactor  # Will be sent
+            corrFactor=cal.CalcCorrFactor(PowerTab,speed,power)
+            self.TargetResistance  *= self.clv.PowerFactor/corrFactor # Will be sent
 
-            self.CurrentResistance /= self.clv.PowerFactor  # Was just received
-            self.CurrentPower      /= self.clv.PowerFactor  # Was just received
+            self.CurrentResistance /= self.clv.PowerFactor /corrFactor # Was just received
+            self.CurrentPower      /= self.clv.PowerFactor/corrFactor  # Was just received
 
         # ----------------------------------------------------------------------
         # Dynamic Adjustment of Resistance
@@ -2509,7 +2511,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
         self.OK         = True
-
+        #self.self.PowerTab
         self.MotorBrakeUnitFirmware = 0             # Introduced 2020-11-23
         self.MotorBrakeUnitSerial   = 0
         self.MotorBrakeUnitYear     = 0
@@ -2577,6 +2579,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             logfile.Console ("FortiusAnt applies the MotorBrake power curve")
         else:
             logfile.Console ("FortiusAnt applies the MagneticBrake power curve")
+            self.PowerTab=cal.OpenPowerTab('..\PowerTab\ActivPwTab.dat')
 
         #---------------------------------------------------------------------------
         # Refresh with stop-command
