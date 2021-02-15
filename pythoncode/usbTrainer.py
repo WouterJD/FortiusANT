@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
-# Version info
+# Version info 
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-12"
+__version__ = "2021-02-15"
+# 2021-02-15    Added: Calibration by Powertable
+# 2021-01-29    Added: -L Status-LED for Raspi headless
 # 2021-01-12    @TotalReverse comment added on 128866
 #               Power calculation incorrect due to GearboxReduction
 # 2021-01-11    Error-recovery improved on USB_Read
@@ -618,14 +620,17 @@ class clsTacxTrainer():
         #
         # The idea is that Power2Resistance gives insufficient resistance
         # and that the formula can be corrected with the PowerFactor.
+        # Additional it is to calibrate additional by a measured power table.
         # Therefore before Send:
-        #       the TargetResistance is multiplied by factor
-        # and after Receive:
+        #       the TargetResistance is multiplied by factor and divided by the
+        #       calibration value from th interpolation 
+        #       and after Receive:
         #       the CurrentResistance and CurrentPower are divided by factor
         # Just for antifier upwards compatibility; usage unknown.
         #-----------------------------------------------------------------------
         if self.clv.PowerFactor:
-            corrFactor=cal.CalcCorrFactor(PowerTab,speed,power)
+            corrFactor=cal.CalcCorrFactor(self.PowerTab,self.SpeedKmh,self.CurrentPower)
+            # print(self.SpeedKmh,self.CurrentPower,corrFactor)
             self.TargetResistance  *= self.clv.PowerFactor/corrFactor # Will be sent
 
             self.CurrentResistance /= self.clv.PowerFactor /corrFactor # Was just received
@@ -2511,7 +2516,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
         self.OK         = True
-        #self.self.PowerTab
+        self.PowerTab=cal.OpenPowerTab('../PowerTab/ActivPwTab.dat')
         self.MotorBrakeUnitFirmware = 0             # Introduced 2020-11-23
         self.MotorBrakeUnitSerial   = 0
         self.MotorBrakeUnitYear     = 0
@@ -2579,8 +2584,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             logfile.Console ("FortiusAnt applies the MotorBrake power curve")
         else:
             logfile.Console ("FortiusAnt applies the MagneticBrake power curve")
-            self.PowerTab=cal.OpenPowerTab('..\PowerTab\ActivPwTab.dat')
-
+            
         #---------------------------------------------------------------------------
         # Refresh with stop-command
         #---------------------------------------------------------------------------

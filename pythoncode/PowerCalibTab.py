@@ -25,9 +25,8 @@ def OpenPowerTab(Dateiname):
 def CalcCorrFactor(Powertab,speed,power):
     try:
         Powertab
-    except:
-        P=1.0
-    else:
+    
+   # else:
         left=int(power/50)  #the power divided by 50W is the left value index
         upper=int(speed/10) #the speed divided by 10kmhis the upper value index 
         
@@ -48,5 +47,7 @@ def CalcCorrFactor(Powertab,speed,power):
         R_1= (x2-x)/(x2-x1)*Q_11+(x-x1)/(x2-x1)*Q_21 # interpolating the corr. factor between the Left Values
         R_2= (x2-x)/(x2-x1)*Q_12+(x-x1)/(x2-x1)*Q_22 # interpolating the corr. factor between the Right Values
         P= (y2-y)/(y2-y1)*R_1+(y-y1)/(y2-y1)*R_2   # interpolating the result corr. factor from the iterpol.values
+    except:
+        P=1.0
     return P
 

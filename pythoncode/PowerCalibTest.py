@@ -3,7 +3,7 @@ import numpy as np
 
 
 
-PowerTab=cal.OpenPowerTab('..\PowerTab\ActivPwTab.dat')
+PowerTab=cal.OpenPowerTab('../PowerTab/ActivPwTab.dat')
 print(PowerTab)
 #while True:
 #    speed = float(input("speed/kmh? "))
