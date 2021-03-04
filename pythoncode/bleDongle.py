@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2021-01-04"
+__version__ = "2021-02-27"
+# 2021-02-27    Retry added in Write() for raspberry.
 # 2021-01-04    lib_programname used to get correct dirname
 #               ./node was searched relative to current path
 #               https://github.com/WouterJD/FortiusANT/issues/103#issuecomment-753359525
@@ -112,7 +113,7 @@ class clsBleInterface():
                     if debug.on(debug.Ble): logfile.Write ("... " + str(e))
                 else:
                     if debug.on(debug.Ble): logfile.Write('... completed')
-                    self.Message = ", Bluetooth interface opened to CTP"
+                    self.Message = ", Bluetooth interface open"
                     self.OK = True
 
             if self.OK: logfile.Console("FortiusANT exchanges data with a bluetooth Cycling Training Program")
@@ -123,18 +124,29 @@ class clsBleInterface():
         # input     data
         #
         # function  The provided data is posted to the Bluetooth interface
+        #           Retry: Failed to establish a new connection: [Errno 111] Connection refused
+        #               which appears to happen in Raspberry initially
+        #               perhaps because we are too fast or something...
         #
         # returns   none
         #-------------------------------------------------------------------
         def Write(self, data):
             rtn = False
+            retry = 10
             if debug.on(debug.Ble): logfile.Write('BleInterface.Write(%s)' % data)
-            if self.interface:
+            while retry and not rtn and self.interface:
                 url = f'http://{self.host}:{self.port}/ant'
                 try:
                     r = requests.post(url, data=data)
                 except Exception as e:
-                    logfile.Console ("... requests.post() error " + str(e))
+                    msg = "... requests.post() error " + str(e)
+                    if retry and '[Errno 111]' in msg:
+                        retry -= 1
+                        time.sleep(0.250)
+                        logfile.Write (msg)
+                    else:
+                        retry = 0
+                        logfile.Console (msg)
                 else:
                     rtn = r.ok
             return rtn

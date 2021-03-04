@@ -1,7 +1,13 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-02-12"
+__version__ = "2021-03-02"
+# 2021-03-02    added: -l Raspberry status Leds
+#               -A -g -l dummy definition present to avoid command-line error
+#                   when dependencies are not fulfilled, FortiusAnt will proceed
+#                   silently to headless mode.
+# 2021-02-25    settings required, even when UseGui = False
+# 2021-02-11    added: -e homeTrainer (Exersize bike)
 # 2021-02-12    Apply default settings only if no json file loaded
 # 2021-02-01    Standard welcome message changed
 # 2021-01-19    PowerFactor limit changed to 0.5 ... 1.5
@@ -57,11 +63,12 @@ import debug
 import logfile
 
 from   constants                    import UseBluetooth, UseGui
+from   raspberry                    import UseLeds
 import constants
+import settings
 
 if UseGui:
     import wx
-    import settings
 
 #-------------------------------------------------------------------------------
 # Realize clv to be program-global, by accessing through this function.
@@ -79,6 +86,7 @@ class CommandLineVariables(object):
     antDeviceID     = None       # introduced 2020-12-10; Use this usb antDongle type only
     autostart       = False
     ble             = False      # introduced 2020-12-18; Bluetooth support
+    DeviceNumberBase= False      # introduced 2021-02-22; Issue #260
     calibrate       = True
     CTRL_SerialL    = 0          # introduced 2020-12-14; ANT+ Control command (Left/Right)
     CTRL_SerialR    = 0
@@ -90,6 +98,8 @@ class CommandLineVariables(object):
     GradeShift      = 0          #                        The number of degrees to be added
     gui             = False
     hrm             = None       # introduced 2020-02-09; None=not specified, numeric=HRM device, -1=no HRM
+    homeTrainer     = False
+    rpiLeds         = False
     manual          = False
     manualGrade     = False
     PedalStrokeAnalysis = False
@@ -149,18 +159,36 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         parser = argparse.ArgumentParser(description='Program to broadcast data from USB Tacx Fortius trainer, and to receive resistance data for the trainer')
         parser.add_argument   ('-a','--autostart',          help=constants.help_a,  required=False, action='store_true')
-        parser.add_argument   ('-A','--PedalStrokeAnalysis',help=constants.help_A,  required=False, action='store_true')
+        if UseGui:
+           parser.add_argument('-A','--PedalStrokeAnalysis',help=constants.help_A,  required=False, action='store_true')
+        else:
+           # If -A is requested but not available, then ignore
+           parser.add_argument('-A','--pdaNotAvailable',    help=argparse.SUPPRESS, required=False, action='store_true')
         if UseBluetooth:
            parser.add_argument('-b','--ble',                help=constants.help_b,  required=False, action='store_true')
+        else:
+           # If -b is requested but not available, then an error is appropriate
+           pass
+        parser.add_argument   ('-B','--DeviceNumberBase',   help=constants.help_B,  required=False, default=False)
         parser.add_argument   ('-c','--CalibrateRR',        help=constants.help_c,  required=False, default=False)
 #       parser.add_argument   ('-C','--CtrlCommand',        help=constants.help_C,  required=False, default=False)
         parser.add_argument   ('-C','--CtrlCommand',        help=argparse.SUPPRESS, required=False, default=False)
         parser.add_argument   ('-d','--debug',              help=constants.help_d,  required=False, default=False)
         parser.add_argument   ('-D','--antDeviceID',        help=constants.help_D,  required=False, default=False)
+        parser.add_argument   ('-e','--homeTrainer',        help=constants.help_e,  required=False, action='store_true')
+        #                       -h     help!!
         if UseGui:
            parser.add_argument('-g','--gui',                help=constants.help_g,  required=False, action='store_true')
+        else:
+           # If -g is requested but not available, then ignore and proceed headless
+           parser.add_argument('-g','--guiNotAvailable',    help=argparse.SUPPRESS, required=False, action='store_true')
         parser.add_argument   ('-G','--GradeAdjust',        help=constants.help_G,  required=False, default=False)
         parser.add_argument   ('-H','--hrm',                help=constants.help_H,  required=False, default=False)
+        if UseLeds:
+           parser.add_argument('-l','--rpiLeds',            help=constants.help_l,  required=False, action='store_true')
+        else:
+           # If -l is requested but not available, then ignore and proceed without leds
+           parser.add_argument('-l','--ledsNotAvailable',   help=argparse.SUPPRESS, required=False, action='store_true')
         parser.add_argument   ('-m','--manual',             help=constants.help_m,  required=False, action='store_true')
         parser.add_argument   ('-M','--manualGrade',        help=constants.help_M,  required=False, action='store_true')
         parser.add_argument   ('-n','--calibrate',          help=constants.help_n,  required=False, action='store_false')
@@ -184,7 +212,7 @@ class CommandLineVariables(object):
         # Parse command line
         # Overwrite from json file if present
         #-----------------------------------------------------------------------
-        self.args                   = parser.parse_args()
+        self.args  = parser.parse_args()
         jsonLoaded = settings.ReadJsonFile(self.args)
 
         #-----------------------------------------------------------------------
@@ -208,7 +236,7 @@ class CommandLineVariables(object):
             self.args.autostart              = True
             self.args.gui                    = UseGui    # Show gui
             self.args.hrm                    = 0         # Pair with HRM
-            self.args.PedalStrokeAnalysis    = True      # Show it
+            self.args.PedalStrokeAnalysis    = UseGui    # Show it
 
         #-----------------------------------------------------------------------
         # Display welcome message
@@ -232,21 +260,41 @@ class CommandLineVariables(object):
             self.ble                = self.args.ble
         if UseGui:
             self.gui                = self.args.gui
+        self.homeTrainer            = self.args.homeTrainer # Exersize Bike
+        if UseLeds:
+            self.rpiLeds            = self.args.rpiLeds
         self.manual                 = self.args.manual
         self.manualGrade            = self.args.manualGrade
         self.calibrate              = self.args.calibrate
         self.PowerMode              = self.args.PowerMode
-        self.PedalStrokeAnalysis    = self.args.PedalStrokeAnalysis
+        if UseGui:
+            self.PedalStrokeAnalysis= self.args.PedalStrokeAnalysis
         self.Resistance             = self.args.Resistance
         self.SimulateTrainer        = self.args.simulate
-        self.exportTCX              = self.args.exportTCX or self.manual or self.manualGrade
+        self.exportTCX              = self.args.exportTCX or self.homeTrainer or self.manual or self.manualGrade
 
-        if self.manual and self.manualGrade:
-            logfile.Console("-m and -M are mutually exclusive; manual power selected")
-            self.manualGrade = False        # Mutually exclusive
+        i = 0
+        if self.homeTrainer:    i += 1
+        if self.manual:         i += 1
+        if self.manualGrade:    i += 1
 
-        if (self.manual or self.manualGrade) and self.SimulateTrainer:
-            logfile.Console("-m/-M and -s both specified, most likely for program test purpose")
+        if i > 1:
+            logfile.Console("Only one of -h, -m and -M may be specified; manual power selected")
+            self.homeTrainer = False
+            self.manual      = True
+            self.manualGrade = False
+
+        if (self.homeTrainer or self.manual or self.manualGrade) and self.SimulateTrainer:
+            logfile.Console("-e/-m/-M and -s both specified, most likely for program test purpose")
+
+        #-----------------------------------------------------------------------
+        # Get DeviceNumberBase
+        #-----------------------------------------------------------------------
+        if self.args.DeviceNumberBase:
+            try:
+                self.DeviceNumberBase = int(self.args.DeviceNumberBase)
+            except:
+                logfile.Console('Command line error; -B incorrect DeviceNumber Base=%s' % self.args.DeviceNumberBase)
 
         #-----------------------------------------------------------------------
         # Get calibration of Rolling Resistance
@@ -325,7 +373,20 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         if self.args.factor:
             try:
-                self.PowerFactor = max(0.5, min(1.5, int(self.args.factor)/100 ))
+                self.PowerFactor = int(self.args.factor) / 100
+                # I would expect +/- 15% would be enough for compensation, but
+                # reactions from "the field" have reported 35% difference.
+                # So the range became 50% ... 150%
+                #
+                # If the power is good and you specify 50% then you will report
+                # 500 Watt when producing 250Watt and ... you're cheating...
+                #
+                # HomeTrainer users may want a low resistance but a reasonable
+                # power on Zwift or Strava, otherwise the mountain becomes 
+                # endless. So the lower range is set to 20%.
+                # When producing 50 Watts, Rouvy will receive 250 Watt and you 
+                # can cycle uphill.
+                self.PowerFactor = max(0.2, min(1.5, self.PowerFactor) )
             except:
                 logfile.Console('Command line error; -p incorrect power factor=%s' % self.args.factor)
 
@@ -462,18 +523,18 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         # Check pedal stroke analysis
         #-----------------------------------------------------------------------
-        if self.args.PedalStrokeAnalysis and (not self.args.gui or self.Tacx_Vortex or
+        if self.PedalStrokeAnalysis and (not self.args.gui or self.Tacx_Vortex or
                                          self.Tacx_Genius or self.Tacx_Bushido):
             logfile.Console("Pedal stroke analysis is not possible in console mode or this Tacx type")
             self.PedalStrokeAnalysis = False
-
 
     def print(self):
         try:
             v = self.debug                          # Verbose: print all command-line variables with values
             if      self.autostart:          logfile.Console("-a")
             if      self.PedalStrokeAnalysis:logfile.Console("-A")
-            if UseBluetooth and self.ble:    logfile.Console("-b")
+            if      self.ble:                logfile.Console("-b")
+            if v or self.args.DeviceNumberBase: logfile.Console("-B %s" % self.DeviceNumberBase )
             if v or self.args.CalibrateRR:   logfile.Console("-c %s" % self.CalibrateRR )
             if v or self.CTRL_SerialL or self.CTRL_SerialR:
                 logfile.Console("-C %s/%s" % (self.CTRL_SerialL, self.CTRL_SerialR ) )
@@ -486,8 +547,10 @@ class CommandLineVariables(object):
                                                     % (self.GradeFactor, self.GradeFactorDH) )
                 if self.GradeAdjust == 3: logfile.Console("-G defines Grade = (antGrade - %s) * %s [* %s (downhill)]" \
                                                     % (self.GradeShift, self.GradeFactor, self.GradeFactorDH) )
-            if UseGui and self.gui:          logfile.Console("-g")
+            if      self.gui:                logfile.Console("-g")
+            if      self.homeTrainer:        logfile.Console("-e")
             if v or self.args.hrm:           logfile.Console("-H %s" % self.hrm )
+            if      self.rpiLeds:            logfile.Console("-l")
             if      self.manual:             logfile.Console("-m")
             if      self.manualGrade:        logfile.Console("-M")
             if      not self.args.calibrate: logfile.Console("-n")

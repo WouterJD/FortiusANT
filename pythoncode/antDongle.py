@@ -1,7 +1,13 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2020-12-30"
+__version__ = "2021-03-03"
+# 2021-03-03    Message in ...Config() function only given if self.ConfigMsg:
+#               so that it's given only once.
+#               When -D -1 is specified, we don't even look for an ANTdongle
+# 2021-02-22    devAntDongle.read() given variable timeout
+#               devAntDongle.write() sends all messages and then does ONE read-loop
+# 2021-02-19    msgPage16_PowerOnly, msgPage25_TrainerData: CurrentPower must be > 0
 # 2020-12-30    Tacx Genius/Bushido data pages, constants and channel
 #               configuration implemented
 #               Added: msg44_ChannelSearchTimeout
@@ -204,7 +210,6 @@ BHU_Alarm_SpeedTooHigh       = 0x0080
 BHU_Alarm_Undervoltage       = 0x0100
 BHU_Alarm_CommunicationError = 0x8000
 
-
 DeviceNumber_EA     = 57590    # short Slave device-number for ExplorANT
 DeviceNumber_FE     = 57591    #       These are the device-numbers FortiusANT uses and
 DeviceNumber_HRM    = 57592    #       slaves (TrainerRoad, Zwift, ExplorANT) will find.
@@ -213,6 +218,17 @@ DeviceNumber_VHU    = 57594    #
 DeviceNumber_SCS    = 57595    #
 DeviceNumber_PWR    = 57596    #
 DeviceNumber_CTRL   = 57597    #
+def DeviceNumberBase(base):
+    global DeviceNumber_EA,  DeviceNumber_FE,  DeviceNumber_HRM, DeviceNumber_VTX, \
+           DeviceNumber_VHU, DeviceNumber_SCS, DeviceNumber_PWR, DeviceNumber_CTRL
+    DeviceNumber_EA     = base + 0
+    DeviceNumber_FE     = base + 1
+    DeviceNumber_HRM    = base + 2
+    DeviceNumber_VTX    = base + 3
+    DeviceNumber_VHU    = base + 4
+    DeviceNumber_SCS    = base + 5
+    DeviceNumber_PWR    = base + 6
+    DeviceNumber_CTRL   = base + 7
 
 ModelNumber_FE      = 2875     # short antifier-value=0x8385, Tacx Neo=2875
 SerialNumber_FE     = 19590705 # int   1959-7-5
@@ -347,6 +363,7 @@ RfFrequency_2478Mhz     = 0x4e          # used for Tacx i-Vortex Headunit
 #---------------------------------------------------------------------------
 class clsAntDongle():
     devAntDongle        = None           # There is no dongle connected yet
+    ConfigMsg           = True
     OK                  = False
     DeviceID            = None
     Message             = ''
@@ -361,7 +378,11 @@ class clsAntDongle():
     def __init__(self, DeviceID = None):
         self.DeviceID = DeviceID
         self.OK       = True                    # Otherwise we're disabled!!
-        self.OK       = self.__GetDongle()
+        if self.DeviceID == -1:
+            self.OK      = False                   # No ANT dongle wanted
+            self.Message = "No ANT"
+        else:
+            self.OK   = self.__GetDongle()
 
     #-----------------------------------------------------------------------
     # G e t D o n g l e
@@ -512,21 +533,36 @@ class clsAntDongle():
     #           receive     after sending the data, receive all responses
     #           drop        the caller does not process the returned data
     #
+    #           flush       read all available messages
+    #                       This flag is provided True on the first call in
+    #                       a loop, so that write() does not run into a
+    #                       filled ANT-dongle (device driver) because many
+    #                       messages are waiting to be processed.
+    #                       Default = True, which is safe behaviour
+    #
     # function  write all strings to antDongle
     #           read responses from antDongle
     #
     # returns   rtn         the string-array as received from antDongle
     #-----------------------------------------------------------------------
-    def Write(self, messages, receive=True, drop=True):
+    def Write(self, messages, receive=True, drop=True, flush=True):
         rtn = []
         if self.OK:                      # If no dongle ==> no action at all
+            #---------------------------------------------------------------
+            # Read all available messages first, it seems required to be
+            # able to write (if too many messages pending: Write exception,
+            # message lost)
+            #---------------------------------------------------------------
+            if flush:
+                rtn = self.Read(drop)   # Flush -> default timeout = proven!
+
             for message in messages:
                 #-----------------------------------------------------------
                 # Logging
                 #-----------------------------------------------------------
                 DongleDebugMessage("Dongle    send   :", message)
-                if debug.on(debug.Data1):
-                    logfile.Write('devAntDongle.write(0x01,%s)' \
+                if debug.on(debug.Performance):
+                    logfile.Write('devAntDongle.write(0x01,%s) ...' \
                                                     % logfile.HexSpace(message))
                 #-----------------------------------------------------------
                 # Send the message
@@ -539,12 +575,21 @@ class clsAntDongle():
                 except Exception as e:
                     logfile.Console("AntDongle.Write exception (message lost): " + str(e))
 
+                if debug.on(debug.Performance): logfile.Write('... done')
                 #-----------------------------------------------------------
-                # Read all responses
+                # Read all responses (after each write only when flushing!)
                 #-----------------------------------------------------------
-                if receive:
-                    data = self.Read(drop)
+                if receive and flush:
+                    data = self.Read(drop) # Flush -> default timeout = proven!
                     for d in data: rtn.append(d)
+
+            #---------------------------------------------------------------
+            # Read all responses after having sent all messages.
+            # Not required when flushing, to avoid double timeout.
+            #---------------------------------------------------------------
+            if receive and not flush:
+                data = self.Read(drop, 1)       # Shortest possible timeout
+                for d in data: rtn.append(d)
 
         return rtn
 
@@ -579,12 +624,24 @@ class clsAntDongle():
     def ApplicationRestart(self):
         self.DongleReconnected = False
 
-    def __ReadAndRetry(self):
-        failed = False
+    def __ReadAndRetry(self, timeout):
+        failed  = False
+        # ----------------------------------------------------------------------
+        # 2021-02-22 timeout was 20 untill now; but that causes too much delay!
+        #
+        # Zero is not allowed, so take 1 milli-second
+        #       Measurements however show, the delay still is 16 ms.
+        # But with a too short delay, sometimes incomplete buffers are returned
+        #       causing the message "characters skipped"
+        #       
+        # Now we have a default of 20ms, which can be overridden by the caller
+        # tipically in the ANT-loop, a short timeout will be specified.
+        # ----------------------------------------------------------------------
+        if debug.on(debug.Performance): logfile.Write('devAntDongle.__ReadAndRetry(0x81,1000,%s) ...' % timeout)
         try:
-            trv = []                                    # initialize because is processed even after exception
-            trv = self.devAntDongle.read(0x81,1000,20)  # input:   endpoint address, length, timeout
-                                                        # returns: an array of bytes
+            trv = []                                        # initialize because is processed even after exception
+            trv = self.devAntDongle.read(0x81,1000,timeout) # input:  endpoint address, length, timeout
+                                                            # returns: an array of bytes
         # ----------------------------------------------------------------------
         # https://docs.python.org/3/library/exceptions.html
         # ----------------------------------------------------------------------
@@ -618,9 +675,10 @@ class clsAntDongle():
                 self.DongleReconnected = True
                 logfile.Console('ANT Dongle reconnected, application restarts')
 
+        if debug.on(debug.Performance): logfile.Write('... done')
         return trv
 
-    def Read(self, drop):
+    def Read(self, drop, timeout = 20):
         #-------------------------------------------------------------------
         # Read from antDongle untill no more data (timeout), or error
         # Usually, dongle gives one buffer at the time, starting with 0xa4
@@ -630,14 +688,14 @@ class clsAntDongle():
         #-------------------------------------------------------------------
         data = []
         while self.OK:                   # If no dongle ==> no action at all
-            trv = self.__ReadAndRetry()
+            trv = self.__ReadAndRetry(timeout)
             if len(trv) == 0:
                 break
             # --------------------------------------------------------------------------
             # Handle content returned by .read()
             # --------------------------------------------------------------------------
-            if debug.on(debug.Data1): logfile.Write('devAntDongle.read(0x81,1000,20) returns %s ' \
-                                                    % logfile.HexSpaceL(trv))
+            if debug.on(debug.Data1): logfile.Write('devAntDongle.read() returns %s ' \
+                                                    % (logfile.HexSpaceL(trv)))
 
             if len(trv) > 900: logfile.Console("Dongle.Read() too much data from .read()" )
             start  = 0
@@ -735,7 +793,8 @@ class clsAntDongle():
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         if self.OK:
-            logfile.Console ('FortiusANT tries to pair with an ANT+ device' + s)
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT tries to pair with an ANT+ device' + s)
             if debug.on(debug.Data1): logfile.Write ("SlavePair_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_pair, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
@@ -749,7 +808,8 @@ class clsAntDongle():
 
     def Trainer_ChannelConfig(self):
         if self.OK:
-            logfile.Console ('FortiusANT broadcasts data as an ANT+ Controlled Fitness Equipent device (FE-C), id=%s' % DeviceNumber_FE)
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT broadcasts data as an ANT+ Controlled Fitness Equipent device (FE-C), id=%s' % DeviceNumber_FE)
             if debug.on(debug.Data1): logfile.Write ("Trainer_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_FE, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
@@ -765,7 +825,8 @@ class clsAntDongle():
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         if self.OK:
-            logfile.Console ('FortiusANT receives data from an ANT+ Controlled Fitness Equipent device (FE-C)' + s)
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT receives data from an ANT+ Controlled Fitness Equipent device (FE-C)' + s)
             if debug.on(debug.Data1): logfile.Write ("SlaveTrainer_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_FE_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
@@ -780,7 +841,8 @@ class clsAntDongle():
 
     def HRM_ChannelConfig(self):
         if self.OK:
-            logfile.Console ('FortiusANT broadcasts data as an ANT+ Heart Rate Monitor (HRM), id=%s' % DeviceNumber_HRM)
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT broadcasts data as an ANT+ Heart Rate Monitor (HRM), id=%s' % DeviceNumber_HRM)
             if debug.on(debug.Data1): logfile.Write ("HRM_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_HRM, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
@@ -796,7 +858,8 @@ class clsAntDongle():
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         if self.OK:
-            logfile.Console ('FortiusANT receives data from an ANT+ Heart Rate Monitor (HRM display)' + s)
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT receives data from an ANT+ Heart Rate Monitor (HRM display)' + s)
             if debug.on(debug.Data1): logfile.Write ("SlaveHRM_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_HRM_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
@@ -811,7 +874,8 @@ class clsAntDongle():
 
     def PWR_ChannelConfig(self, DeviceNumber):
         if self.OK:
-            logfile.Console ('FortiusANT broadcasts data as an ANT+ Bicycle Power Sensor (PWR), id=%s' % DeviceNumber_PWR)
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT broadcasts data as an ANT+ Bicycle Power Sensor (PWR), id=%s' % DeviceNumber_PWR)
             if debug.on(debug.Data1): logfile.Write ("PWR_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_PWR, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
@@ -825,7 +889,8 @@ class clsAntDongle():
 
     def SCS_ChannelConfig(self, DeviceNumber):
         if self.OK:
-            logfile.Console ('FortiusANT broadcasts data as an ANT+ Speed and Cadence Sensor (SCS), id=%s' % DeviceNumber_SCS)
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT broadcasts data as an ANT+ Speed and Cadence Sensor (SCS), id=%s' % DeviceNumber_SCS)
             if debug.on(debug.Data1): logfile.Write ("SCS_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_SCS, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
@@ -841,7 +906,8 @@ class clsAntDongle():
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         if self.OK:
-            logfile.Console ('FortiusANT receives data from an ANT+ Speed and Cadence Sensor (SCS Display)' + s)
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT receives data from an ANT+ Speed and Cadence Sensor (SCS Display)' + s)
             if debug.on(debug.Data1): logfile.Write ("SlaveSCS_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_SCS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
@@ -859,7 +925,8 @@ class clsAntDongle():
             # For consistency it should have been:
             #                'FortiusANT broadcasts that it accepts commands from an ANT+ Generic Remote Control')
             # because we are the master device and the Remote Control pairs to us
-            logfile.Console ('FortiusANT receives commands from an ANT+ Generic Remote Control')
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT receives commands from an ANT+ Generic Remote Control')
             if debug.on(debug.Data1): logfile.Write ("CTRL_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_CTRL, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
@@ -874,7 +941,8 @@ class clsAntDongle():
 
     def VTX_ChannelConfig(self):                         # Pretend to be a Tacx i-Vortex
         if self.OK:
-            logfile.Console ('FortiusANT broadcasts data as an ANT Tacx i-Vortex (VTX), id=%s' % DeviceNumber_VTX)
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT broadcasts data as an ANT Tacx i-Vortex (VTX), id=%s' % DeviceNumber_VTX)
             if debug.on(debug.Data1): logfile.Write ("VTX_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VTX, ChannelType_BidirectionalTransmit, NetworkNumber=0x01),
@@ -891,7 +959,8 @@ class clsAntDongle():
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         if self.OK:
-            logfile.Console ('FortiusANT receives data from an ANT Tacx i-Vortex (VTX Controller)' + s)
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT receives data from an ANT Tacx i-Vortex (VTX Controller)' + s)
             if debug.on(debug.Data1): logfile.Write ("SlaveVTX_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
@@ -907,8 +976,10 @@ class clsAntDongle():
     def SlaveGNS_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx Genius
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
-        logfile.Console ('FortiusANT receives data from an ANT Tacx Genius (GNS Brake)' + s)
-        if debug.on(debug.Data1): logfile.Write ("SlaveGNS_ChannelConfig()")
+        if self.OK:
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT receives data from an ANT Tacx Genius (GNS Brake)' + s)
+            if debug.on(debug.Data1): logfile.Write ("SlaveGNS_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_GNS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
             msg51_ChannelID             (channel_GNS_s, DeviceNumber, DeviceTypeID_GNS, TransmissionType_IC),
@@ -924,8 +995,10 @@ class clsAntDongle():
     def SlaveBHU_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx Genius
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
-        logfile.Console ('FortiusANT receives data from an ANT Tacx Bushido head unit (BHU Controller)' + s)
-        if debug.on(debug.Data1): logfile.Write ("SlaveBHU_ChannelConfig()")
+        if self.OK:
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT receives data from an ANT Tacx Bushido head unit (BHU Controller)' + s)
+            if debug.on(debug.Data1): logfile.Write ("SlaveBHU_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_GNS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
             msg51_ChannelID             (channel_GNS_s, DeviceNumber, DeviceTypeID_BHU, TransmissionType_IC),
@@ -944,7 +1017,8 @@ class clsAntDongle():
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         if self.OK:
-            logfile.Console ('FortiusANT receives data from an ANT Tacx i-Vortex Headunit (VHU Controller)' + s)
+            if self.ConfigMsg:
+                logfile.Console ('FortiusANT receives data from an ANT Tacx i-Vortex Headunit (VHU Controller)' + s)
             if debug.on(debug.Data1): logfile.Write ("SlaveVHU_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VHU_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
@@ -1350,10 +1424,10 @@ def unmsg64_ChannelResponse(info):
 def msgPage16_PowerOnly (Channel, EventCount, Cadence, AccumulatedPower, CurrentPower):
     DataPageNumber      = 16
 
-    EventCount            = int(min(0xff,   EventCount      ))
-    Cadence               = int(min(0xff,   Cadence         ))
-    AccumulatedPower      = int(min(0xffff, AccumulatedPower))
-    CurrentPower          = int(min(0xffff, CurrentPower    ))
+    EventCount            = int(       min(0xff,   EventCount      ))
+    Cadence               = int(       min(0xff,   Cadence         ))
+    AccumulatedPower      = int(       min(0xffff, AccumulatedPower))
+    CurrentPower          = int(max(0, min(0x0fff, CurrentPower    )))  # 2021-02-19
 
     fChannel              = sc.unsigned_char  # First byte of the ANT+ message content
     fDataPageNumber       = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
@@ -2044,10 +2118,10 @@ def msgUnpage16_GeneralFEdata (info):
 # ------------------------------------------------------------------------------
 def msgPage25_TrainerData(Channel, EventCounter, Cadence, AccumulatedPower, CurrentPower):
     DataPageNumber      = 25
-    EventCounter        = int(min(  0xff, EventCounter      ))
-    Cadence             = int(min(  0xff, Cadence           ))
-    AccumulatedPower    = int(min(0xffff, AccumulatedPower  ))
-    CurrentPower        = int(min(0x0fff, CurrentPower      ))
+    EventCounter        = int(       min(  0xff, EventCounter      ))
+    Cadence             = int(       min(  0xff, Cadence           ))
+    AccumulatedPower    = int(       min(0xffff, AccumulatedPower  ))
+    CurrentPower        = int(max(0, min(0x0fff, CurrentPower      )))  # 2021-02-19
     Flags               = 0x30          # Hmmm.... leave as is but do not understand the value
 
     fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
