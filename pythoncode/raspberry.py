@@ -1,12 +1,17 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2021-03-01"
-# 2021-03-01  Five leds defined; blinking when events occur.
+__version__ = "2021-03-08"
+# 2021-03-08  GPIO3 used for the button, so that can be used for poweron
+#                   Thanks As provided by @decodais, #
+#             5 blinks before shutdown, is enough
+#             before shutdown all leds on()
+#
+# # 2021-03-01  Five leds defined; blinking when events occur.
 #             Now activity on the interfaces is visible.
 #             Pin 29...39 are selected because it's 6 pins in a row for all leds
 #
-#             Button defined on pins 30/32 to gracefully shutdown
+#             Button defined on GPIO 3 (since Mar 8th) to gracefully shutdown
 #
 # 2021-01-29  As provided by @decodais.
 #             If the -L is set as commandline parameter it enables the
@@ -17,6 +22,7 @@ import subprocess
 import sys
 import time
 
+MySelf = None
 try:
                     # this module is a preinstalled module on Raspbian
     import gpiozero # pylint: disable=import-error
@@ -68,6 +74,12 @@ def IsShutdownRequested():
 def ShutdownIfRequested():
     if IsShutdownRequested():
         print("Powerdown raspberry now")
+        if MySelf != None: 
+            MySelf.LedTacx     .on()
+            MySelf.LedShutdown .on()
+            MySelf.LedCadence  .on()
+            MySelf.LedBLE      .on()
+            MySelf.LedANT      .on()
         subprocess.call("sudo shutdown -P now", shell=True)
 
 # ==============================================================================
@@ -101,10 +113,12 @@ def ShutdownIfRequested():
 # ==============================================================================
 class clsRaspberry:
     def __init__(self, clv):
+        global MySelf
         # ----------------------------------------------------------------------
         # Activate leds, if we are on Raspberry
         # ----------------------------------------------------------------------
         self.OK = UseLeds
+        MySelf = self
 
         # ----------------------------------------------------------------------
         # Activate leds, if -L defined
@@ -126,7 +140,7 @@ class clsRaspberry:
             self.LedBLE      = gpiozero.LED(19)         # Blue
             self.LedANT      = gpiozero.LED(26)         # Green
 
-            self.BtnShutdown = gpiozero.Button(12)
+            self.BtnShutdown = gpiozero.Button(3)
 
         # ----------------------------------------------------------------------
         # Show leds for power-up
@@ -214,7 +228,7 @@ class clsRaspberry:
     # Returns   True when button pressed firmly
     # --------------------------------------------------------------------------
     def CheckShutdown(self):
-        repeat = 20      # timeout = n * .25 seconds
+        repeat = 5       # timeout = n * .25 seconds        # 5 blinks is enough
         rtn    = self.OK # Assume button will remain pressed
                          # If we don't use leds/buttons ==> False
 

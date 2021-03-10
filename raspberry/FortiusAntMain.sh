@@ -10,7 +10,9 @@ echo Stop standard Bluetooth Service
 sudo service bluetooth stop
 echo Enable Bluetooth for FortiusAnt
 sudo hciconfig hci0 up
-echo $?
+if [ $? != 0 ] ; then
+	echo "hciconfig failed, press enter to continue"; read x
+fi
 
 #    Start FortiusANT
 python3 ../pythoncode/FortiusAnt.py $@

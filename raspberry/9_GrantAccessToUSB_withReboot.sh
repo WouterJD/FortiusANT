@@ -7,9 +7,9 @@ EOF
 sudo cp 10-usbaccess.rules /etc/udev/rules.d
 rm 10-usbaccess.rules
 
-# Create group usbtacx
+echo Create group usbtacx
 sudo addgroup usbtacx
-# add user pi to this group
+echo add user pi to this group
 sudo adduser pi usbtacx
 
 echo pi user is granted access to usb after reboot, press Enter to continue
