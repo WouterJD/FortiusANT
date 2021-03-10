@@ -7,9 +7,6 @@ GDRIVE=https://drive.google.com/file/d/1Uk1TSc6iLArx14QH8q85c9ytrw0IKLIn/view?us
 cd ~/Downloads
 
 # Download pre-build wxPython package to home folder.
-# wget $SRC/$PYTHON
-#pip install gdown
-#/home/pi/.local/bin/gdown --id 1Uk1TSc6iLArx14QH8q85c9ytrw0IKLIn --output $wxPYTHON
 sudo pip install gdown
 gdown --id 1Uk1TSc6iLArx14QH8q85c9ytrw0IKLIn --output $wxPYTHON
 
