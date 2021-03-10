@@ -232,7 +232,7 @@ class CommandLineVariables(object):
             print('     %s -a' % pgm)
             print(' ')
             print('For more info, please refer to the wiki on github.')
-            print('Succes!')
+            print('Success!')
             self.args.autostart              = True
             self.args.gui                    = UseGui    # Show gui
             self.args.hrm                    = 0         # Pair with HRM
