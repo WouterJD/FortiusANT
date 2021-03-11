@@ -6,7 +6,14 @@ if [ -d "$HOME/FortiusANT" ] ; then
 else
 	git clone https://github.com/WouterJD/FortiusANT.git
 fi
-pip3 install -r ~/FortiusANT/pythoncode/requirements.txt
+
+if [ `uname -m` == 'armv6l' ]; then
+	# Requirements for Raspberry Pi0 will be installed
+    pip3 install -r ~/FortiusANT/pythoncode/requirementsNoGUI.txt
+else
+	# Requirements will be installed (includes wxPython)
+    pip3 install -r ~/FortiusANT/pythoncode/requirements.txt
+fi
 
 echo FortiusAnt dependencies installed, press Enter to continue
 read reply

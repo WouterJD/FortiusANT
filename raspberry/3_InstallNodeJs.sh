@@ -2,7 +2,9 @@
 
 echo For more information: refer the installation instruction on https://www.makersupplies.sg/blogs/tutorials/how-to-install-node-js-and-npm-on-the-raspberry-pi.
 
-NODEJS=node-v14.15.3-linux-armv7l
+# Raspberry Pi0: armv6l
+#        others: armv7l
+NODEJS=node-v14.15.3-linux-`uname -m`
 
 # Go to Downloads
 cd ~/Downloads
