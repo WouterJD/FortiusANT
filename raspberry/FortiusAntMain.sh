@@ -11,7 +11,9 @@ sudo service bluetooth stop
 echo Enable Bluetooth for FortiusAnt
 sudo hciconfig hci0 up
 if [ $? != 0 ] ; then
-	echo "hciconfig failed, press enter to continue"; read x
+    Red='\033[0;31m'
+    NC='\033[0m'
+    printf "${Red} hciconfig failed, press enter to continue: ${NC}"; read x
 fi
 
 #    Start FortiusANT

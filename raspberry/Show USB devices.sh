@@ -41,6 +41,7 @@ else
     lsusb | grep ":$ANT"
 fi
 
-# ----------------------------------------------------------
-echo Done, press Enter to continue
+# ----------------------------------------------------- Done
+Raspberry='\033[0;35m'
+printf "${Raspberry} Done, press Enter to continue: "
 read x

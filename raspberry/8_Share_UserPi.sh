@@ -1,14 +1,20 @@
 #!/bin/bash
 # https://raspberrypihq.com/how-to-share-a-folder-with-a-windows-computer-from-a-raspberry-pi/
+
+# ----------------------------------------------------------
+# Install samba
+# ----------------------------------------------------------
 sudo apt-get install samba samba-common-bin
 
+# ----------------------------------------------------------
+# Modify smb.conf:
+#    workgroup = WORKGROUP
+#    wins support = yes
+# add [PiShare] section
+# ----------------------------------------------------------
 # grep: 0 = line is selected, 1 = no lines, 2 = error
 grep -c 'PiShare' /etc/samba/smb.conf
 if [ $? == 1 ] ; then
-    # workgroup = WORKGROUP
-    # wins support = yes
-    # sudo nano /etc/samba/smb.conf (if edited manually)
-
     cat /etc/samba/smb.conf | sed 's/workgroup = WORKGROUP/workgroup = WORKGROUP\n    wins support = yes/' >./smb.conf
     cat << EOF >> ./smb.conf
 [PiShare]
@@ -30,5 +36,7 @@ else
     echo PiShare already created
 fi
 
-echo pi home folder is shared as [PiShare], press Enter to continue
+# ----------------------------------------------------- Done
+Raspberry='\033[0;35m'
+printf "${Raspberry} pi home folder is shared as [PiShare], press Enter to continue: "
 read reply

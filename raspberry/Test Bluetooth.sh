@@ -7,13 +7,17 @@ sudo service bluetooth status
 echo Enable Bluetooth for FortiusAnt
 sudo hciconfig hci0 up
 if [ $? != 0 ] ; then
-	echo "hciconfig failed"
+    Red='\033[0;31m'
+    NC='\033[0m'
+    printf "${Red} hciconfig failed, press enter to continue: ${NC}"; read x
 else
-	echo "hciconfig ok"
+    echo "hciconfig ok"
 fi
 
 echo Start standard Bluetooth Service
 sudo service bluetooth start
 
-echo Done, press Enter to continue
+# ----------------------------------------------------- Done
+Raspberry='\033[0;35m'
+printf "${Raspberry} Done, press Enter to continue: "
 read x
