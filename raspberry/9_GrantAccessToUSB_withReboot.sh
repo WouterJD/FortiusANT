@@ -41,35 +41,37 @@ fi
 # ----------------------------------------------------------
 # First create files, then cp to target
 # ----------------------------------------------------------
+USBCONF=FortiusAntUsb2.conf
 if [ ANT != NoAntFound ]; then
-    cat << EOF > ant-usb2.conf
-# Options for ANTdonle $ANTTYPE $VENDOR:$ANT
+    cat << EOF > $USBCONF
+# Options for ANTdongle $ANTTYPE $VENDOR:$ANT
 Options usbserial vendor=0x$VENDOR product=0x$ANT
 EOF
-    sudo cp ant-usb2.conf /etc/modprobe.d/
-    rm ant-usb2.conf
+    sudo cp $USBCONF /etc/modprobe.d/
+    rm $USBCONF
 fi
 
-cat << EOF > 10-usbaccess.rules
+USBRULES=FortiusAntUsbAccess.rules
+cat << EOF > $USBRULES
 # Allow users in group usbtacx to access Tacx USB headunit
 SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", MODE="0664", GROUP="usbtacx"
 EOF
 
 if [ ANT != NoAntFound ]; then
-    cat << EOF >> 10-usbaccess.rules
+    cat << EOF >> $USBRULES
 # Allow users in group usbtacx to access ANTdongle
 SUBSYSTEM==”tty”, ACTION==”add”, ATTRS{idProduct}==”$ANT”, ATTRS{idVendor}==”$VENDOR”, MODE=”0666”, GROUP=”usbtacx”
 EOF
 fi
 
-sudo cp 10-usbaccess.rules /etc/udev/rules.d/
-rm 10-usbaccess.rules
+sudo cp $USBRULES /etc/udev/rules.d/
+rm $USBRULES
 
 # ----------------------------------------------------------
 # Verify
 # ----------------------------------------------------------
-#nano /etc/modprobe.d/ant-usb2.conf
-#nano /etc/udev/rules.d/10-usbaccess.rules
+#nano /etc/modprobe.d/$USBCONF
+#nano /etc/udev/rules.d/$USBRULES
 
 # ----------------------------------------------------------
 # Create group and add user
