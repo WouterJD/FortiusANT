@@ -41,6 +41,9 @@ fi
 # ----------------------------------------------------------
 # First create files, then cp to target
 # ----------------------------------------------------------
+# Assign the Linux USB serial driver to the ANT stick by
+# noting the driver with the id's:
+# ----------------------------------------------------------
 USBCONF=FortiusAntUsb2.conf
 if [ ANT != NoAntFound ]; then
     cat << EOF > $USBCONF
@@ -51,6 +54,17 @@ EOF
     rm $USBCONF
 fi
 
+# ----------------------------------------------------------
+# Furthermore we assign the device file to our user so that
+# he can read and write to it. In my example the user is pi.
+# Please also adjust the following example with your usb ids
+# (vendor and product).
+# It is also possible to assign Groups.
+# See udev rules documentation or search the web for more examples.
+# More general udev rules can be found here:
+# https://github.com/WouterJD/FortiusANT/issues/262#issuecomment-790384254
+# https://stackoverflow.com/questions/3738173/why-does-pyusb-libusb-require-root-sudo-permissions-on-linux
+# ----------------------------------------------------------
 USBRULES=FortiusAntUsbAccess.rules
 cat << EOF > $USBRULES
 # Allow users in group usbtacx to access Tacx USB headunit
