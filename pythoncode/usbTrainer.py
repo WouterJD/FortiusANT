@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-02-11"
+__version__ = "2021-03-16"
+# 2021-03-16    @Meanhat's odd T1902 supported: 0547:2131
 # 2021-02-11    added: -e homeTrainer --> MultiplyPower()
 #               removed: self.DynamicAdjust code (which was experimental code)
 # 2021-01-12    @TotalReverse comment added on 128866
@@ -154,6 +155,7 @@ import fxload
 # Constants
 #-------------------------------------------------------------------------------
 hu1902          = 0x1902    # Old "solid green" iMagic headunit (with or without firmware)
+hu1902_nfw      = 0x2131    # @Meanhats headunit, without fw
 hu1904          = 0x1904    # New "white green" iMagic headunit (firmware inside)
 hu1932          = 0x1932    # New "white blue" Fortius headunit (firmware inside)
 hu1942          = 0x1942    # Old "solid blue" Fortius (firmware inside)
@@ -361,13 +363,18 @@ class clsTacxTrainer():
         #-----------------------------------------------------------------------
         # Find supported trainer (actually we talk to a headunit)
         #-----------------------------------------------------------------------
-        for hu in [hu1902, hu1904, hu1932, hu1942, hue6be_nfw]:
+        for hu in [hu1902, hu1902_nfw, hu1904, hu1932, hu1942, hue6be_nfw]:
             try:
                 if debug.on(debug.Function):
                     logfile.Write ("GetTrainer - Check for trainer %s" % (hex(hu)))
-                dev = usb.core.find(idVendor=idVendor_Tacx, idProduct=hu)      # find trainer USB device
+                if hu == hu1902_nfw:
+                    vendor = 0x0547             # Unknown special vendor
+                else:
+                    vendor = idVendor_Tacx      # For all others
+
+                dev = usb.core.find(idVendor=vendor, idProduct=hu)      # find trainer USB device
                 if dev:
-                    msg = "Connected to Tacx Trainer T" + hex(hu)[2:]          # remove 0x from result
+                    msg = "Connected to Tacx Trainer T" + hex(hu)[2:]   # remove 0x from result
                     if debug.on(debug.Data2 | debug.Function):
                         logfile.Print (dev)
                     break
@@ -392,7 +399,7 @@ class clsTacxTrainer():
             #-------------------------------------------------------------------
             # iMagic             As defined together with fritz-hh and jegorvin)
             #-------------------------------------------------------------------
-            if hu == hu1902:
+            if hu in (hu1902, hu1902_nfw):
                 LegacyProtocol = True
                 logfile.Console ("Initialising head unit T1902 (iMagic), please wait 5 seconds")
                 logfile.Console (imagic_fw)   # Hint what may be wrong if absent
@@ -404,6 +411,7 @@ class clsTacxTrainer():
                 else:
                     time.sleep(5)
                     msg = "T1902 head unit initialised (iMagic)"
+                    hu = hu1902 # so we do not need to think of hu1902_nfw elsewhere
 
             #-------------------------------------------------------------------
             # unintialised Fortius (as provided by antifier original code)
