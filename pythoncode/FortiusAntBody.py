@@ -688,8 +688,8 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     # Open channels:
     #    one to transmit the trainer info (Fitness Equipment)
     #    one to transmit heartrate info   (HRM monitor)
-    #    one to interface with Tacx i-Vortex (VTX)
-    #    one to interface with Tacx i-Vortex headunit (VHU)
+    #    one to interface with Tacx Vortex (VTX)
+    #    one to interface with Tacx Vortex headunit (VHU)
     #
     # And if you want a dedicated Speed Cadence Sensor, implement like this...
     #---------------------------------------------------------------------------

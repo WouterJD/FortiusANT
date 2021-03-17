@@ -10,7 +10,7 @@ You might also run TrainerRoad or Zwift on the same computer and then two ANT+ d
 ## Supported Tacx trainers
 USB: Tacx Flow, Fortius, i-Flow, i-Magic with T1902, T1904, T1932, T1942 head units
 
-ANT: Tacx i-Vortex, Genius, Bushido (with T1982 head unit)
+ANT: Tacx Vortex, Genius, Bushido (with T1982 head unit)
 
 Bushido support is still *experimental* at this time (please consider providing feedback in https://github.com/WouterJD/FortiusANT/issues/117).
 

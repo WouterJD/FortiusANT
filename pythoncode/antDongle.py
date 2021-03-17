@@ -8,6 +8,8 @@ __version__ = "2021-03-03"
 # 2021-02-22    devAntDongle.read() given variable timeout
 #               devAntDongle.write() sends all messages and then does ONE read-loop
 # 2021-02-19    msgPage16_PowerOnly, msgPage25_TrainerData: CurrentPower must be > 0
+# 2021-02-11    Vortex HU serial/mode page added
+#               Vortex brake search time-out disabled
 # 2020-12-30    Tacx Genius/Bushido data pages, constants and channel
 #               configuration implemented
 #               Added: msg44_ChannelSearchTimeout
@@ -125,10 +127,10 @@ channel_PWR         = 2           # ANT+ Channel for Power Profile
 channel_SCS         = 3           # ANT+ Channel for Speed Cadence Sensor
 channel_SCS_s       = channel_SCS # slave=display or Cycle Training Program
 
-channel_VTX         = 4           # ANT+ Channel for Tacx i-Vortex
+channel_VTX         = 4           # ANT+ Channel for Tacx Vortex
 channel_VTX_s       = channel_VTX # slave=Cycle Training Program
 
-channel_VHU_s       = 5           # ANT+ Channel for Tacx i-Vortex Headunit
+channel_VHU_s       = 5           # ANT+ Channel for Tacx Vortex Headunit
                                   # slave=Cycle Training Program
 channel_GNS_s       = channel_VHU_s # ANT+ Channel for Tacx Genius
 
@@ -154,6 +156,13 @@ VHU_Button_Up    = 0x2
 VHU_Button_Enter = 0x3
 VHU_Button_Down  = 0x4
 VHU_Button_Right = 0x5
+
+#---------------------------------------------------------------------------
+# Vortex alarm bits
+#---------------------------------------------------------------------------
+VTX_Alarm_WrongMainsVoltage     = 0x0001
+VTX_Alarm_TemperatureHigh       = 0x0002
+VTX_Alarm_NoBrakeCoils          = 0x0004
 
 #---------------------------------------------------------------------------
 # Tacx Genius brake modes
@@ -336,7 +345,7 @@ DeviceTypeID_HRM        = DeviceTypeID_heart_rate
 DeviceTypeID_PWR        = DeviceTypeID_bike_power
 DeviceTypeID_SCS        = DeviceTypeID_bike_speed_cadence
 DeviceTypeID_CTRL       = DeviceTypeID_control
-DeviceTypeID_VTX        = 61            # Tacx i-Vortex
+DeviceTypeID_VTX        = 61            # Tacx Vortex
 DeviceTypeID_GNS        = 83            # Tacx Genius
 DeviceTypeID_BHU        = 82            # Tacx Bushido head unit
 # 0x3d  according TotalReverse
@@ -349,8 +358,8 @@ TransmissionType_IC_GDP = 0x05          #           0x01 = Independant Channel
 TransmitPower_0dBm      = 0x03          # 9.4.3     Output Power Level Settings
 RfFrequency_2457Mhz     =   57          # 9.5.2.6   Channel RF Frequency
 RfFrequency_2460Mhz     =   60          # used for Tacx Genius/Bushido
-RfFrequency_2466Mhz     =   66          # used for Tacx i-Vortex only
-RfFrequency_2478Mhz     = 0x4e          # used for Tacx i-Vortex Headunit
+RfFrequency_2466Mhz     =   66          # used for Tacx Vortex only
+RfFrequency_2478Mhz     = 0x4e          # used for Tacx Vortex Headunit
 #---------------------------------------------------------------------------
 # c l s A n t D o n g l e
 #---------------------------------------------------------------------------
@@ -939,10 +948,10 @@ class clsAntDongle():
         ]
         self.Write(messages)
 
-    def VTX_ChannelConfig(self):                         # Pretend to be a Tacx i-Vortex
+    def VTX_ChannelConfig(self):                         # Pretend to be a Tacx Vortex
         if self.OK:
             if self.ConfigMsg:
-                logfile.Console ('FortiusANT broadcasts data as an ANT Tacx i-Vortex (VTX), id=%s' % DeviceNumber_VTX)
+                logfile.Console ('FortiusANT broadcasts data as an ANT Tacx Vortex (VTX), id=%s' % DeviceNumber_VTX)
             if debug.on(debug.Data1): logfile.Write ("VTX_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VTX, ChannelType_BidirectionalTransmit, NetworkNumber=0x01),
@@ -955,18 +964,19 @@ class clsAntDongle():
         ]
         self.Write(messages)
 
-    def SlaveVTX_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex
+    def SlaveVTX_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx Vortex
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         if self.OK:
             if self.ConfigMsg:
-                logfile.Console ('FortiusANT receives data from an ANT Tacx i-Vortex (VTX Controller)' + s)
+                logfile.Console ('FortiusANT receives data from an ANT Tacx Vortex (VTX Controller)' + s)
             if debug.on(debug.Data1): logfile.Write ("SlaveVTX_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VTX_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
             msg51_ChannelID             (channel_VTX_s, DeviceNumber, DeviceTypeID_VTX, TransmissionType_IC),
             msg45_ChannelRfFrequency    (channel_VTX_s, RfFrequency_2466Mhz),
             msg43_ChannelPeriod         (channel_VTX_s, ChannelPeriod=0x2000),
+            msg44_ChannelSearchTimeout  (channel_VTX_s, 255),
             msg60_ChannelTransmitPower  (channel_VTX_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_VTX_s),
             msg4D_RequestMessage        (channel_VTX_s, msgID_ChannelID)
@@ -1011,14 +1021,14 @@ class clsAntDongle():
         ]
         self.Write(messages)
 
-    def SlaveVHU_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx i-Vortex Headunit
+    def SlaveVHU_ChannelConfig(self, DeviceNumber):     # Listen to a Tacx Vortex Headunit
                                                         # See comment above msgPage000_TacxVortexHU_StayAlive
         
         if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
         else:                s = ", any device"
         if self.OK:
             if self.ConfigMsg:
-                logfile.Console ('FortiusANT receives data from an ANT Tacx i-Vortex Headunit (VHU Controller)' + s)
+                logfile.Console ('FortiusANT receives data from an ANT Tacx Vortex Headunit (VHU Controller)' + s)
             if debug.on(debug.Data1): logfile.Write ("SlaveVHU_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_VHU_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
@@ -1876,6 +1886,31 @@ def msgUnpage221_TacxVortexHU_ButtonPressed (info):
     tuple = struct.unpack (format, info)
 
     return tuple[nButton]
+
+# -------------------------------------------------------------------------------------
+# P a g e 1 7 3  ( 0 x 0 1 )  T a c x V o r t e x S e r i a l M o d e
+# -------------------------------------------------------------------------------------
+def msgUnpage173_01_TacxVortexHU_SerialMode (info):
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fSubPageNumber      = sc.unsigned_char  # == 0x01
+
+    fMode               = sc.unsigned_char  # head-unit mode
+    nMode               = 3
+    fYear               = sc.unsigned_char  # production year
+    nYear               = 4
+    fDeviceType         = sc.unsigned_char  # device type id
+    nDeviceType         = 5
+    fDeviceNumber       = '3' + sc.char_array  # device number
+    nDeviceNumber       = 6
+
+    format = sc.big_endian + fChannel + fDataPageNumber + fSubPageNumber + \
+             fMode + fYear + fDeviceType + fDeviceNumber
+    tuple = struct.unpack(format, info)
+
+    deviceNumber = int.from_bytes(tuple[nDeviceNumber], byteorder='big')
+
+    return tuple[nMode], tuple[nYear], tuple[nDeviceType], deviceNumber
 
 # ------------------------------------------------------------------------------
 # T a c x  G e n i u s  p a g e s
