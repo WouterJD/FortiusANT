@@ -1,16 +1,20 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-07"
+__version__ = "2021-02-21"
+# 2021-02-21    .Show replaced by .ShowRadarGraph (now can be tested again)
+#               added: Angle()
+#               ToDo: show the rotating pedal.
 # 2020-05-07    pylint error free
 # 2020-05-01    First version
 #-------------------------------------------------------------------------------
 
 # https://github.com/wxWidgets/wxPython-Classic/blob/master/samples/wxPIA_book/Chapter-12/radargraph.py
 
-import wx
 import math
 import random
+import time
+import wx
 import logfile
 
 # ------------------------------------------------------------------------------
@@ -42,43 +46,36 @@ class clsRadarGraph():
         self.cy         = y + int( wh / 2 )
         self.radius100  = self.wh / 2 / 1.1 # 10% space around the 100% circle
 
+        self.StartTime  = 0                 # Time at PedelEcho
+        self.Cadence    = 0                 # Last received Cadence
+
     # --------------------------------------------------------------------------
     # P e d a l S t r o k e A n a l y s i s
     # S h o w R a d a r G r a p h
     # --------------------------------------------------------------------------
     # input:        User interface values
     #               info = list of tuples(Time,  Power)
-    #               data = list of tuples(Angle, Power)
     #
     # Description:  Show the Pedal Stroke Analysis in the RadarGraph
-    #               When the right pedal is to the front (0 degrees) then the
-    #               pedalecho is given (left pedal is back). "Adjust" is for
-    #               possible improvement if ever needed.
     #
-    # Output:       None
+    # Output:       data = list of tuples(Angle, Power)
     # --------------------------------------------------------------------------
     def PedalStrokeAnalysis(self, info, Cadence):
-        Adjust = 0
-        StartTime = info[0][0]                  # First element = at pedelecho
-        data      = []
+        self.Cadence    = Cadence
+        self.StartTime  = info[0][0]            # First element = at pedelecho
+        data            = []
+        logfile.Write('PedalStrokeAnalysis - Cadence=%3s info=%3s StartTime=%s' % \
+                        (self.Cadence, len(info), self.StartTime))
         for i in info:
-            Timestamp = i[0]                    # Time of the measurement
-            Delta     = (Timestamp - StartTime) # Elapsed time in seconds
-            dps       = Cadence / 60 * 360      # Cadence = Rotations/minute
-                                                # dps = Degrees/second
+            Angle = self.Angle(i[0])
+            if Angle == -1: break
 
-            Angle     = int( Delta * dps )      # Angle since PedalEcho
-            Angle    += Adjust
-            if Angle >= 360:
-                Angle -= 360
+            Power = i[1]
 
-            Power     = int( i[1] )
             d = (Angle, Power)
-            # s = ""
-            # logfile.Write('Angle=%3s power=%5s Time=%s' % (Angle, Power, i[0]))
+            logfile.Write('Angle=%3s power=%5s Time=%s' % (Angle, Power, i[0]))
             data.append(d)
         self.ShowRadarGraph(data)
-        pass
 
     def ShowRadarGraph(self, data):
         # logfile.Console('ShowRadarGraph')
@@ -103,7 +100,37 @@ class clsRadarGraph():
         # Force OnPaint()
         # ----------------------------------------------------------------------
         self.parent.Refresh()
-    
+
+    # --------------------------------------------------------------------------
+    # A n g l e
+    # --------------------------------------------------------------------------
+    # input:        TimeStamp
+    #               self.StartTime
+    #
+    # Description:  Calculate angle, compared to PedalEcho position
+    #               When the right pedal is to the front (0 degrees) then the
+    #               pedalecho is given (left pedal is back). 
+    #               "Adjust" is for possible improvement if ever needed.
+    #
+    # Return:       0 <= Angle < 360
+    #               -1 means: ignore this
+    # --------------------------------------------------------------------------
+    def Angle(self, Timestamp):
+        rtn    = -1
+        Adjust = 0                              # Adjust position of PedalEcho magnet
+        Delta  = (Timestamp - self.StartTime)   # Elapsed time in seconds
+        dps    = self.Cadence / 60 * 360        # Cadence = Rotations/minute
+                                                # dps = Degrees/second
+
+        rtn    = int( Delta * dps )             # Angle since PedalEcho
+        if rtn >= 360:                          # Since called on PedalEcho
+            rtn = -1                            # Only one circle expected
+        else:
+            rtn += Adjust
+            if rtn >= 360: rtn -= 360
+
+        return rtn
+
     def PolarToCartesian(self, angle, radius, cx, cy):
         x = int(radius * math.cos(math.radians(angle)))
         y = int(radius * math.sin(math.radians(angle)))
@@ -151,7 +178,35 @@ class clsRadarGraph():
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
         dc.SetPen(wx.Pen("red", 3))            # pylint: disable=maybe-no-member
         dc.DrawPolygon(self.polypoints)
-        
+
+        # ----------------------------------------------------------------------
+        # Draw the location of the right pedal
+        # I admit: I do not know how to get a moving object but not make the
+        #          screen flicker. So left for future improvement.
+        # ----------------------------------------------------------------------
+        Angle = int( self.Angle( time.time() ) )            # Where is the pedal now?
+        if False and Angle >= 0:
+            dc.SetPen(wx.Pen("black", 1))                   # pylint: disable=maybe-no-member
+            if -2 < Angle < 2:
+                dc.SetBrush(wx.Brush(wx.Colour(255,0,0)))   # pylint: disable=maybe-no-member
+            else:
+                dc.SetBrush(wx.Brush(wx.Colour(0,0,255)))   # pylint: disable=maybe-no-member
+
+            if Angle in (90,270):
+                x = 0
+                y = self.radius100
+            elif Angle in (0,180):
+                x = self.radius100
+                y = 0
+            else:
+                x = self.radius100 / math.cos(math.radians(Angle))
+                y = self.radius100 / math.sin(math.radians(Angle))
+
+            x = int(self.cx + x)
+            y = int(self.cy + y)
+            print('pedal circle Angle=%3s x=%3s y=%3s' % (Angle, x, y))
+            dc.DrawCircle(x, y, 5)
+
 # ------------------------------------------------------------------------------
 # Demo- and testcode
 # ------------------------------------------------------------------------------
@@ -171,7 +226,7 @@ if __name__ == "__main__":
             # Fill list and show it 
             for i in range(0,360,int(self.step)):
                 self.power.append((i, random.randint(75, 125)))
-            self.RadarGraph.Show(self.power)    # pylint: disable=maybe-no-member
+            self.RadarGraph.ShowRadarGraph(self.power)
 
             # ------------------------------------------------------------------
             # Get the paint event to draw the RadarGraph
@@ -183,13 +238,17 @@ if __name__ == "__main__":
             # ------------------------------------------------------------------
             self.Bind(wx.EVT_TIMER, self.OnTimeout)
             self.timer = wx.Timer(self)
-            self.timer.Start(500)
-
+            self.timer.Start(50)
+            self.CountDown = 0
 
         def OnTimeout(self, evt):
-            for i, p in enumerate(self.power):
-                self.power[i] = (p[0], p[1] + random.uniform(-15, 15))
-            self.RadarGraph.Show(self.power)          # pylint: disable=maybe-no-member
+            if self.CountDown == 0:
+                for i, p in enumerate(self.power):
+                    self.power[i] = (p[0], p[1] + random.uniform(-15, 15))
+                self.RadarGraph.ShowRadarGraph(self.power)
+                self.CountDown = 10
+            else:
+                self.CountDown -= 1
             self.Refresh()
             
         def OnPaint(self, event):

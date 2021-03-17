@@ -1,13 +1,15 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-02-01"
-# 2020-02-03    Test values updated in callTacx2Dongle(self)
+__version__ = "2021-03-02"
+# 2021-03-02    Buttons enlarged for Raspberry rendering
+# 2021-02-22    Button correction removed from timer
+# 2021-02-03    Test values updated in callTacx2Dongle(self)
 #               When no heartrate shown, cassette/cranckset
-# 2020-01-28    During calibration, the Cadence speedometer will display 
+# 2021-01-28    During calibration, the Cadence speedometer will display 
 #               "Calibration countdown"
 #               Help and Sponsor button added (#189)
-# 2020-01-25    Random cranckset was 0...2; should be 0..1
+# 2021-01-25    Random cranckset was 0...2; should be 0..1
 #
 #               SetValues(), SetMessages() and PedalStrokeAnalysis() made
 #               thread safe, using wx.CallAfter(). See issue #216.
@@ -30,8 +32,8 @@ __version__ = "2021-02-01"
 #               Little test: there seems to be no difference between StaticText and
 #                            TextCtrl() from screen-stability point of view
 #
-# 2020-01-18    When Setvalues() is called with zeroes, default transmission
-# 2020-01-16    Value of cassette was displayed incorrectly
+# 2021-01-18    When Setvalues() is called with zeroes, default transmission
+# 2021-01-16    Value of cassette was displayed incorrectly
 # 2021-01-08    Buttons spaced and Panel used for TAB-handling
 #               Drawing done on the panel and speedometers 'disable focus'
 #               #120 cranckset added for virtual front/read shifting
@@ -304,7 +306,7 @@ class frmFortiusAntGui(wx.Frame):
         # x [button] x [speed] x [revs] x [power] x
         #
         ButtonX = Margin
-        ButtonW = 80
+        ButtonW = 85           # 2021-03-02 changed from 80 --> 85 for Raspberry
 
         SpeedWH     = int((BitmapW - ButtonW - 5 * Margin) / 3) # width/height equal (square)
         RevsWH      = SpeedWH
@@ -1204,12 +1206,6 @@ class frmFortiusAntGui(wx.Frame):
     # --------------------------------------------------------------------------
     def OnTimer(self, event):
         if self.OnTimerEnabled:
-            # If we are not running and STOP has focus, correct it!
-            # This is caused by setting focus from the thread, for which I did
-            #   not find a proper solution
-            if not self.RunningSwitch and self.btnStop.HasFocus():
-                self.btnStart.SetFocus()
-
             self.callIdleFunction()
 
     # --------------------------------------------------------------------------

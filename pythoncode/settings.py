@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-19"
+__version__ = "2021-03-02"
+# 2021-03-02    added: -l Raspberry status Leds
+# 2021-02-11    added: -e homeTrainer
+# 2021-02-21    Return load result from ReadJsonFile
 # 2021-01-19    PowerFactor limit changed to 0.5 ... 1.5 (50 ... 150)
 # 2021-01-18    help texts defined as 'constants' to be used for commandline.
 #               texts in Json file different from variable name
@@ -40,6 +43,8 @@ json_autostart          = 'autostart'
 #json_CtrlCommand       = 'CtrlCommand'
 json_debug              = 'debug'
 json_gui                = 'gui'
+json_leds               = 'leds'
+json_homeTrainer        = 'home trainer'      # User function, although technically like simulation
 json_hrm                = 'hrm'
 #json_scs               = 'scs'
 json_exportTCX          = 'export TCX-file'
@@ -108,12 +113,15 @@ def JsonFileExists():
 #               
 # Output:       args, data
 #
-# Returns:      None
+# Returns:      loaded successfully (bool)
 # ------------------------------------------------------------------------------
 def ReadJsonFile (args):
     global data
     if debug.on(debug.Function):
         logfile.Write ("ReadJsonFile () ...")
+
+    jsonLoaded = False
+
     # --------------------------------------------------------------------------
     # Open json file
     # --------------------------------------------------------------------------
@@ -157,6 +165,8 @@ def ReadJsonFile (args):
                         if   q == json_autostart:           args.autostart            = w[q]
                         elif q == json_debug:               args.debug                = w[q]
                         elif q == json_gui:                 args.gui                  = w[q]
+                        elif q == json_leds:                args.leds                 = w[q]
+                        elif q == json_homeTrainer:         args.homeTrainer          = w[q]
                         elif q == json_hrm:                 args.hrm                  = w[q]
                         elif q == json_exportTCX:           args.exportTCX            = w[q]
                         else: logfile.Console ('Json file contains unknown parameter %s %s' % (p, q))
@@ -237,19 +247,24 @@ def ReadJsonFile (args):
                     args.Runoff = False
                 else:
                     args.Runoff = "%s/%s/%s/%s/%s" % (RunoffMaxSpeed, RunoffDip, RunoffMinSpeed, RunoffTime, RunoffPower)
+
+            jsonLoaded = True
+
         # ----------------------------------------------------------------------
         # Close json file
         # ----------------------------------------------------------------------
         if debug.on(debug.Function):
             logfile.Write   ("... completed")
 
-        jsonFile.close
+        jsonFile.close()
 
     # --------------------------------------------------------------------------
     # Done
     # --------------------------------------------------------------------------
     if debug.on(debug.Function):
         logfile.Write ("... completed")
+
+    return jsonLoaded
 
 if constants.UseGui:
     # ------------------------------------------------------------------------------
@@ -323,6 +338,7 @@ if constants.UseGui:
             #'CtrlCommand':             DialogWindow.na_C   .GetValue(),
             json_debug:                 DialogWindow.txt_d  .GetValue(),
             json_gui:                   DialogWindow.cb_g   .GetValue(),
+            json_homeTrainer:           DialogWindow.cb_e   .GetValue(),
             json_hrm:                   DialogWindow.txt_H  .GetValue(),
             #'scs':                     DialogWindow.txt_S  .GetValue(),
             json_exportTCX:             DialogWindow.cb_x   .GetValue(),
@@ -371,7 +387,7 @@ if constants.UseGui:
             logfile.Console ("Json file cannot be written: " + JsonFileName())
         else:
             json.dump(data, jsonFile, sort_keys=True, indent=4)
-            jsonFile.close
+            jsonFile.close()
 
         if debug.on(debug.Function):
             logfile.Write ("... completed")
@@ -545,9 +561,15 @@ if constants.UseGui:
             self.cb_g = wx.CheckBox(panel, id=wx.ID_ANY, label=l, pos=p, size=s, style=0, validator=wx.DefaultValidator, name=wx.CheckBoxNameStr)
             self.cb_g.Bind(wx.EVT_CHECKBOX, self.EVT_CHECKBOX_cb_g)
             
-            v = ""
+            l = constants.help_e + " (-e *)"
             s = (-1, -1)
             p = Under(self.cb_g)
+            self.cb_e = wx.CheckBox(panel, id=wx.ID_ANY, label=l, pos=p, size=s, style=0, validator=wx.DefaultValidator, name=wx.CheckBoxNameStr)
+            self.cb_e.Bind(wx.EVT_CHECKBOX, self.EVT_CHECKBOX_cb_e)
+            
+            v = ""
+            s = (-1, -1)
+            p = Under(self.cb_e)
             c = clv.ant_tacx_models
             if True:                # Required?? platform.system() in [ 'Windows' ]:
                 self.combo_t = wx.ComboBox(panel, id=wx.ID_ANY, value=v, pos=p, size=s, choices=c, style=0, validator=wx.DefaultValidator, name=wx.ComboBoxNameStr)
@@ -875,6 +897,7 @@ if constants.UseGui:
                 self.txt_G1 .SetValue(str(int(clv.GradeFactor   * 100)))
                 self.txt_G2 .SetValue(str(int(clv.GradeFactorDH * 100)))
             #self.txt_G3 .SetValue(clv.GradeShiftGradeShift)
+                self.cb_e   .SetValue(clv.homeTrainer)
                 self.cb_m   .SetValue(clv.manual)
                 self.cb_M   .SetValue(clv.manualGrade)
                 self.cb_n   .SetValue(not clv.calibrate)
@@ -986,15 +1009,23 @@ if constants.UseGui:
             EVT_CHAR_uint(event)
             
         # --------------------------------------------------------------------------
-        # Checkbox -m -M
+        # Checkbox -e -m -M
         # --------------------------------------------------------------------------
+        def EVT_CHECKBOX_cb_e (self, event):
+            if  self.cb_e.GetValue():
+                self.cb_m.SetValue(False)
+                self.cb_M.SetValue(False)
+                self.cb_x.SetValue(True)
+
         def EVT_CHECKBOX_cb_m (self, event):
             if  self.cb_m.GetValue():
+                self.cb_e.SetValue(False)
                 self.cb_M.SetValue(False)
                 self.cb_x.SetValue(True)
                 
         def EVT_CHECKBOX_cb_M (self, event):
             if  self.cb_M.GetValue():
+                self.cb_e.SetValue(False)
                 self.cb_m.SetValue(False)
                 self.cb_x.SetValue(True)
                 
@@ -1059,6 +1090,7 @@ if constants.UseGui:
             clv.GradeFactor     = int(  self.txt_G1 .GetValue()) / 100
             clv.GradeFactorDH   = int(  self.txt_G2 .GetValue()) / 100
             # clv.GradeShift
+            clv.homeTrainer     =       self.cb_e   .GetValue()
             clv.manual          =       self.cb_m   .GetValue()
             clv.manualGrade     =       self.cb_M   .GetValue()
             clv.calibrate       = not   self.cb_n   .GetValue()

@@ -4,7 +4,8 @@ assert sys.version_info >= (3,5), "Python version >= 3.5 required"
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-18"
+__version__ = "2021-02-22"
+# 2020-02-22    Performance added
 # 2020-12-18    Ble added
 # 2020-11-13    LogfileJson added
 # 2020-04-27    MultiProcessing added
@@ -25,6 +26,7 @@ Data2          	= 0x08      # 8			usbTrainer
 MultiProcessing = 0x10      # 16
 LogfileJson     = 0x20      # 32
 Ble             = 0x40      # 64
+Performance     = 0x80      # 128
 
 All	        	= 0xff      # 255		When setting, it's All
 Any				= All		#			When checing, it's Any

@@ -1,7 +1,13 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-01-10"
+__version__ = "2021-03-03"
+# 2021-03-03    Change 2020-12-16 undone; modification moved to GUI itself
+#                   so that raspberry can powerdown.
+# 2021-03-01    raspberry added
+# 2021-02-25    Console message modified to fit on one line
+# 2021-02-18    FortiusAntBody.Initialize() not called in the GUI-process
+#               FortiusAntBody.Terminate()  before ending main()
 # 2021-01-10    Digital gearbox changed to front/rear index
 # 2021-01-06    settings added (+ missing other files for version check)
 # 2020-12-24    usage of UseGui implemented
@@ -44,6 +50,7 @@ import logfile
 import FortiusAntBody
 import FortiusAntCommand    as cmd
 from   FortiusAntTitle                  import githubWindowTitle
+import raspberry
 import settings
 import structConstants      as sc
 import TCXexport
@@ -170,7 +177,7 @@ if UseGui:
             if   Buttons == usbTrainer.EnterButton: self.Navigate_Enter()
             elif Buttons == usbTrainer.DownButton:  self.Navigate_Down()
             elif Buttons == usbTrainer.UpButton:    self.Navigate_Up()
-            elif Buttons == usbTrainer.CancelButton:pass    # self.Navigate_Back()
+            elif Buttons == usbTrainer.CancelButton:self.Navigate_Back()
             else:                                   pass
             return True
 
@@ -223,6 +230,8 @@ class clsFortiusAntConsole:
                 sTarget = "None"
             msg = "Target=%s Speed=%4.1fkmh hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f T=%2s %2s %s" % \
                   (sTarget,       fSpeed,  iHeartRate,       iPower,    iRevs,  iTacx, iCrancksetIndex, iCassetteIndex, fReduction)
+            msg = "Target=%s %4.1fkmh hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f %3s%%" % \
+                  (sTarget,  fSpeed,  iHeartRate,       iPower,    iRevs,  iTacx, int(fReduction*100))
             logfile.Console (msg)
 
     def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
@@ -326,7 +335,7 @@ if UseGui:
             if   Buttons == usbTrainer.EnterButton: self.Navigate_Enter()
             elif Buttons == usbTrainer.DownButton:  self.Navigate_Down()
             elif Buttons == usbTrainer.UpButton:    self.Navigate_Up()
-            elif Buttons == usbTrainer.CancelButton:pass    # self.Navigate_Back()
+            elif Buttons == usbTrainer.CancelButton:self.Navigate_Back()
             else:                                   pass
             return True
 
@@ -487,8 +496,6 @@ def FortiusAntChild(clv, conn):
         logfile.Open('FortiusAntGUI')
         logfile.Console('FortiusAnt GUI started in child-process')
 
-    FortiusAntBody.Initialize(clv)
-
     # --------------------------------------------------------------------------
     # Start the user-interface
     # --------------------------------------------------------------------------
@@ -559,6 +566,7 @@ def mainProgram():
         logfile.Write(s % ('logfile',               logfile.__version__ ))
         if UseGui:
             logfile.Write(s % ('RadarGraph',     RadarGraph.__version__ ))
+        logfile.Write(s % ('raspberry',           raspberry.__version__ ))
         logfile.Write(s % ('settings',             settings.__version__ ))
         logfile.Write(s % ('structConstants',            sc.__version__ ))
         logfile.Write(s % ('TCXexport',           TCXexport.__version__ ))
@@ -589,6 +597,12 @@ def mainProgram():
         logfile.Write(s % ('UseGui',                        UseGui))
         logfile.Write(s % ('UseBluetooth',                  UseBluetooth))
         logfile.Write("------------------")
+
+    #-------------------------------------------------------------------------------
+    # Modify ANT deviceNumbers if requested
+    #-------------------------------------------------------------------------------
+    if clv.DeviceNumberBase:
+        ant.DeviceNumberBase(clv.DeviceNumberBase)
 
     if not clv.gui:
         # --------------------------------------------------------------------------
@@ -631,9 +645,12 @@ def mainProgram():
         # Wait for child-process to complete
         # --------------------------------------------------------------------------
         pChild.join()
+
     # ------------------------------------------------------------------------------
     # We're done
     # ------------------------------------------------------------------------------
+    FortiusAntBody.Terminate()
+
     if debug.on(debug.Any):
         logfile.Console('FortiusAnt ended')
         logfile.Close()
@@ -649,3 +666,9 @@ if __name__ == "__main__":
     while True:
         mainProgram()
         if not RestartApplication: break
+
+    # ------------------------------------------------------------------------------
+    # If so requested, shutdown Raspberry pi
+    # ------------------------------------------------------------------------------
+    if raspberry.UseLeds:
+        raspberry.ShutdownIfRequested()

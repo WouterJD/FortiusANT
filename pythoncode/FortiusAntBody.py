@@ -1,7 +1,17 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-02-03"
+__version__ = "2021-03-03"
+# 2021-03-03    AntDongle.ConfigMsg set to False after first cycle.
+#                   This avoids repeated sets of messages.
+# 2021-03-01    raspberry leds & button added
+# 2021-02-18    added: Terminate() to resolve #203
+#               self replaced by FortiusAntGui because there is no self here
+# 2021-02-11    added: -e homeTrainer
+#               homeTrainer increments/reduces requested power by 10% instead of
+#               a fixed step. As opposed to manual/manualGrade which is more
+#               created for testing purpose; manual power changed to -10/+10
+#               modified: powerfactor saved during calibration
 # 2021-02-04    Fix ANT command status response (page 71) #222 by @switchabl
 # 2021-01-28    We're bravely calibrating BUT since in the split of 2020-04-23
 #               'Calibrate' was not replaced by TacxTrainer.Calibrate
@@ -221,6 +231,7 @@ import antSCS            as scs
 import antCTRL           as ctrl
 import debug
 import logfile
+import raspberry
 import TCXexport
 import usbTrainer
 
@@ -233,13 +244,45 @@ CycleTimeANT  = 0.25
 # Initialize globals
 # ------------------------------------------------------------------------------
 def Initialize(pclv):
-    global clv, AntDongle, TacxTrainer, tcx, bleCTP
+    global clv, AntDongle, TacxTrainer, tcx, bleCTP, rpi
     clv         = pclv
     AntDongle   = None
     TacxTrainer = None
     tcx         = None
+    rpi         = raspberry.clsRaspberry(clv)
     if clv.exportTCX: tcx = TCXexport.clsTcxExport()
     bleCTP = bleDongle.clsBleCTP(clv)
+
+# ------------------------------------------------------------------------------
+# The opposite, hoping that this will properly release USB device, see #203
+# Ref: https://github.com/pyusb/pyusb/blob/a16251f3d62de1e0b50cdfb431482d08a34355b4/docs/tutorial.rst#dont-be-selfish
+#      https://github.com/pyusb/pyusb/blob/ffe6faf42c6ad273880b0b464b9bbf44c1d4b2e9/usb/util.py#L206
+# ------------------------------------------------------------------------------
+def Terminate():
+    global clv, AntDongle, TacxTrainer, tcx, bleCTP
+    f = logfile.Write
+    #f = logfile.Console            # For quick testing
+    if debug.on(debug.Function): f ("FortiusAntBody.Terminate() ...")
+    # --------------------------------------------------------------------------
+    # If there is an AntDongle, release it as good as possible
+    # --------------------------------------------------------------------------
+    if AntDongle != None and AntDongle.OK:
+        if debug.on(debug.Function): f ("AntDongle.reset()")
+        AntDongle.devAntDongle.reset()
+
+        for cfg in AntDongle.devAntDongle:
+            for intf in cfg:
+                if debug.on(debug.Function): f ("AntDongle.release_interface()")
+                usb.util.release_interface(AntDongle.devAntDongle, intf)
+
+        if debug.on(debug.Function): f ("AntDongle.dispose_resources()")
+        usb.util.dispose_resources(AntDongle.devAntDongle)
+    # --------------------------------------------------------------------------
+    # Delete our globals to help python clean-up
+    # --------------------------------------------------------------------------
+    del clv, AntDongle, TacxTrainer, tcx, bleCTP
+
+    if debug.on(debug.Function): f ("... done")
     
 # ==============================================================================
 # Here we go, this is the real work what's all about!
@@ -254,15 +297,29 @@ def Initialize(pclv):
 #               So, when the trainer is not yet detected, the trainer cannot
 #                   read for the headunit.
 #
+#               On raspberry, activate the leds and when shutdown button pressed
+#                   stop processing.
+#
 # Output:       None
 #
 # Returns:      The actual status of the headunit buttons
 # ------------------------------------------------------------------------------
-def IdleFunction(self):
-    global TacxTrainer
+def IdleFunction(FortiusAntGui):
+    global TacxTrainer, rpi
     rtn = 0
     if TacxTrainer and TacxTrainer.OK:
-        TacxTrainer.Refresh(True, usbTrainer.modeStop)
+        rpi.ANT(False)
+        rpi.BLE(False)
+        rpi.Tacx(True)
+        rpi.Cadence(TacxTrainer.PedalEcho == 1)
+        if rpi.CheckShutdown():
+            # If rpi shutdown button pressed, stop
+            TacxTrainer.Buttons = usbTrainer.CancelButton
+        else:
+            TacxTrainer.Refresh(True, usbTrainer.modeStop)
+            # Cancel-button is disabled to avoid accidental stop
+            if TacxTrainer.Buttons == usbTrainer.CancelButton:
+                TacxTrainer.Buttons = 0
         rtn = TacxTrainer.Buttons
     return rtn
 
@@ -281,7 +338,7 @@ def IdleFunction(self):
 #
 # Returns:      True
 # ------------------------------------------------------------------------------
-def Settings(self, pRestartApplication, pclv):
+def Settings(FortiusAntGui, pRestartApplication, pclv):
     global clv
     clv = pclv
     if debug.on(debug.Function):
@@ -302,8 +359,8 @@ def Settings(self, pRestartApplication, pclv):
 #
 # Returns:      True if TRAINER and DONGLE found
 # ------------------------------------------------------------------------------
-def LocateHW(self):
-    global clv, AntDongle, TacxTrainer, bleCTP
+def LocateHW(FortiusAntGui):
+    global clv, AntDongle, TacxTrainer, bleCTP, manualMsg
     if debug.on(debug.Application): logfile.Write ("Scan for hardware")
 
     #---------------------------------------------------------------------------
@@ -318,10 +375,12 @@ def LocateHW(self):
         pass
     else:
         AntDongle = ant.clsAntDongle(clv.antDeviceID)
+        manualMsg = ''
         if AntDongle.OK or not (clv.Tacx_Vortex or clv.Tacx_Genius or clv.Tacx_Bushido):       # 2020-09-29
-             if clv.manual:      AntDongle.Message += ' (manual power)'
-             if clv.manualGrade: AntDongle.Message += ' (manual grade)'
-        self.SetMessages(Dongle=AntDongle.Message + bleCTP.Message)
+             if clv.homeTrainer: manualMsg = ' (home trainer)'
+             if clv.manual:      manualMsg = ' (manual power)'
+             if clv.manualGrade: manualMsg = ' (manual grade)'
+        FortiusAntGui.SetMessages(Dongle=AntDongle.Message + bleCTP.Message + manualMsg)
 
     #---------------------------------------------------------------------------
     # Get Trainer and find trainer model for Windows and Linux
@@ -331,15 +390,15 @@ def LocateHW(self):
         pass
     else:
         TacxTrainer = usbTrainer.clsTacxTrainer.GetTrainer(clv, AntDongle)
-        self.SetMessages(Tacx=TacxTrainer.Message)
+        FortiusAntGui.SetMessages(Tacx=TacxTrainer.Message)
 
     #---------------------------------------------------------------------------
     # Show where the heartrate comes from 
     #---------------------------------------------------------------------------
     if clv.hrm == None:
-        self.SetMessages(HRM="Heartrate expected from Tacx Trainer")
+        FortiusAntGui.SetMessages(HRM="Heartrate expected from Tacx Trainer")
     else:
-        self.SetMessages(HRM="Heartrate expected from ANT+ HRM")
+        FortiusAntGui.SetMessages(HRM="Heartrate expected from ANT+ HRM")
 
     #---------------------------------------------------------------------------
     # Done
@@ -347,7 +406,7 @@ def LocateHW(self):
     if debug.on(debug.Application): logfile.Write ("Scan for hardware - end")
                                                                     # 2020-09-29
     return ((AntDongle.OK or (not (clv.Tacx_Vortex or clv.Tacx_Genius or clv.Tacx_Bushido)
-                              and (clv.manual or clv.manualGrade or clv.ble))) \
+                              and (clv.homeTrainer or clv.manual or clv.manualGrade or clv.ble))) \
             and TacxTrainer.OK)
     
 # ------------------------------------------------------------------------------
@@ -381,7 +440,7 @@ def LocateHW(self):
 #
 # Returns:      True
 # ------------------------------------------------------------------------------
-def Runoff(self):
+def Runoff(FortiusAntGui):
     global clv, AntDongle, TacxTrainer
     if clv.SimulateTrainer or clv.Tacx_Vortex or clv.Tacx_Genius or clv.Tacx_Bushido:
         logfile.Console('Runoff not implemented for Simulated trainer or Tacx Vortex/Genius/Bushido')
@@ -413,7 +472,7 @@ def Runoff(self):
     else:
         CycleTime = CycleTimeANT    # 0.25 Seconds, inspired by 4Hz ANT+
 
-    while self.RunningSwitch == True:
+    while FortiusAntGui.RunningSwitch == True:
         StartTime     = time.time()
         #-----------------------------------------------------------------------
         # Get data from trainer
@@ -424,10 +483,10 @@ def Runoff(self):
         # Show what happens
         #-----------------------------------------------------------------------
         if TacxTrainer.Message == "Not Found":
-            self.SetValues(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-            self.SetMessages(Tacx="Check if trainer is powered on")
+            FortiusAntGui.SetValues(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+            FortiusAntGui.SetMessages(Tacx="Check if trainer is powered on")
         else:
-            self.SetValues( TacxTrainer.SpeedKmh,         TacxTrainer.Cadence, \
+            FortiusAntGui.SetValues(TacxTrainer.SpeedKmh, TacxTrainer.Cadence, \
                             TacxTrainer.CurrentPower,     TacxTrainer.TargetMode, \
                             TacxTrainer.TargetPower,      TacxTrainer.TargetGrade, \
                             TacxTrainer.TargetResistance, TacxTrainer.HeartRate, \
@@ -436,11 +495,11 @@ def Runoff(self):
             # SpeedKmh up to 40 km/h and then let wheel rolldown
             #---------------------------------------------------------------------
             if not rolldown:
-                self.SetMessages(Tacx=ShortMessage + "Warm-up for some minutes, then cycle to above {}km/hr" \
+                FortiusAntGui.SetMessages(Tacx=ShortMessage + "Warm-up for some minutes, then cycle to above {}km/hr" \
                                                     .format(clv.RunoffMaxSpeed))
 
                 if TacxTrainer.SpeedKmh > clv.RunoffMaxSpeed:      # SpeedKmh above 40, start rolldown
-                    self.SetMessages(Tacx=ShortMessage + "STOP PEDALLING")
+                    FortiusAntGui.SetMessages(Tacx=ShortMessage + "STOP PEDALLING")
                     rolldown = True
 
             #---------------------------------------------------------------------
@@ -451,19 +510,19 @@ def Runoff(self):
                     # rolldown timer starts when dips below 38
                     if rolldown_time == 0:
                         rolldown_time = time.time()
-                    self.SetMessages(Tacx=ShortMessage + \
+                    FortiusAntGui.SetMessages(Tacx=ShortMessage + \
                                         "KEEP STILL, Rolldown timer %s seconds" % \
                                         ( round((time.time() - rolldown_time),1) ) \
                                     )
           
                 if TacxTrainer.SpeedKmh < clv.RunoffMinSpeed :  # wheel almost stopped
-                    self.SetMessages(Tacx=ShortMessage + \
+                    FortiusAntGui.SetMessages(Tacx=ShortMessage + \
                                         "Rolldown time = %s seconds (aim %s s)" % \
                                         (round((time.time() - rolldown_time),1), clv.RunoffTime) \
                                     )
 
                 if TacxTrainer.SpeedKmh < 0.1 :                 # wheel stopped
-                    self.RunningSwitch = False                  # break loop
+                    FortiusAntGui.RunningSwitch = False         # break loop
 
         #-------------------------------------------------------------------------
         # #48 Frequency of data capture - sufficient for pedal stroke analysis?
@@ -490,7 +549,7 @@ def Runoff(self):
                                     and len(pdaInfo) \
                                     and TacxTrainer.Cadence:
                 # Pedal triggers cadence sensor
-                self.PedalStrokeAnalysis(pdaInfo, TacxTrainer.Cadence)
+                FortiusAntGui.PedalStrokeAnalysis(pdaInfo, TacxTrainer.Cadence)
                 pdaInfo = []
 
             # Store data for analysis until next signal
@@ -509,7 +568,7 @@ def Runoff(self):
         if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
         elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddPower (-50) # Subtract 50 Watts for calibration test
         elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddPower ( 50) # Add 50 Watts for calibration test
-        elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False # Stop calibration
+        elif TacxTrainer.Buttons == usbTrainer.CancelButton:    FortiusAntGui.RunningSwitch = False # Stop calibration
         else:                                                   pass
 
         #-----------------------------------------------------------------------
@@ -529,9 +588,9 @@ def Runoff(self):
     #---------------------------------------------------------------------------
     # Finalize
     #---------------------------------------------------------------------------
-    self.SetValues( 0, 0, 0, TacxTrainer.TargetMode, 0, 0, 0, 0, 0, 0, 0 )
+    FortiusAntGui.SetValues( 0, 0, 0, TacxTrainer.TargetMode, 0, 0, 0, 0, 0, 0, 0 )
     if not rolldown:
-        self.SetMessages(Tacx=TacxTrainer.Message)
+        FortiusAntGui.SetMessages(Tacx=TacxTrainer.Message)
     if debug.on(debug.Any) and PowerCount > 0:
         logfile.Console("Pedal Stroke Analysis: #samples = %s, #equal = %s (%3.0f%%)" % \
                     (PowerCount, PowerEqual, PowerEqual * 100 /PowerCount))
@@ -555,21 +614,21 @@ def Runoff(self):
 #
 # Returns:      True
 # ------------------------------------------------------------------------------
-def Tacx2Dongle(self):
-    global clv, AntDongle, TacxTrainer, bleCTP
+def Tacx2Dongle(FortiusAntGui):
+    global clv, AntDongle, TacxTrainer, bleCTP, manualMsg
     Restart = False
     while True:
-        rtn = Tacx2DongleSub(self, Restart)
+        rtn = Tacx2DongleSub(FortiusAntGui, Restart)
         if AntDongle.DongleReconnected:
-            self.SetMessages(Dongle=AntDongle.Message + bleCTP.Message)
+            FortiusAntGui.SetMessages(Dongle=AntDongle.Message + bleCTP.Message + manualMsg)
             AntDongle.ApplicationRestart()
             Restart = True
         else:
             break
     return rtn
 
-def Tacx2DongleSub(self, Restart):
-    global clv, AntDongle, TacxTrainer, tcx, bleCTP
+def Tacx2DongleSub(FortiusAntGui, Restart):
+    global clv, AntDongle, TacxTrainer, tcx, bleCTP, manualMsg
 
     assert(AntDongle)                       # The class must be created
     assert(TacxTrainer)                     # The class must be created
@@ -715,12 +774,20 @@ def Tacx2DongleSub(self, Restart):
         #-------------------------------------------------------------------
         AntDongle.CTRL_ChannelConfig(ant.DeviceNumber_CTRL)
 
+    AntDongle.ConfigMsg = False # Displayed only once
+
     if not clv.gui: logfile.Console ("Ctrl-C to exit")
 
     #---------------------------------------------------------------------------
     # Loop control
     #---------------------------------------------------------------------------
     EventCounter       = 0
+
+    #---------------------------------------------------------------------------
+    # During calibration, save powerfactor to avoid undesired correction.
+    #---------------------------------------------------------------------------
+    SavePowerFactor = clv.PowerFactor
+    clv.PowerFactor = 1
 
     #---------------------------------------------------------------------------
     # Calibrate trainer
@@ -740,13 +807,13 @@ def Tacx2DongleSub(self, Restart):
     StartPedaling   = True
     Counter         = 0
 
-    if TacxTrainer.CalibrateSupported():
-        self.SetMessages(Tacx="* * * * G I V E   A   P E D A L   K I C K   T O   S T A R T   C A L I B R A T I O N * * * *")
+    if clv.calibrate and TacxTrainer.CalibrateSupported():
+        FortiusAntGui.SetMessages(Tacx="* * * * G I V E   A   P E D A L   K I C K   T O   S T A R T   C A L I B R A T I O N * * * *")
         if debug.on(debug.Function):
             logfile.Write('Tacx2Dongle; start pedaling for calibration')
     try:
     # if True:
-        while         self.RunningSwitch \
+        while         FortiusAntGui.RunningSwitch \
               and     clv.calibrate \
               and not TacxTrainer.Buttons == usbTrainer.CancelButton \
               and     TacxTrainer.Calibrate == 0 \
@@ -757,6 +824,11 @@ def Tacx2DongleSub(self, Restart):
             # Receive / Send trainer
             #-------------------------------------------------------------------
             TacxTrainer.Refresh(True, usbTrainer.modeCalibrate)
+            # rpi.ANT(False)     --> depending on calibration mode, see below
+            # rpi.BLE(False)
+            rpi.Tacx(True)
+            rpi.Cadence(TacxTrainer.PedalEcho == 1)
+            if rpi.CheckShutdown(): FortiusAntGui.RunningSwitch = False
 
             #-------------------------------------------------------------------
             # When calibration IS supported, the following condition will NOT occur.
@@ -781,12 +853,12 @@ def Tacx2DongleSub(self, Restart):
                 # The message must be given once for the console-mode (no GUI)
                 #---------------------------------------------------------------
                 if StartPedaling:
-                    self.SetMessages(Tacx="* * * * C A L I B R A T I N G   (Do not pedal) * * * *")
+                    FortiusAntGui.SetMessages(Tacx="* * * * C A L I B R A T I N G   (Do not pedal) * * * *")
                     if debug.on(debug.Function):
                         logfile.Write('Tacx2Dongle; start calibration')
                     StartPedaling = False
 
-                self.SetValues(TacxTrainer.SpeedKmh, int(CountDown / CountDownX), \
+                FortiusAntGui.SetValues(TacxTrainer.SpeedKmh, int(CountDown / CountDownX), \
                         round(TacxTrainer.CurrentPower * -1,0), \
                         mode_Power, 0, 0, TacxTrainer.CurrentResistance * -1, 0, 0, 0, 0)
 
@@ -810,6 +882,17 @@ def Tacx2DongleSub(self, Restart):
                                            (TacxTrainer.Calibrate, int(120 * CountDownX - CountDown) ) )
 
                 CountDown -= 0.25                   # If not started, no count down!
+                #---------------------------------------------------------------
+                # While calibrating: blink ANT led
+                #---------------------------------------------------------------
+                rpi.ANT(True)
+                rpi.BLE(False)
+            else:
+                #---------------------------------------------------------------
+                # While waiting for pedal-kick: blink two leds
+                #---------------------------------------------------------------
+                rpi.ANT(True)
+                rpi.BLE(True)
                 
             #-------------------------------------------------------------------
             # WAIT        So we do not cycle faster than 4 x per second
@@ -826,7 +909,12 @@ def Tacx2DongleSub(self, Restart):
     if TacxTrainer.OK:
         if debug.on(debug.Function): logfile.Write('Tacx2Dongle; stop trainer')
         TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
-    self.SetMessages(Tacx=TacxTrainer.Message)
+    FortiusAntGui.SetMessages(Tacx=TacxTrainer.Message)
+
+    #---------------------------------------------------------------------------
+    # Restore powerfactor after calibration
+    #---------------------------------------------------------------------------
+    clv.PowerFactor = SavePowerFactor
 
     #---------------------------------------------------------------------------
     # Initialize variables
@@ -836,13 +924,14 @@ def Tacx2DongleSub(self, Restart):
             tcx.Start()                     # Start TCX export
         if clv.ble:
             bleCTP.Open()                   # Open connection with Bluetooth CTP
-            self.SetMessages(Dongle=AntDongle.Message + bleCTP.Message)
+            FortiusAntGui.SetMessages(Dongle=AntDongle.Message + bleCTP.Message + manualMsg)
         if clv.manualGrade:
             TacxTrainer.SetGrade(0)
         else:
             TacxTrainer.SetPower(100)
         TacxTrainer.SetGearboxReduction(1)
 
+    CTPcommandTime          = 0             # Time that last CTP command received
     TargetPowerTime         = 0             # Time that last TargetPower received
     PowerModeActive         = ''            # Text showing in userinterface
     
@@ -889,9 +978,13 @@ def Tacx2DongleSub(self, Restart):
     # -- Pedal stroke analysis
     # -- Modify data, due to Buttons or ANT
     #---------------------------------------------------------------------------
+    flush       = True
+    bleEvent    = False
+    antEvent    = False
+    pedalEvent  = False
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start main loop')
     try:
-        while self.RunningSwitch == True and not AntDongle.DongleReconnected:
+        while FortiusAntGui.RunningSwitch == True and not AntDongle.DongleReconnected:
             StartTime = time.time()
             #-------------------------------------------------------------------
             # ANT process is done once every 250ms
@@ -907,7 +1000,21 @@ def Tacx2DongleSub(self, Restart):
             # Get data from trainer (Receive + Calc + Send)
             #-------------------------------------------------------------------
             TacxTrainer.Refresh(QuarterSecond, usbTrainer.modeResistance)
-            if clv.gui: self.SetMessages(Tacx=TacxTrainer.Message + PowerModeActive)
+            if TacxTrainer.PedalEcho == 1: pedalEvent = True
+            if clv.gui: FortiusAntGui.SetMessages(Tacx=TacxTrainer.Message + PowerModeActive)
+
+            #-------------------------------------------------------------------
+            # Raspberry PI leds
+            #-------------------------------------------------------------------
+            if QuarterSecond:
+                rpi.ANT(antEvent)           # Toggle if ANT received
+                rpi.BLE(bleEvent)           # Toggle if BLE received
+                rpi.Tacx(True)              # Always toggle
+                rpi.Cadence(pedalEvent)     # Toggle on pedalecho
+                if rpi.CheckShutdown(): FortiusAntGui.RunningSwitch = False
+                bleEvent   = False
+                antEvent   = False
+                pedalEvent = False
 
             #-------------------------------------------------------------------
             # If NO Speed Cadence Sensor defined, use Trainer-info
@@ -927,7 +1034,7 @@ def Tacx2DongleSub(self, Restart):
             #-------------------------------------------------------------------
             # Show actual status
             #-------------------------------------------------------------------
-            self.SetValues(TacxTrainer.VirtualSpeedKmh, 
+            FortiusAntGui.SetValues(TacxTrainer.VirtualSpeedKmh, 
                             TacxTrainer.Cadence, \
                             TacxTrainer.CurrentPower, \
                             TacxTrainer.TargetMode, \
@@ -956,7 +1063,11 @@ def Tacx2DongleSub(self, Restart):
                 if LastPedalEcho == 0 and TacxTrainer.PedalEcho == 1 and \
                     len(pdaInfo) and TacxTrainer.Cadence:
                     # Pedal triggers cadence sensor
-                    self.PedalStrokeAnalysis(pdaInfo, TacxTrainer.Cadence)
+                    FortiusAntGui.PedalStrokeAnalysis(pdaInfo, TacxTrainer.Cadence)
+
+                    #logfile.Console('PedalStrokeAnalysis - Cadence=%3s pdaInfo=%3s StartTime=%s' % \
+                    #    (TacxTrainer.Cadence, len(pdaInfo), pdaInfo[0][0]))
+
                     pdaInfo = []
                 pdaInfo.append((time.time(), TacxTrainer.CurrentPower)) # Store data for analysis
                 LastPedalEcho = TacxTrainer.PedalEcho                   # until next signal
@@ -996,25 +1107,34 @@ def Tacx2DongleSub(self, Restart):
 
             #-------------------------------------------------------------------
             # In manual-mode, power can be incremented or decremented
-            # In all modes, operation can be stopped.
+            #   and operation can be stopped. Manual mode is intended for test-purpose.
+            # homeTrainer mode is intended for stand-alone use.
             #
             # TargetMode  is set here (manual mode) or received from ANT+ (Zwift)
             # TargetPower and TargetGrade are set in this section only!
             #-------------------------------------------------------------------
             ReductionChanged = False
-            if clv.manual:
+            if clv.homeTrainer and not (time.time() - CTPcommandTime) < 30:
+                # In homeTrainer mode, buttons are only valid when no CTP active
                 if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
-                elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddPower(-50)
+                elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.MultiplyPower(1 / 1.1)
                 elif TacxTrainer.Buttons == usbTrainer.OKButton:        TacxTrainer.SetPower(100)
-                elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddPower( 50)
-                elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
+                elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.MultiplyPower(1.1)
+                elif TacxTrainer.Buttons == usbTrainer.CancelButton:    FortiusAntGui.RunningSwitch = False
+                else:                                                   pass
+            elif clv.manual:
+                if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
+                elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddPower(-10)
+                elif TacxTrainer.Buttons == usbTrainer.OKButton:        TacxTrainer.SetPower(100)
+                elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddPower( 10)
+                elif TacxTrainer.Buttons == usbTrainer.CancelButton:    FortiusAntGui.RunningSwitch = False
                 else:                                                   pass
             elif clv.manualGrade:
                 if   TacxTrainer.Buttons == usbTrainer.EnterButton:     pass
                 elif TacxTrainer.Buttons == usbTrainer.DownButton:      TacxTrainer.AddGrade(-1)
                 elif TacxTrainer.Buttons == usbTrainer.OKButton:        TacxTrainer.SetGrade(0)
                 elif TacxTrainer.Buttons == usbTrainer.UpButton:        TacxTrainer.AddGrade( 1)
-                elif TacxTrainer.Buttons == usbTrainer.CancelButton:    self.RunningSwitch = False
+                elif TacxTrainer.Buttons == usbTrainer.CancelButton:    FortiusAntGui.RunningSwitch = False
                 else:                                                   pass
             else:
                 if   TacxTrainer.Buttons == usbTrainer.EnterButton \
@@ -1049,7 +1169,7 @@ def Tacx2DongleSub(self, Restart):
 
                 elif TacxTrainer.Buttons == usbTrainer.CancelButton:    # Switch front up (round robin)
                             ReductionChanged = True
-                            #self.RunningSwitch = False
+                            #FortiusAntGui.RunningSwitch = False
                             CrancksetIndex += 1
                             if CrancksetIndex == len(clv.Cranckset):
                                 CrancksetIndex = 0
@@ -1145,6 +1265,8 @@ def Tacx2DongleSub(self, Restart):
                     bleCTP.SetTrainerData(TacxTrainer.SpeedKmh, \
                                     TacxTrainer.Cadence, TacxTrainer.CurrentPower)
                     if bleCTP.Refresh():
+                        bleEvent = True
+                        CTPcommandTime = time.time()
                         if bleCTP.TargetMode == mode_Power:
                             TargetPowerTime = time.time()
                             TacxTrainer.SetPower(bleCTP.TargetPower)
@@ -1170,7 +1292,9 @@ def Tacx2DongleSub(self, Restart):
             # Broadcast and receive ANT+ responses
             #-------------------------------------------------------------------
             if len(messages) > 0:
-                data = AntDongle.Write(messages, True, False)
+                data = AntDongle.Write(messages, True, False, flush)
+                flush = False
+                if data: antEvent = True
 
             #-------------------------------------------------------------------
             # Here all response from the ANT dongle are processed (receive=True)
@@ -1201,6 +1325,7 @@ def Tacx2DongleSub(self, Restart):
                     # Fitness Equipment Channel inputs
                     #-----------------------------------------------------------
                     if Channel == ant.channel_FE:
+                        CTPcommandTime = time.time()
                         #-------------------------------------------------------
                         # Data page 48 (0x30) Basic resistance
                         #-------------------------------------------------------
@@ -1535,7 +1660,7 @@ def Tacx2DongleSub(self, Restart):
 
                     elif Channel == ant.channel_HRM_s and DeviceTypeID == ant.DeviceTypeID_HRM:
                         AntHRMpaired = True
-                        self.SetMessages(HRM='Heart Rate Monitor paired: %s' % DeviceNumber)
+                        FortiusAntGui.SetMessages(HRM='Heart Rate Monitor paired: %s' % DeviceNumber)
 
                     else:
                         logfile.Console('Unexpected device %s on channel %s' % (DeviceNumber, Channel))
@@ -1592,7 +1717,7 @@ def Tacx2DongleSub(self, Restart):
     if not AntDongle.DongleReconnected:
         if clv.exportTCX: tcx.Stop()
         if clv.ble:       bleCTP.Close()
-        self.SetMessages(Dongle=AntDongle.Message + bleCTP.Message)
+        FortiusAntGui.SetMessages(Dongle=AntDongle.Message + bleCTP.Message + manualMsg)
         TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
         logfile.Console (ActivationMsg.replace('activated', 'deactivated'))
 
