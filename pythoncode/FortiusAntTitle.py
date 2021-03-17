@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v6.0" # Double quotes, see below!
+WindowTitle = "Fortius Antifier v6.1" # Double quotes, see below!
+# 2020-03-17    Version 6.1     Vortex Quality Improvement
 # 2020-03-17    Version 6.0     major change: Raspberry integrated!
 # 2020-01-25    Version 5.2     Issues #189, #216, #222
 # 2020-01-21    Version 5.1     Published
