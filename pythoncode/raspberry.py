@@ -1,7 +1,10 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2021-03-08"
+__version__ = "2021-03-25"
+# 2021-03-25  OLEDdisplay added
+# 2021-03-22  constants.py imported; OnRaspberry used
+# 2021-03-07  @MeanHat TFT screen v2.1
 # 2021-03-08  GPIO3 used for the button, so that can be used for poweron
 #                   Thanks As provided by @decodais, #
 #             5 blinks before shutdown, is enough
@@ -18,18 +21,28 @@ __version__ = "2021-03-08"
 #             RasperryPi IO functions. This is for compatibility to PC-systems.
 #             May be there exists a better way but it works
 #-------------------------------------------------------------------------------
+import os
 import subprocess
 import sys
 import time
 
 MySelf = None
-try:
-                    # this module is a preinstalled module on Raspbian
-    import gpiozero # pylint: disable=import-error
-except:
-    UseLeds = False
-else:
-    UseLeds = True
+from   constants import OnRaspberry
+import constants
+import logfile
+
+UseOLEDdisplay = False
+if OnRaspberry:
+    import gpiozero                                     # pylint: disable=import-error
+
+    try:
+        import adafruit_rgb_display.st7789 as st7789    # pylint: disable=import-error
+        import board                                    # pylint: disable=import-error
+        import digitalio                                # pylint: disable=import-error
+        from PIL import Image, ImageDraw, ImageFont     # pylint: disable=import-error
+    except:
+        pass
+    UseOLEDdisplay = True
 
 # ------------------------------------------------------------------------------
 # P r e p a r e S h u t d o w n
@@ -74,7 +87,7 @@ def IsShutdownRequested():
 def ShutdownIfRequested():
     if IsShutdownRequested():
         print("Powerdown raspberry now")
-        if MySelf != None: 
+        if MySelf != None and MySelf.StatusLeds:
             MySelf.LedTacx     .on()
             MySelf.LedShutdown .on()
             MySelf.LedCadence  .on()
@@ -85,71 +98,108 @@ def ShutdownIfRequested():
 # ==============================================================================
 # Initialisation of IO-Port's for the LED's
 # ------------------------------------------------------------------------------
-# 
-#       Raspberry Pi Pin  Pin Raspberry Pi
-#    + 3,3 V           1  2   + 5 V
-#  (SDA1) GPI_O2       3  4   + 5 V
-#  (SCL1) GPI_O3       5  6   GND
-#  (GPIO_GCLK) GPI_O4  7  8   GPIO_14 (TXD0)
-#    GND               9  10  GPIO_15 (RXD0)
-# (GPIO_GEN0) GPIO_17 11  12  GPIO_18 (GPIO_GEN1)
-# (GPIO_GEN2) GPIO_27 13  14  GND                    ---> GND
-# (GPIO_GEN3) GPIO_22 15  16  GPIO_23 (GPIO_GEN4)    ---> LED_Dongle
-#    + 3,3 V          17  18  GPIO_24 (GPIO_GEN5)    ---> LED_Cadence
-# (SPI_MISO) GPIO_9   21  22  GPIO_25 (GPIO_GEN6)    ---> LED_Tacx
-# (SPI_SLCK) GPIO_11  23  24  GPIO_8 (SPI_CE0_N)
-#    GND              25  26  GPIO_7 (SPI_CE1_N)
-# (für I2C) ID_SD     27  28  ID_SC (nur für I2C)
-#    GPI_O5           29  30  GND
-#    GPI_O6           31  32  GPIO_12
-#    GPI_O13          33  34  GND
-#    GPI_O19          35  36  GPIO_16
-#    GPIO_26          37  38  GPIO 20
-#    GND              39  40  GPIO 21
-#
+#       Raspberry Pi Pin  Pin Raspberry Pi          | Default leds/buttons (-L) | OLED display 
+#    + 3,3 V           1  2   + 5 V                 |                           | x x
+#  (SDA1) GPI_O2       3  4   + 5 V                 |                           | x x
+#  (SCL1) GPI_O3       5  6   GND                   | clv.rpiButton  fanGround  | x x
+#  (GPIO_GCLK) GPI_O4  7  8   GPIO_14 (TXD0)        |                Fan        | x x
+#    GND               9  10  GPIO_15 (RXD0)        | btnGround                 | x x
+# (GPIO_GEN0) GPIO_17 11  12  GPIO_18 (GPIO_GEN1)   |                           | x x
+# (GPIO_GEN2) GPIO_27 13  14  GND                   |                           | x x
+# (GPIO_GEN3) GPIO_22 15  16  GPIO_23 (GPIO_GEN4)   |                           | x x
+#    + 3,3 V          17  18  GPIO_24 (GPIO_GEN5)   |                           | x x
+# (SPI_MISO) GPIO_9   21  22  GPIO_25 (GPIO_GEN6)   |                           | x x
+# (SPI_SLCK) GPIO_11  23  24  GPIO_8 (SPI_CE0_N)    |                           | x x
+#    GND              25  26  GPIO_7 (SPI_CE1_N)    |                           |
+# (für I2C) ID_SD     27  28  ID_SC (nur für I2C)   |                           |
+#    GPI_O5           29  30  GND                   | clv.rpiTacx               | Tacx fanGnd
+#    GPI_O6           31  32  GPIO_12               | clv.rpiShutdown           | Shut Fan
+#    GPI_O13          33  34  GND                   | clv.rpiCadence            | Cade btnGnd
+#    GPI_O19          35  36  GPIO_16               | clv.rpiBLE                | BLE  Button
+#    GPIO_26          37  38  GPIO 20               | clv.rpiANT                | ANT
+#    GND              39  40  GPIO 21               | clv.rpiGround             | Gnd
 #
 # Reference https://gpiozero.readthedocs.io/en/stable/api_output.html#led
 #           https://gpiozero.readthedocs.io/en/stable/api_input.html#button
 # ==============================================================================
 class clsRaspberry:
+    OK          = False
+    display     = None   # callable function
+
+    StatusLeds  = False  # 5 status leds and one button
+    OLEDdisplay = False  # one mini TFT display connected
+
+    LedTacx     = None
+    LedShutdown = None
+    LedCadence  = None
+    LedBLE      = None
+    LedANT      = None
+    BtnShutdown = None
+
     def __init__(self, clv):
         global MySelf
         # ----------------------------------------------------------------------
         # Activate leds, if we are on Raspberry
         # ----------------------------------------------------------------------
-        self.OK = UseLeds
+        self.OK = OnRaspberry
         MySelf = self
 
         # ----------------------------------------------------------------------
-        # Activate leds, if -L defined
-        # Reason for -L is that usage of GPIO might be conflicting with other
+        # Activate leds, if -l defined
+        # Reason for -l is that usage of GPIO might be conflicting with other
         #       applications on the Raspberry
+        # OnRaspberry, without clv, it's all true for test-purpose
         # ----------------------------------------------------------------------
-        if self.OK and clv != None:
-            self.OK = clv.rpiLeds
+        if self.OK:
+            if clv == None:
+                if OnRaspberry: self.StatusLeds  = True
+                if OnRaspberry: self.OLEDdisplay = True
+            else:
+                if OnRaspberry: self.StatusLeds  = clv.StatusLeds                     # boolean
+                if OnRaspberry: self.OLEDdisplay = clv.OLEDdisplay and UseOLEDdisplay # string
+
+            self.OK = self.StatusLeds or self.OLEDdisplay
 
         # ----------------------------------------------------------------------
         # Create 5 leds on these Pins as outputs.
         # The numbers are the numbers of the IO-Pins of the Raspi
         # Don't forget to add the series resistor of 470 Ohm
         # ----------------------------------------------------------------------
-        if self.OK:
-            self.LedTacx     = gpiozero.LED(5)          # Orange
-            self.LedShutdown = gpiozero.LED(6)          # Red
-            self.LedCadence  = gpiozero.LED(13)         # White
-            self.LedBLE      = gpiozero.LED(19)         # Blue
-            self.LedANT      = gpiozero.LED(26)         # Green
+        if self.StatusLeds:
+            self.LedTacx     = gpiozero.LED(clv.rpiTacx)        # Orange
+            self.LedShutdown = gpiozero.LED(clv.rpiShutdown)    # Red
+            self.LedCadence  = gpiozero.LED(clv.rpiCadence)     # White
+            self.LedBLE      = gpiozero.LED(clv.rpiBLE)         # Blue
+            self.LedANT      = gpiozero.LED(clv.rpiANT)         # Green
 
-            self.BtnShutdown = gpiozero.Button(3)
+            self.BtnShutdown = gpiozero.Button(clv.rpiButton)
+
+        # ----------------------------------------------------------------------
+        # Initialize OLED display
+        # ----------------------------------------------------------------------
+        self.display = self.displayConsole         # If invalid, on console
+
+        if   clv.OLEDdisplay == False:             # Not specified, no output
+            self.display = self.displayNone
+
+        elif clv.OLEDdisplay == 'console':         # Test output on console
+            pass
+
+        elif clv.OLEDdisplay == 'st7789':          # TFT mini OLED display
+            if self.SetupDisplaySt7789():
+                self.display = self.displaySt7789
+
+        else:
+            logfile.Console('Unexpected value for -O %s' % clv.OLEDdisplay)
 
         # ----------------------------------------------------------------------
         # Show leds for power-up
         # ----------------------------------------------------------------------
-        if self.OK:
+        if self.StatusLeds:
             self.PowerupTest()
 
     # --------------------------------------------------------------------------
-    #  T o g g l e
+    # [ L E D ]   T o g g l e
     # --------------------------------------------------------------------------
     # Input     OK, led, event
     #
@@ -165,59 +215,53 @@ class clsRaspberry:
     # Output    led-value is set
     # --------------------------------------------------------------------------
     def Toggle(self, led, event):
-        if self.OK:
+        if self.StatusLeds:
             if not event:
                 led.off()
             else:
                 led.toggle()
 
     # --------------------------------------------------------------------------
-    #  Toggles for the five leds
+    # [ L E D ]   Toggles for the five leds
     # --------------------------------------------------------------------------
     def ANT(self, event):
-        if self.OK: self.Toggle(self.LedANT,      event)
+        self.Toggle(self.LedANT,      event)
 
     def BLE(self, event):
-        if self.OK: self.Toggle(self.LedBLE,      event)
+        self.Toggle(self.LedBLE,      event)
 
     def Cadence(self, event):
-        if self.OK: self.Toggle(self.LedCadence,  event)
+        self.Toggle(self.LedCadence,  event)
 
     def Shutdown(self, event):
-        if self.OK: self.Toggle(self.LedShutdown, event)
+        self.Toggle(self.LedShutdown, event)
 
     def Tacx(self, event):
-        if self.OK: self.Toggle(self.LedTacx,     event)
+        self.Toggle(self.LedTacx,     event)
+
+    def SetLeds(self, ANT=None, BLE=None, Cadence=None, Shutdown=None, Tacx=None):
+        if ANT      != None: self.ANT(ANT)
+        if BLE      != None: self.BLE(BLE)
+        if Cadence  != None: self.Cadence(Cadence)
+        if Shutdown != None: self.Shutdown(Shutdown)
+        if Tacx     != None: self.Tacx(Tacx)
 
     # --------------------------------------------------------------------------
-    #  Powerup test TSCBA
+    # [ L E D ]   Powerup test TSCBA
     # --------------------------------------------------------------------------
     def PowerupTest(self):
-        self.Tacx    (True)
-        time.sleep(.25)
-
-        self.Tacx    (False)
-        self.Shutdown(True)
-        time.sleep(.25)
-
-        self.Shutdown(False)
-        self.Cadence (True)
-        time.sleep(.25)
-
-        self.Cadence (False)
-        self.BLE     (True)
-        time.sleep(.25)
-
-        self.BLE     (False)
-        self.ANT(True)
-        time.sleep(.25)
-
-        self.ANT     (False)
+        self.SetLeds(False, False, False, False, False)                  # off
+        self.SetLeds(False, False, False, False, True ); time.sleep(.25) # Tacx
+        self.SetLeds(False, False, False, True,  False); time.sleep(.25) # Shutdown
+        self.SetLeds(False, False, True,  False, False); time.sleep(.25) # Cadence
+        self.SetLeds(False, True,  False, False, False); time.sleep(.25) # BLE
+        self.SetLeds(True,  False, False, False, False); time.sleep(.25) # ANT
+        self.SetLeds(False, False, False, False, False)                  # off
 
     # --------------------------------------------------------------------------
-    # C h e c k S h u t d o w n
+    # [ L E D ]   C h e c k S h u t d o w n
     # --------------------------------------------------------------------------
-    # Input     nothing
+    # Input     FortiusAntGui
     #
     # Function  toggle Shutdown led during button press
     #           return True if kept pressed for the define timeout
@@ -227,21 +271,16 @@ class clsRaspberry:
     #
     # Returns   True when button pressed firmly
     # --------------------------------------------------------------------------
-    def CheckShutdown(self):
-        repeat = 5       # timeout = n * .25 seconds        # 5 blinks is enough
-        rtn    = self.OK # Assume button will remain pressed
-                         # If we don't use leds/buttons ==> False
+    def CheckShutdown(self, FortiusAntGui=None):
+        repeat = 5                  # timeout = n * .25 seconds        # 5 blinks is enough
+        rtn    = self.StatusLeds    # Assume button will remain pressed
+                                    # If we don't use leds/buttons ==> False
+        ResetLeds= False
 
-        if self.OK and not IsShutdownRequested():
+        if self.StatusLeds and not IsShutdownRequested():
             # ------------------------------------------------------------------
-            # Switch off all leds
+            # Switch off shutdown led, just in case (only local)
             # ------------------------------------------------------------------
-            if self.BtnShutdown.is_held:
-                self.ANT     (False)
-                self.BLE     (False)
-                self.Tacx    (False)
-                self.Cadence (False)
-
             self.Shutdown(False)
 
             # ------------------------------------------------------------------
@@ -249,11 +288,15 @@ class clsRaspberry:
             # ------------------------------------------------------------------
             while repeat:
                 repeat -= 1
-                if not self.BtnShutdown.is_held:
+                if self.BtnShutdown.is_held:
+                    self.SetLeds             (False, False, False, True, False)
+                    if FortiusAntGui != None:
+                        FortiusAntGui.SetLeds(False, False, False, True, False)
+                    ResetLeds = True
+                    time.sleep(.25)
+                else:
                     rtn = False
                     break
-                self.Shutdown(True)
-                time.sleep(.25)
 
             # ------------------------------------------------------------------
             # Final warning
@@ -266,12 +309,171 @@ class clsRaspberry:
             # Now it's sure we will shutdown
             # The application has to do it, though.
             # ------------------------------------------------------------------
-            if rtn: PrepareShutdown()
+            if rtn:
+                PrepareShutdown()
+
+            # ------------------------------------------------------------------
+            # If leds were touched, switch off all - application must set again
+            # ------------------------------------------------------------------
+            if not rtn and ResetLeds:
+                self.SetLeds             (False, False, False, False, False)
+                if FortiusAntGui != None:
+                    FortiusAntGui.SetLeds(False, False, False, False, False)
 
         # ----------------------------------------------------------------------
         # Return True/False; may be of previous shutdown-request!
         # ----------------------------------------------------------------------
         return IsShutdownRequested()
+
+    # --------------------------------------------------------------------------
+    # [ T F T ]   S e t u p D i s p l a y
+    # --------------------------------------------------------------------------
+    # Input     None
+    #
+    # Function  see https://learn.adafruit.com/adafruit-mini-pitft-135x240-color-tft-add-on-for-raspberry-pi/python-setup
+    #           define display and produce startup image
+    #           configure CS and DC pins (these are FeatherWing defaults on M0/M4):
+    #
+    # Returns   True for success
+    # --------------------------------------------------------------------------
+    def SetupDisplaySt7789(self):
+        rtn = True
+        # ----------------------------------------------------------------------
+        # Create the ST7789 display (this is 240x240 version):
+        # ----------------------------------------------------------------------
+        cs_pin    = digitalio.DigitalInOut(board.CE0)
+        dc_pin    = digitalio.DigitalInOut(board.D25)
+        reset_pin = None
+
+        BAUDRATE  = 64000000        # Default max is 24Mhz
+        try:
+            spi   = board.SPI()     # Setup SPI bus using hardware SPI
+        except Exception as e:
+            logfile.Console ("OLED display st7778 cannot be initialized: %s" % e)
+            rtn   = False
+        else:
+            # ------------------------------------------------------------------
+            # Now initialize the display
+            # ------------------------------------------------------------------
+            disp = st7789.ST7789(
+                spi,
+                cs=cs_pin,
+                dc=dc_pin,
+                rst=reset_pin,
+                baudrate=BAUDRATE,
+                width=240,
+                height=240,
+                x_offset=0,
+                y_offset=80,
+            )
+
+            # ------------------------------------------------------------------
+            # Swap height/width to rotate it to landscape:
+            # ------------------------------------------------------------------
+            width  = disp.width  
+            height = disp.height
+                
+            image = Image.new("RGB", (width, height))
+
+            # ------------------------------------------------------------------
+            # get drawing object to draw on image:
+            ## draw = ImageDraw.Draw(image)
+
+            # draw a black filled box to clear the image:
+            ## draw.rectangle((0, 0, width, height), outline=0, fill=(0, 0, 0))
+            ## disp.image(image)
+            # ------------------------------------------------------------------
+
+            # ------------------------------------------------------------------
+            # Startup images is in directory of the .py [or embedded in .exe]
+            # ------------------------------------------------------------------
+            dirname = os.path.dirname(__file__)
+            FortiusAnt_jpg = os.path.join(dirname, "FortiusAnt.jpg")
+            image = Image.open(FortiusAnt_jpg)
+
+            # ------------------------------------------------------------------
+            # Scale the image to the smaller screen dimension:
+            # ------------------------------------------------------------------
+            image_ratio  = image.width / image.height
+            screen_ratio = width / height
+            if screen_ratio < image_ratio:
+                scaled_width  = image.width * height // image.height
+                scaled_height = height
+            else:
+                scaled_width  = width
+                scaled_height = image.height * width // image.width
+            image = image.resize((scaled_width, scaled_height), Image.BICUBIC)
+
+            # ------------------------------------------------------------------
+            # Crop and center the image:
+            # ------------------------------------------------------------------
+            x_jpg = scaled_width  // 2 - width  // 2
+            y_jpg = scaled_height // 2 - height // 2
+            image = image.crop((x_jpg, y_jpg, x_jpg + width, y_jpg + height))
+
+            # ------------------------------------------------------------------
+            # Display image:
+            # ------------------------------------------------------------------
+            disp.image(image)
+
+        return rtn
+
+    # --------------------------------------------------------------------------
+    # [ T F T ]   d i s p l a y
+    # --------------------------------------------------------------------------
+    # Input     FortiusAntState; as defined in constants
+    #
+    # Function  For each FortiusAnt state display the appropriate messages on
+    #           the small attached screen.
+    #           2021-03 - only one screen implemented; other screens could
+    #                     be implemented in future.
+    #
+    # Returns   None
+    # --------------------------------------------------------------------------
+    def displayNone(self, FortiusAntState):
+        pass
+
+    def displayConsole(self, FortiusAntState):
+        if True or self.OLEDdisplay:
+            if   FortiusAntState == constants.faStarted:
+                print('+++++ faStarted')
+            elif FortiusAntState == constants.faTrainer:
+                print('+++++ faTrainer')
+            elif FortiusAntState == constants.faWait2Calibrate:
+                print('+++++ faWait2Calibrate')
+            elif FortiusAntState == constants.faCalibrating:
+                print('+++++ faCalibrating')
+            elif FortiusAntState == constants.faActivate:
+                print('+++++ faActivate')
+            elif FortiusAntState == constants.faOperational:
+                print('+++++ faOperational')
+            elif FortiusAntState == constants.faStopped:
+                print('+++++ faStopped')
+            elif FortiusAntState == constants.faDeactivated:
+                print('+++++ faDeactivated')
+            else:
+                pass
+
+    def displaySt7789(self, FortiusAntState):
+        if True or self.OLEDdisplay:
+            if   FortiusAntState == constants.faStarted:
+                print('+++++ faStarted (st7789)')
+            elif FortiusAntState == constants.faTrainer:
+                print('+++++ faTrainer (st7789)')
+            elif FortiusAntState == constants.faWait2Calibrate:
+                print('+++++ faWait2Calibrate (st7789)')
+            elif FortiusAntState == constants.faCalibrating:
+                print('+++++ faCalibrating (st7789)')
+            elif FortiusAntState == constants.faActivate:
+                print('+++++ faActivate (st7789)')
+            elif FortiusAntState == constants.faOperational:
+                print('+++++ faOperational (st7789)')
+            elif FortiusAntState == constants.faStopped:
+                print('+++++ faStopped (st7789)')
+            elif FortiusAntState == constants.faDeactivated:
+                print('+++++ faDeactivated (st7789)')
+            else:
+                pass
 
 # ------------------------------------------------------------------------------
 # Code for test-purpose
@@ -282,18 +484,18 @@ if __name__ == "__main__":
     first = True
 
     while True:
-            if first: print('Test leds')
-            rpi.ANT     (event)
-            rpi.BLE     (event)
-            rpi.Tacx    (event)
-            rpi.Cadence (event)
-            rpi.Shutdown(event)
-            time.sleep(.25)
-            event = not event
+        if first: print('Test leds')
+        rpi.ANT     (event)
+        rpi.BLE     (event)
+        rpi.Tacx    (event)
+        rpi.Cadence (event)
+        rpi.Shutdown(event)
+        time.sleep(.25)
+        event = not event
 
-            if first: print('Until button pressed')
-            if rpi.CheckShutdown(): break
+        if first: print('Until button pressed')
+        if rpi.CheckShutdown(): break
 
-            first = False
+        first = False
 
     ShutdownIfRequested()

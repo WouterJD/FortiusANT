@@ -1,7 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-02"
+__version__ = "2021-03-24"
+# 2021-03-24    changed: command line help + validation
+# 2021-03-24    added: OLEDdisplay
+# 2021-03-22    changed: -l allowed for Raspberry or GUI
+#               leds active by default
 # 2021-03-02    added: -l Raspberry status Leds
 #               -A -g -l dummy definition present to avoid command-line error
 #                   when dependencies are not fulfilled, FortiusAnt will proceed
@@ -62,8 +66,7 @@ import time
 import debug
 import logfile
 
-from   constants                    import UseBluetooth, UseGui
-from   raspberry                    import UseLeds
+from   constants                    import UseBluetooth, UseGui, OnRaspberry
 import constants
 import settings
 
@@ -99,14 +102,15 @@ class CommandLineVariables(object):
     gui             = False
     hrm             = None       # introduced 2020-02-09; None=not specified, numeric=HRM device, -1=no HRM
     homeTrainer     = False
-    rpiLeds         = False
     manual          = False
     manualGrade     = False
     PedalStrokeAnalysis = False
     PowerMode       = False      # introduced 2020-04-10; When specified Grade-commands are ignored xx seconds after Power-commands
     Resistance      = False      # introduced 2020-11-23; When specified, Target Resistance equals Target Power
+    StatusLeds      = False      # modified   2020-03-22; When specified, Status Led displayed (GUI / raspberry)
     CalibrateRR     = False      # introduced 2020-12-07; To calibrate Magnetic Brake power RollingResistance
     scs             = None       # introduced 2020-02-10; None=not specified, numeric=SCS device
+    OLEDdisplay     = False      # introduced 2021-03-24; Raspberry small display
     PowerFactor     = 1.00
     SimulateTrainer = False
     TacxType        = False
@@ -115,16 +119,26 @@ class CommandLineVariables(object):
     Tacx_Bushido    = False
     Tacx_MotorBrake = False
     Tacx_MagneticBrake = False
+    Tacx_Cadence    = True      # Trainer has cadence sensor; only for USB-trainers
 
     Transmission    = ''        # introduced 2020-01-10
 
-    Cranckset      = []
-    CrancksetStart = 0          # The initial value of index
-    CrancksetMax   = 0          # Corresponds to full WH of the drawing area
+    Cranckset       = []
+    CrancksetStart  = 0         # The initial value of index
+    CrancksetMax    = 0         # Corresponds to full WH of the drawing area
 
-    Cassette       = []
-    CassetteStart  = 0          # The initial value of index
-    CassetteMax    = 0          # Corresponds to full WH of the drawing area
+    Cassette        = []
+    CassetteStart   = 0         # The initial value of index
+    CassetteMax     = 0         # Corresponds to full WH of the drawing area
+
+    rpiButton       = 3         # Introduced 2021-03-22, for Raspberry
+                                # See raspberry.py for button layout
+                                # Position moves when -L specified
+    rpiTacx         = 5
+    rpiShutdown     = 6
+    rpiCadence      = 13
+    rpiBLE          = 19
+    rpiANT          = 26
 
     #---------------------------------------------------------------------------
     # Runoff, as defined by @cyclingflow
@@ -151,62 +165,82 @@ class CommandLineVariables(object):
     #---------------------------------------------------------------------------
     # Define and process command line
     #---------------------------------------------------------------------------
+    # Before 2021-03-24 The following specs were used:
+    #   parser.add_argument   ('-a','--autostart',          ...
+    #   parser.add_argument   ('-t','--TacxType',           ...
+    #
+    # resulting in the following help-text:
+    # optional arguments:
+    #   -h, --help            show this help message and exit
+    #   -a, --autostart       Automatically start; “Locate HW” and “Start” if the required devices were found.
+    #   -t {Bushido,Genius,Vortex,Magneticbrake,Motorbrake,i-Vortex}, --TacxType {Bushido,Genius,Vortex,Magneticbrake,Motorbrake,i-Vortex}
+    #                         Specify Tacx Type; if not specified, USB-trainers will be detected automatically.
+    #
+    # 2021-03-24 '--VariableName' replaced by dest='VariableName' result in in:
+    #       (which is a lot more readable)
+    # optional arguments:
+    #   -h, --help            show this help message and exit
+    #   -a                    Automatically start; “Locate HW” and “Start” if the required devices were found.
+    #   -t {Bushido,Genius,Vortex,Magneticbrake,Motorbrake,i-Vortex}
+    #                         Specify Tacx Type; if not specified, USB-trainers will be detected automatically.
+    #---------------------------------------------------------------------------
     def __init__(self):
         global clv
         clv = self
         #-----------------------------------------------------------------------
         # Define and process command line
+        # Ref: https://docs.python.org/3/library/argparse.html
         #-----------------------------------------------------------------------
-        parser = argparse.ArgumentParser(description='Program to broadcast data from USB Tacx Fortius trainer, and to receive resistance data for the trainer')
-        parser.add_argument   ('-a','--autostart',          help=constants.help_a,  required=False, action='store_true')
+        parser = argparse.ArgumentParser(description='FortiusAnt exchanges data between USB or ANT+ Tacx trainer with an ANT+ or BLE Cycling Training Program')
+        parser.add_argument   ('-a', dest='autostart',                                  help=constants.help_a,  required=False, action='store_true')
         if UseGui:
-           parser.add_argument('-A','--PedalStrokeAnalysis',help=constants.help_A,  required=False, action='store_true')
+           parser.add_argument('-A', dest='PedalStrokeAnalysis',                        help=constants.help_A,  required=False, action='store_true')
         else:
-           # If -A is requested but not available, then ignore
-           parser.add_argument('-A','--pdaNotAvailable',    help=argparse.SUPPRESS, required=False, action='store_true')
+           parser.add_argument('-A', dest='A_IgnoredIfDefined',                         help=argparse.SUPPRESS, required=False, action='store_true')
         if UseBluetooth:
-           parser.add_argument('-b','--ble',                help=constants.help_b,  required=False, action='store_true')
+           parser.add_argument('-b', dest='ble',                                        help=constants.help_b,  required=False, action='store_true')
         else:
-           # If -b is requested but not available, then an error is appropriate
-           pass
-        parser.add_argument   ('-B','--DeviceNumberBase',   help=constants.help_B,  required=False, default=False)
-        parser.add_argument   ('-c','--CalibrateRR',        help=constants.help_c,  required=False, default=False)
-#       parser.add_argument   ('-C','--CtrlCommand',        help=constants.help_C,  required=False, default=False)
-        parser.add_argument   ('-C','--CtrlCommand',        help=argparse.SUPPRESS, required=False, default=False)
-        parser.add_argument   ('-d','--debug',              help=constants.help_d,  required=False, default=False)
-        parser.add_argument   ('-D','--antDeviceID',        help=constants.help_D,  required=False, default=False)
-        parser.add_argument   ('-e','--homeTrainer',        help=constants.help_e,  required=False, action='store_true')
+           pass # If -b is requested but not available, then an error is appropriate
+        parser.add_argument   ('-B', dest='DeviceNumberBase',   metavar='0...65535',    help=constants.help_B,  required=False, default=False, type=int)
+        parser.add_argument   ('-c', dest='CalibrateRR',        metavar='0...100',      help=constants.help_c,  required=False, default=False, type=int)
+#       parser.add_argument   ('-C', dest='CtrlCommand',        metavar='ANT+DeviceID', help=constants.help_C,  required=False, default=False, type=int)
+        parser.add_argument   ('-C', dest='CtrlCommand',        metavar='ANT+DeviceID', help=argparse.SUPPRESS, required=False, default=False, type=int)
+        parser.add_argument   ('-d', dest='debug',              metavar='0...255',      help=constants.help_d,  required=False, default=False, type=int)
+        parser.add_argument   ('-D', dest='antDeviceID',        metavar='USB-DeviceID', help=constants.help_D,  required=False, default=False, type=int)
+        parser.add_argument   ('-e', dest='homeTrainer',                                help=constants.help_e,  required=False, action='store_true')
         #                       -h     help!!
         if UseGui:
-           parser.add_argument('-g','--gui',                help=constants.help_g,  required=False, action='store_true')
+           parser.add_argument('-g', dest='gui',                                        help=constants.help_g,  required=False, action='store_true')
         else:
-           # If -g is requested but not available, then ignore and proceed headless
-           parser.add_argument('-g','--guiNotAvailable',    help=argparse.SUPPRESS, required=False, action='store_true')
-        parser.add_argument   ('-G','--GradeAdjust',        help=constants.help_G,  required=False, default=False)
-        parser.add_argument   ('-H','--hrm',                help=constants.help_H,  required=False, default=False)
-        if UseLeds:
-           parser.add_argument('-l','--rpiLeds',            help=constants.help_l,  required=False, action='store_true')
+           parser.add_argument('-g', dest='g_IgnoredIfDefined',                         help=argparse.SUPPRESS, required=False, action='store_true')
+        parser.add_argument   ('-G', dest='GradeAdjust',        metavar='% / % / %',    help=constants.help_G,  required=False, default=False)
+        parser.add_argument   ('-H', dest='hrm',                metavar='ANT+DeviceID', help=constants.help_H,  required=False, default=False, type=int)
+        if UseGui or OnRaspberry:
+           parser.add_argument('-l', dest='StatusLeds',                                 help=constants.help_l,  required=False, action='store_true')
         else:
-           # If -l is requested but not available, then ignore and proceed without leds
-           parser.add_argument('-l','--ledsNotAvailable',   help=argparse.SUPPRESS, required=False, action='store_true')
-        parser.add_argument   ('-m','--manual',             help=constants.help_m,  required=False, action='store_true')
-        parser.add_argument   ('-M','--manualGrade',        help=constants.help_M,  required=False, action='store_true')
-        parser.add_argument   ('-n','--calibrate',          help=constants.help_n,  required=False, action='store_false')
-        parser.add_argument   ('-p','--factor',             help=constants.help_p,  required=False, default=False)
-        parser.add_argument   ('-P','--PowerMode',          help=constants.help_P,  required=False, action='store_true')
-        parser.add_argument   ('-r','--Resistance',         help=constants.help_r,  required=False, action='store_true')
-        parser.add_argument   ('-R','--Runoff',             help=constants.help_R,  required=False, default=False)
-        parser.add_argument   ('-s','--simulate',           help=constants.help_s,  required=False, action='store_true')
-#scs    parser.add_argument   ('-S','--scs',                help=constants.help_S,  required=False, default=False)
-        parser.add_argument   ('-T','--Transmission',       help=constants.help_T,  required=False, default=False)
-
-        self.ant_tacx_models = ['Bushido', 'Genius', 'Vortex', 'Magneticbrake', 'Motorbrake']
-        ant_tacx_help = constants.help_t \
-                      + ' Allowed values are: %s' % ', '.join(self.ant_tacx_models)
-        parser.add_argument('-t', '--TacxType',             help=ant_tacx_help, metavar='', required=False, default=False, \
-                choices=self.ant_tacx_models + ['i-Vortex']) # i-Vortex is still allowed for compatibility
-
-        parser.add_argument   ('-x','--exportTCX',          help=constants.help_x,  required=False, action='store_true')
+           parser.add_argument('-l', dest='l_IgnoredIfDefined',                         help=argparse.SUPPRESS, required=False, action='store_true')
+        if OnRaspberry:
+           parser.add_argument('-L', dest='gpioLayout',         metavar='gpioLayout',   help=constants.help_L,  required=False, default=False)
+        else:
+           parser.add_argument('-L', dest='-L_IgnoredIfDefined',                        help=argparse.SUPPRESS, required=False, default=False)
+        parser.add_argument   ('-m', dest='manual',                                     help=constants.help_m,  required=False, action='store_true')
+        parser.add_argument   ('-M', dest='manualGrade',                                help=constants.help_M,  required=False, action='store_true')
+        parser.add_argument   ('-n', dest='calibrate',                                  help=constants.help_n,  required=False, action='store_false')
+        if OnRaspberry:
+           parser.add_argument('-O', dest='OLEDdisplay', choices=['console', 'st7789'], help=constants.help_O, required=False, default=False)
+        else:
+           parser.add_argument('-O', dest='O_IgnoredIfDefined',                         help=argparse.SUPPRESS, required=False, default=False)
+        parser.add_argument   ('-p', dest='factor',             metavar='%',            help=constants.help_p,  required=False, default=False, type=int)
+        parser.add_argument   ('-P', dest='PowerMode',                                  help=constants.help_P,  required=False, action='store_true')
+        parser.add_argument   ('-r', dest='Resistance',                                 help=constants.help_r,  required=False, action='store_true')
+        parser.add_argument   ('-R', dest='Runoff',             metavar='see text',     help=constants.help_R,  required=False, default=False)
+        parser.add_argument   ('-s', dest='simulate',                                   help=constants.help_s,  required=False, action='store_true')
+#scs    parser.add_argument   ('-S', dest='scs',                metavar='ANT+ DeviceID',help=constants.help_S,  required=False, default=False, type=int)
+        parser.add_argument   ('-T', dest='Transmission',       metavar='see text',     help=constants.help_T,  required=False, default=False)
+        parser.add_argument   ('-t', dest='TacxType',                                   help=constants.help_t, required=False, default=False, \
+                    choices=['Bushido', 'Genius', 'Vortex', 'Magneticbrake', 'Motorbrake'] + ['i-Vortex'])
+                    # i-Vortex is still allowed for compatibility
+        parser.add_argument   ('-x', dest='exportTCX',                                  help=constants.help_x,  required=False, action='store_true')
 
         #-----------------------------------------------------------------------
         # Parse command line
@@ -226,7 +260,7 @@ class CommandLineVariables(object):
             print('You have started FortiusANT without command-line parameters.')
             print(' ')
             print('Therefore we start with a best-practice setting:')
-            print('     %s -a -g -H0 -A' % pgm)
+            print('     %s -a -g -H0 -A -l' % pgm)
             print(' ')
             print('If you want to start without the graphical user interface:')
             print('     %s -a' % pgm)
@@ -237,6 +271,7 @@ class CommandLineVariables(object):
             self.args.gui                    = UseGui    # Show gui
             self.args.hrm                    = 0         # Pair with HRM
             self.args.PedalStrokeAnalysis    = UseGui    # Show it
+            self.args.StatusLeds             = UseGui    # Show it
 
         #-----------------------------------------------------------------------
         # Display welcome message
@@ -261,8 +296,7 @@ class CommandLineVariables(object):
         if UseGui:
             self.gui                = self.args.gui
         self.homeTrainer            = self.args.homeTrainer # Exersize Bike
-        if UseLeds:
-            self.rpiLeds            = self.args.rpiLeds
+        self.StatusLeds             = self.args.StatusLeds
         self.manual                 = self.args.manual
         self.manualGrade            = self.args.manualGrade
         self.calibrate              = self.args.calibrate
@@ -322,6 +356,55 @@ class CommandLineVariables(object):
                 assert(self.CTRL_SerialR >= 0)
             except:
                 logfile.Console('Command line error; -C incorrect SerialNumber in %s' % self.args.CtrlCommand)
+
+        #-----------------------------------------------------------------------
+        # Get OLEDdisplay
+        #-----------------------------------------------------------------------
+        if OnRaspberry and self.args.OLEDdisplay:
+            self.OLEDdisplay = self.args.OLEDdisplay
+
+            #---------------------------------------------------------------
+            # OLEDdisplay uses first 24 pins, so our button moves
+            # Refer to pinlayout in raspberry.py
+            #---------------------------------------------------------------
+            if self.OLEDdisplay == 'st7789':
+                self.rpiButton = 16
+
+        #-----------------------------------------------------------------------
+        # Get Raspberry GPIO Layout = Button/Tacx/Shutdown/Cadence/BLE/ANT
+        #-----------------------------------------------------------------------
+        if OnRaspberry and self.args.gpioLayout:
+            s = self.args.gpioLayout.split("/")
+            try:
+                e = 'Too many GPIO pins defined'
+                assert(len(s) <= 6)
+
+                e = 'Pin number not numeric'
+                if len(s) >= 1: self.rpiButton   = int( s[0] )
+                if len(s) >= 2: self.rpiTacx     = int( s[1] )
+                if len(s) >= 3: self.rpiShutdown = int( s[2] )
+                if len(s) >= 4: self.rpiCadence  = int( s[3] )
+                if len(s) >= 5: self.rpiBLE      = int( s[4] )
+                if len(s) >= 6: self.rpiANT      = int( s[5] )
+
+                # https://gpiozero.readthedocs.io/en/stable/recipes.html#pin-numbering
+                e = 'Pin number not in range 2...27'
+                assert(self.rpiButton   in range(2,28) )
+                assert(self.rpiTacx     in range(2,28) )
+                assert(self.rpiShutdown in range(2,28) )
+                assert(self.rpiCadence  in range(2,28) )
+                assert(self.rpiBLE      in range(2,28) )
+                assert(self.rpiANT      in range(2,28) )
+
+                e = 'Pin number used twice'
+                assert(self.rpiButton   not in (                self.rpiTacx, self.rpiShutdown, self.rpiCadence, self.rpiBLE, self.rpiANT) )
+                assert(self.rpiTacx     not in (self.rpiButton,               self.rpiShutdown, self.rpiCadence, self.rpiBLE, self.rpiANT) )
+                assert(self.rpiShutdown not in (self.rpiButton, self.rpiTacx,                   self.rpiCadence, self.rpiBLE, self.rpiANT) )
+                assert(self.rpiCadence  not in (self.rpiButton, self.rpiTacx, self.rpiShutdown,                  self.rpiBLE, self.rpiANT) )
+                assert(self.rpiBLE      not in (self.rpiButton, self.rpiTacx, self.rpiShutdown, self.rpiCadence,              self.rpiANT) )
+                assert(self.rpiANT      not in (self.rpiButton, self.rpiTacx, self.rpiShutdown, self.rpiCadence, self.rpiBLE             ) )
+            except:
+                logfile.Console('Command line error; -L incorrect pin-number in %s; %s' % (self.args.gpioLayout, e) )
 
         #-----------------------------------------------------------------------
         # Get debug-flags, used in debug module
@@ -443,11 +526,14 @@ class CommandLineVariables(object):
         if self.args.TacxType:
             self.TacxType = self.args.TacxType
             if 'Vortex' in self.TacxType:
-                self.Tacx_Vortex = True
+                self.Tacx_Vortex  = True
+                self.Tacx_Cadence = False
             elif 'Genius' in  self.TacxType:
-                self.Tacx_Genius = True
+                self.Tacx_Genius  = True
+                self.Tacx_Cadence = False
             elif 'Bushido' in self.TacxType:
                 self.Tacx_Bushido = True
+                self.Tacx_Cadence = False
             elif 'Magneticbrake' in self.TacxType:
                 self.Tacx_Magneticbrake = True
             elif 'Motorbrake' in self.TacxType:
@@ -550,11 +636,14 @@ class CommandLineVariables(object):
             if      self.gui:                logfile.Console("-g")
             if      self.homeTrainer:        logfile.Console("-e")
             if v or self.args.hrm:           logfile.Console("-H %s" % self.hrm )
-            if      self.rpiLeds:            logfile.Console("-l")
+            if      self.StatusLeds:         logfile.Console("-l")
+            if OnRaspberry and (v or self.args.gpioLayout):
+                logfile.Console("-L %s/%s/%s/%s/%s/%s" % (self.rpiButton, self.rpiTacx, self.rpiShutdown, self.rpiCadence, self.rpiBLE, self.rpiANT) )
             if      self.manual:             logfile.Console("-m")
             if      self.manualGrade:        logfile.Console("-M")
             if      not self.args.calibrate: logfile.Console("-n")
             if v or self.args.factor:        logfile.Console("-p %s" % self.PowerFactor )
+            if v or self.args.OLEDdisplay:   logfile.Console("-O %s" % self.OLEDdisplay)
             if      self.args.PowerMode:     logfile.Console("-P")
             if      self.args.Resistance:    logfile.Console("-r")
             if v or self.args.Runoff:        logfile.Console("-R defines Runoff: maxSpeed=%s dip=%s minSpeed=%s targetTime=%s power=%s" % \

@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-03"
+__version__ = "2021-03-22"
+# 2021-03-22    StatusLeds also on GUI
 # 2021-03-03    AntDongle.ConfigMsg set to False after first cycle.
 #                   This avoids repeated sets of messages.
 # 2021-03-01    raspberry leds & button added
@@ -229,6 +230,7 @@ import antHRM            as hrm
 import antPWR            as pwr
 import antSCS            as scs
 import antCTRL           as ctrl
+import constants
 import debug
 import logfile
 import raspberry
@@ -250,6 +252,7 @@ def Initialize(pclv):
     TacxTrainer = None
     tcx         = None
     rpi         = raspberry.clsRaspberry(clv)
+    rpi.display(constants.faStarted)
     if clv.exportTCX: tcx = TCXexport.clsTcxExport()
     bleCTP = bleDongle.clsBleCTP(clv)
 
@@ -308,11 +311,9 @@ def IdleFunction(FortiusAntGui):
     global TacxTrainer, rpi
     rtn = 0
     if TacxTrainer and TacxTrainer.OK:
-        rpi.ANT(False)
-        rpi.BLE(False)
-        rpi.Tacx(True)
-        rpi.Cadence(TacxTrainer.PedalEcho == 1)
-        if rpi.CheckShutdown():
+        FortiusAntGui.SetLeds(False,False,TacxTrainer.PedalEcho == 1,None,True)
+        rpi.SetLeds          (False,False,TacxTrainer.PedalEcho == 1,None,True) # ANT, BLE, Cadence, Shutdown, Tacx
+        if rpi.CheckShutdown(FortiusAntGui):
             # If rpi shutdown button pressed, stop
             TacxTrainer.Buttons = usbTrainer.CancelButton
         else:
@@ -391,6 +392,7 @@ def LocateHW(FortiusAntGui):
     else:
         TacxTrainer = usbTrainer.clsTacxTrainer.GetTrainer(clv, AntDongle)
         FortiusAntGui.SetMessages(Tacx=TacxTrainer.Message)
+        if TacxTrainer.OK: rpi.display(constants.faTrainer)
 
     #---------------------------------------------------------------------------
     # Show where the heartrate comes from 
@@ -807,10 +809,15 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     StartPedaling   = True
     Counter         = 0
 
+    bleEvent    = False
+    antEvent    = False
+    pedalEvent  = False
+
     if clv.calibrate and TacxTrainer.CalibrateSupported():
         FortiusAntGui.SetMessages(Tacx="* * * * G I V E   A   P E D A L   K I C K   T O   S T A R T   C A L I B R A T I O N * * * *")
         if debug.on(debug.Function):
             logfile.Write('Tacx2Dongle; start pedaling for calibration')
+        rpi.display(constants.faWait2Calibrate)
     try:
     # if True:
         while         FortiusAntGui.RunningSwitch \
@@ -824,11 +831,9 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             # Receive / Send trainer
             #-------------------------------------------------------------------
             TacxTrainer.Refresh(True, usbTrainer.modeCalibrate)
-            # rpi.ANT(False)     --> depending on calibration mode, see below
-            # rpi.BLE(False)
-            rpi.Tacx(True)
-            rpi.Cadence(TacxTrainer.PedalEcho == 1)
-            if rpi.CheckShutdown(): FortiusAntGui.RunningSwitch = False
+            FortiusAntGui.SetLeds(antEvent,bleEvent,pedalEvent,None,True)
+            rpi.SetLeds          (antEvent,bleEvent,pedalEvent,None,True) # ANT, BLE, Cadence, Shutdown, Tacx
+            if rpi.CheckShutdown(FortiusAntGui): FortiusAntGui.RunningSwitch = False
 
             #-------------------------------------------------------------------
             # When calibration IS supported, the following condition will NOT occur.
@@ -854,6 +859,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                 #---------------------------------------------------------------
                 if StartPedaling:
                     FortiusAntGui.SetMessages(Tacx="* * * * C A L I B R A T I N G   (Do not pedal) * * * *")
+                    rpi.display(constants.faCalibrating)
                     if debug.on(debug.Function):
                         logfile.Write('Tacx2Dongle; start calibration')
                     StartPedaling = False
@@ -883,16 +889,18 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
 
                 CountDown -= 0.25                   # If not started, no count down!
                 #---------------------------------------------------------------
-                # While calibrating: blink ANT led
+                # While calibrating: blink ANT/BLE
                 #---------------------------------------------------------------
-                rpi.ANT(True)
-                rpi.BLE(False)
+                antEvent   = True
+                bleEvent   = True
+                pedalEvent = False
             else:
                 #---------------------------------------------------------------
-                # While waiting for pedal-kick: blink two leds
+                # While waiting for pedal-kick: blink ANT/BLE/Cadence
                 #---------------------------------------------------------------
-                rpi.ANT(True)
-                rpi.BLE(True)
+                antEvent   = True
+                bleEvent   = True
+                pedalEvent = True
                 
             #-------------------------------------------------------------------
             # WAIT        So we do not cycle faster than 4 x per second
@@ -941,6 +949,8 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     #---------------------------------------------------------------------------
     # Initialize antHRM and antFE module
     #---------------------------------------------------------------------------
+    rpi.display(constants.faActivate)
+
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; initialize ANT')
     fe.Initialize()
     hrm.Initialize()
@@ -983,6 +993,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     antEvent    = False
     pedalEvent  = False
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start main loop')
+    rpi.display(constants.faOperational)
     try:
         while FortiusAntGui.RunningSwitch == True and not AntDongle.DongleReconnected:
             StartTime = time.time()
@@ -1007,11 +1018,9 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             # Raspberry PI leds
             #-------------------------------------------------------------------
             if QuarterSecond:
-                rpi.ANT(antEvent)           # Toggle if ANT received
-                rpi.BLE(bleEvent)           # Toggle if BLE received
-                rpi.Tacx(True)              # Always toggle
-                rpi.Cadence(pedalEvent)     # Toggle on pedalecho
-                if rpi.CheckShutdown(): FortiusAntGui.RunningSwitch = False
+                FortiusAntGui.SetLeds(antEvent,bleEvent,pedalEvent,None,True)
+                rpi.SetLeds          (antEvent,bleEvent,pedalEvent,None,True) # ANT, BLE, Cadence, Shutdown, Tacx
+                if rpi.CheckShutdown(FortiusAntGui): FortiusAntGui.RunningSwitch = False
                 bleEvent   = False
                 antEvent   = False
                 pedalEvent = False
@@ -1294,7 +1303,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             if len(messages) > 0:
                 data = AntDongle.Write(messages, True, False, flush)
                 flush = False
-                if data: antEvent = True
+                # antEvent is not set here; only for data on FE-C channel
 
             #-------------------------------------------------------------------
             # Here all response from the ANT dongle are processed (receive=True)
@@ -1325,6 +1334,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                     # Fitness Equipment Channel inputs
                     #-----------------------------------------------------------
                     if Channel == ant.channel_FE:
+                        antEvent = True
                         CTPcommandTime = time.time()
                         #-------------------------------------------------------
                         # Data page 48 (0x30) Basic resistance
@@ -1707,6 +1717,8 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             
     except KeyboardInterrupt:
         logfile.Console ("Stopped")
+
+    rpi.display(constants.faStopped)
     #---------------------------------------------------------------------------
     # Stop devices, if not reconnecting ANT
     # - Create TCXexport
@@ -1720,6 +1732,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
         FortiusAntGui.SetMessages(Dongle=AntDongle.Message + bleCTP.Message + manualMsg)
         TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
         logfile.Console (ActivationMsg.replace('activated', 'deactivated'))
+        rpi.display(constants.faDeactivated)
 
     #---------------------------------------------------------------------------
     # Stop devices

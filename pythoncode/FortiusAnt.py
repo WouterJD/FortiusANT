@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-03"
+__version__ = "2021-03-22"
+# 2021-03-22    Added; SetLeds
 # 2021-03-03    Change 2020-12-16 undone; modification moved to GUI itself
 #                   so that raspberry can powerdown.
 # 2021-03-01    raspberry added
@@ -22,7 +23,7 @@ __version__ = "2021-03-03"
 #               This module contains program startup, GUI-binding and
 #               multi-processing functionality only
 #-------------------------------------------------------------------------------
-from   constants import mode_Power, mode_Grade, UseGui, UseBluetooth, UseMultiProcessing
+from   constants import mode_Power, mode_Grade, UseGui, UseBluetooth, UseMultiProcessing, OnRaspberry
 import constants                        #  for __version__
 
 import argparse
@@ -80,6 +81,7 @@ cmd_Settings            = 19596         # Child->Main; Response = True
 cmd_SetMessages         = 19596         # Main->Child; No response expected
 cmd_SetValues           = 19597         # Main->Child; No response expected
 cmd_PedalStrokeAnalysis = 19598         # Main->Child; No response expected
+cmd_SetLeds             = 19599         # Main->Child; No response expected
 
 # ==============================================================================
 # The following functions are called from the GUI, Console or multi-processing
@@ -244,6 +246,9 @@ class clsFortiusAntConsole:
         if HRM != None:
             logfile.Console ("AntHRM - " + HRM)
 
+    def SetLeds(self, ANT=None, BLE=None, Cadence=None, Shutdown=None, Tacx=None):
+        pass
+
 # ==============================================================================
 # Subclass FortiusAnt GUI with our multi-processing functions
 # ------------------------------------------------------------------------------
@@ -309,7 +314,8 @@ if UseGui:
                     self.SetMessages(rtn[0], rtn[1], rtn[2])# rtn is (Tacx, Dongle, HRM) tuple
                 elif cmd == cmd_PedalStrokeAnalysis:
                     self.PedalStrokeAnalysis(rtn[0], rtn[1])# rtn is (info, Cadence) tuple
-                    pass
+                elif cmd == cmd_SetLeds:
+                    self.SetLeds(rtn[0], rtn[1], rtn[2], rtn[3], rtn[4])# rtn is (ANT, BLE, Cadence, Shutdown, Tacx) tuple
                 else:
                     logfile.Console('%s active but unknown response received (%s, %s); the message is ignored.' % (command, cmd, rtn))
                     break
@@ -421,7 +427,10 @@ class clsFortiusAntParent:
     def PedalStrokeAnalysis(self, info, Cadence):
         if debug.on(debug.MultiProcessing): logfile.Write ("mp-MainDataToGUI(%s, (info, %s))" % (cmd_PedalStrokeAnalysis, Cadence))
         self.app_conn.send((cmd_PedalStrokeAnalysis, (info, Cadence)))  # x. Main sends messages to GUI; no response expected
-        pass
+
+    def SetLeds(self, ANT=None, BLE=None, Cadence=None, Shutdown=None, Tacx=None):
+        if debug.on(debug.MultiProcessing): logfile.Write ("mp-MainDataToGUI(%s, (%s, %s, %s, %d, %s))" % (cmd_SetLeds, Tacx, Shutdown, Cadence, BLE, ANT))
+        self.app_conn.send((cmd_SetLeds, (ANT, BLE, Cadence, Shutdown, Tacx)))  # x. Main sends messages to GUI; no response expected
 
     def RunoffThread(self):
         rtn = Runoff(self)
@@ -670,5 +679,5 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------
     # If so requested, shutdown Raspberry pi
     # ------------------------------------------------------------------------------
-    if raspberry.UseLeds:
+    if OnRaspberry:
         raspberry.ShutdownIfRequested()

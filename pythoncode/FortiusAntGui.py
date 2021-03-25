@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-02"
+__version__ = "2021-03-22"
+# 2021-03-22    Status leds added to screen; SetLeds() added
 # 2021-03-02    Buttons enlarged for Raspberry rendering
 # 2021-02-22    Button correction removed from timer
 # 2021-02-03    Test values updated in callTacx2Dongle(self)
@@ -97,7 +98,7 @@ import webbrowser
 import wx
 import wx.lib.agw.speedmeter as SM
 
-from   constants                    import mode_Power, mode_Grade
+from   constants                    import mode_Power, mode_Grade, OnRaspberry
 import debug
 import logfile
 import FortiusAntCommand     as cmd
@@ -118,6 +119,8 @@ LargeTexts          = True  # 2020-02-07
 bg                  = wx.Colour(220,220,220) # Background colour [for self.Speedometers]
 colorTacxFortius    = wx.Colour(120,148,227)
 Margin              = 4
+
+FixedForDocu        = False
 
 # ------------------------------------------------------------------------------
 # Create the FortiusAnt frame
@@ -144,6 +147,10 @@ class frmFortiusAntGui(wx.Frame):
     LastHeart  = 0  # Time when heartbeat image was updated
     IdleDone   = 0  # Counter to warn that callIdleFunction is not redefined
     power      = [] # Array with power-tuples
+
+    StatusLeds   = [False,False,False,False,False]   # 5 True/False flags
+    StatusLedsXr = None # Right side of rightmost status-led-label
+    StatusLedsYb = None # Bottom of status-led-row
 
     def __init__(self, parent, pclv):
         # ----------------------------------------------------------------------
@@ -590,12 +597,21 @@ class frmFortiusAntGui(wx.Frame):
         # - To the right of the HeartRate text
         # - Under txtAntHRM
         # ----------------------------------------------------------------------
+        x  = self.txtHeartRate.Position [0] + self.txtHeartRate.Size [0] + Margin
+        y  = self.txtAntHRM.Position    [1] + self.txtAntHRM.Size    [1] + 5
+        wh = self.txtHeartRate.Position [1] + self.txtHeartRate.Size [1] - y
         if self.clv.PedalStrokeAnalysis:
-            x  = self.txtHeartRate.Position [0] + self.txtHeartRate.Size [0] + Margin
-            y  = self.txtAntHRM.Position    [1] + self.txtAntHRM.Size    [1] + 5
-            wh = self.txtHeartRate.Position [1] + self.txtHeartRate.Size [1] - y
             self.RadarGraph = RadarGraph.clsRadarGraph(self.panel, "Pedal stroke analysis", x, y, wh)
-        
+
+        # ----------------------------------------------------------------------
+        # Define position of the status leds
+        # right-aligns with Power
+        # bottom-aligns with Pda
+        # ----------------------------------------------------------------------
+        if self.clv.StatusLeds:
+            self.StatusLedsXr = self.Power.Position[0] + self.Power.Size[0]
+            self.StatusLedsYb = y + wh
+
         # ----------------------------------------------------------------------
 		# Font setting for all measurements
         # ----------------------------------------------------------------------
@@ -725,7 +741,7 @@ class frmFortiusAntGui(wx.Frame):
     def callTacx2Dongle(self):
         print("callTacx2Dongle not defined by application class")
 #       tr = 255                                    # experimental purpose only
-        FixedForDocu = False
+        led          = True
         while self.RunningSwitch == True:
             #t = time.localtime()
             r = (90 + random.randint(1,20)) / 100   # 0.9 ... 1.1
@@ -738,8 +754,11 @@ class frmFortiusAntGui(wx.Frame):
                 #             (km/hr, /min, W,       mode, T=Watt, Grade, Resistance, iHeartRate, Cranck, Cassette, Factor)
                 self.SetValues(34.5,  89, 123, mode_Grade,    345,   8.5,       2345,        123,      1,        5,      1)
                 #elf.SetValues(34.5,  89, 123, mode_Power,    345,   8.5,       2345,        123,      1,        5,      1)
+                self.SetLeds(led, led, led, led, led)
             else:    # Random value for moving GUI test
                 self.SetValues(r * 35.6, r * 234, r * 123, mode_Grade, r * 345, r * 19.5, r * 2345, r * 123, random.randint(0,1), random.randint(0,12), 1)
+                self.SetLeds(led, not led, led, not led, led)
+                led = not led
 
             if self.clv.PedalStrokeAnalysis:
                 for i, p in enumerate(self.power):
@@ -808,6 +827,27 @@ class frmFortiusAntGui(wx.Frame):
         else:
             self.Close()                              # Stop program
             pass
+    # --------------------------------------------------------------------------
+    # S e t L e d s
+    # --------------------------------------------------------------------------
+    # input:        Tacx, Shutdown, Cadence, BLE, ANT
+    #
+    # Description:  Modify the leds according the inputs
+    #
+    # Output:       self.StatusLeds
+    # --------------------------------------------------------------------------
+    def SetLeds(self, ANT=None, BLE=None, Cadence=None, Shutdown=None, Tacx=None): #Thread safe
+        wx.CallAfter(self.SetLedsGUI, ANT, BLE, Cadence, Shutdown, Tacx)
+
+    def SetLedsGUI(self, ANT=None, BLE=None, Cadence=None, Shutdown=None, Tacx=None):
+        # print (ANT, BLE, Cadence, Shutdown, Tacx, self.StatusLeds)
+        if Tacx     != None: self.StatusLeds[0] = not self.StatusLeds[0] if Tacx     else False
+        if Shutdown != None: self.StatusLeds[1] = not self.StatusLeds[1] if Shutdown else False
+        if Cadence  != None: self.StatusLeds[2] = not self.StatusLeds[2] if Cadence  else False
+        if BLE      != None: self.StatusLeds[3] = not self.StatusLeds[3] if BLE      else False
+        if ANT      != None: self.StatusLeds[4] = not self.StatusLeds[4] if ANT      else False
+        self.panel.Refresh()
+
     # --------------------------------------------------------------------------
     # S e t V a l u e s
     # --------------------------------------------------------------------------
@@ -964,8 +1004,8 @@ class frmFortiusAntGui(wx.Frame):
                     if self.txtHeartRateShown == False:
                         self.CassetteY  -= self.txtHeartRateSpace
                         self.CrancksetY -= self.txtHeartRateSpace
-                        self.txtCranckset.SetPosition(( self.txtCranckset.Position[0], self.CrancksetY))
-                        self.txtCassette .SetPosition(( self.txtCassette .Position[0], self.CassetteY ))
+                        self.txtCranckset.SetPosition(( int(self.txtCranckset.Position[0]), int(self.CrancksetY)))
+                        self.txtCassette .SetPosition(( int(self.txtCassette .Position[0]), int(self.CassetteY )))
                     self.txtHeartRate.Show()
                     self.txtHeartRateShown = True
                 self.txtHeartRate.SetValue  ("%i" % self.HeartRate)
@@ -988,8 +1028,8 @@ class frmFortiusAntGui(wx.Frame):
                     if self.txtHeartRateShown == True:
                         self.CassetteY  += self.txtHeartRateSpace
                         self.CrancksetY += self.txtHeartRateSpace
-                        self.txtCranckset.SetPosition(( self.txtCranckset.Position[0], self.CrancksetY))
-                        self.txtCassette .SetPosition(( self.txtCassette .Position[0], self.CassetteY ))
+                        self.txtCranckset.SetPosition(( int(self.txtCranckset.Position[0]), int(self.CrancksetY)))
+                        self.txtCassette .SetPosition(( int(self.txtCassette .Position[0]), int(self.CassetteY )))
                     self.txtHeartRate.Hide()
                     self.txtHeartRateShown = False
                     bRefreshRequired  = True
@@ -1142,7 +1182,7 @@ class frmFortiusAntGui(wx.Frame):
                 # --------------------------------------------------------------
                 # Draw the chainring
                 # --------------------------------------------------------------
-                dc.DrawRectangle(x, y, w, h)
+                dc.DrawRectangle(int(x), int(y), int(w), int(h))
 
         # ----------------------------------------------------------------------
         # Draw Cranckset
@@ -1178,13 +1218,13 @@ class frmFortiusAntGui(wx.Frame):
                 # --------------------------------------------------------------
                 # Draw the chainring
                 # --------------------------------------------------------------
-                dc.DrawRectangle(x, y, w, h)
+                dc.DrawRectangle(int(x), int(y), int(w), int(h))
 
                 # --------------------------------------------------------------
                 # If cassette and chainring selected, draw chain
                 # --------------------------------------------------------------
                 if ChainX1 and ChainX2:
-                    dc.DrawLine(ChainX1, ChainY1, ChainX2, ChainY2)
+                    dc.DrawLine(int(ChainX1), int(ChainY1), int(ChainX2), int(ChainY2))
                     ChainX1 = False
 
         else:
@@ -1194,6 +1234,53 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
         if self.clv.PedalStrokeAnalysis:
             self.RadarGraph.OnPaint(dc)
+        # ----------------------------------------------------------------------
+        # Draw status leds
+        # - If there is no ANT dongle, do not show ANT-led
+        # - If there is no BLE interface, do not show BLE-led
+        # - Only on Raspberry, not show shutdown-led
+        # ----------------------------------------------------------------------
+        if self.clv.StatusLeds:
+            all = FixedForDocu
+            x   = self.StatusLedsXr         # Right side of rightmost label
+            y   = self.StatusLedsYb - 10    # Upper size of status leds
+            r   = 3
+            distance = 70
+
+            if all or self.clv.antDeviceID != -1:  # Led 5 = ANT CTP
+                x -= distance
+                self.DrawLed(dc,   0,   0,255, x, y, r, self.StatusLeds[4], 'ANT CTP'  )
+
+            if all or self.clv.ble:                # Led 4 = Bluetooth CTP
+                x -= distance
+                self.DrawLed(dc,   0, 255,255, x, y, r, self.StatusLeds[3], 'BLE CTP'  )
+
+            if all or self.clv.Tacx_Cadence:       # Led 3 = Cadence sensor (black because backgroup is white)
+                x -= distance
+                self.DrawLed(dc,    0,  0,  0, x, y, r, self.StatusLeds[2], 'Cadence'  )
+
+            if all or OnRaspberry:                 # Led 2 = on raspberry only
+                x -= distance
+                self.DrawLed(dc, 255,   0,  0, x, y, r, self.StatusLeds[1], 'Shutdown' )
+
+            if all or True:                        # Led 1 = Tacx trainer; USB, ANT or Simulated
+                x -= distance
+                self.DrawLed(dc, 255, 140,  0, x, y, r, self.StatusLeds[0], 'Tacx'     )
+
+    # --------------------------------------------------------------------------
+    # D r a w L e d
+    # --------------------------------------------------------------------------
+    def DrawLed (self, dc, r,g,b, x, y, radius, on, label):
+        c = wx.Colour(r,g,b)                        # pylint: disable=maybe-no-member
+        dc.SetPen(wx.Pen(c))                        # Circle line, pylint: disable=maybe-no-member
+        if on == True or FixedForDocu:
+            dc.SetBrush(wx.Brush(c))                # Circle fill, pylint: disable=maybe-no-member
+        else:
+            dc.SetBrush(wx.TRANSPARENT_BRUSH)       # Circle fill transparent
+        dc.DrawCircle(x, y, radius)
+
+        dc.SetFont   (wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        dc.DrawText  (label, x + radius + 2, y - 7)
 
     # --------------------------------------------------------------------------
     # O n T i m e r
