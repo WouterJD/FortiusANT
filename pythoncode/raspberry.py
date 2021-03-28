@@ -2,7 +2,7 @@
 # Version info
 #---------------------------------------------------------------------------
 __version__ = "2021-03-25"
-# 2021-03-25  OLEDdisplay added
+# 2021-03-25  OutputDisplay added
 # 2021-03-22  constants.py imported; OnRaspberry used
 # 2021-03-07  @MeanHat TFT screen v2.1
 # 2021-03-08  GPIO3 used for the button, so that can be used for poweron
@@ -29,20 +29,22 @@ import time
 MySelf = None
 from   constants import OnRaspberry
 import constants
+import FortiusAntCommand    as cmd
 import logfile
 
-UseOLEDdisplay = False
+UseOutputDisplay = False
 if OnRaspberry:
     import gpiozero                                     # pylint: disable=import-error
 
     try:
+        from adafruit_rgb_display.rgb import color565   # pylint: disable=import-error
         import adafruit_rgb_display.st7789 as st7789    # pylint: disable=import-error
         import board                                    # pylint: disable=import-error
         import digitalio                                # pylint: disable=import-error
         from PIL import Image, ImageDraw, ImageFont     # pylint: disable=import-error
     except:
         pass
-    UseOLEDdisplay = True
+    UseOutputDisplay = True
 
 # ------------------------------------------------------------------------------
 # P r e p a r e S h u t d o w n
@@ -123,18 +125,18 @@ def ShutdownIfRequested():
 #           https://gpiozero.readthedocs.io/en/stable/api_input.html#button
 # ==============================================================================
 class clsRaspberry:
-    OK          = False
-    display     = None   # callable function
+    OK            = False
+    display       = None   # callable function
 
-    StatusLeds  = False  # 5 status leds and one button
-    OLEDdisplay = False  # one mini TFT display connected
+    StatusLeds    = False  # 5 status leds and one button
+    OutputDisplay = False  # one mini TFT display connected
 
-    LedTacx     = None
-    LedShutdown = None
-    LedCadence  = None
-    LedBLE      = None
-    LedANT      = None
-    BtnShutdown = None
+    LedTacx       = None
+    LedShutdown   = None
+    LedCadence    = None
+    LedBLE        = None
+    LedANT        = None
+    BtnShutdown   = None
 
     def __init__(self, clv):
         global MySelf
@@ -148,17 +150,12 @@ class clsRaspberry:
         # Activate leds, if -l defined
         # Reason for -l is that usage of GPIO might be conflicting with other
         #       applications on the Raspberry
-        # OnRaspberry, without clv, it's all true for test-purpose
         # ----------------------------------------------------------------------
         if self.OK:
-            if clv == None:
-                if OnRaspberry: self.StatusLeds  = True
-                if OnRaspberry: self.OLEDdisplay = True
-            else:
-                if OnRaspberry: self.StatusLeds  = clv.StatusLeds                     # boolean
-                if OnRaspberry: self.OLEDdisplay = clv.OLEDdisplay and UseOLEDdisplay # string
+            if OnRaspberry: self.StatusLeds  = clv.StatusLeds                           # boolean
+            if OnRaspberry: self.OutputDisplay = clv.OutputDisplay and UseOutputDisplay # string
 
-            self.OK = self.StatusLeds or self.OLEDdisplay
+            self.OK = self.StatusLeds or self.OutputDisplay
 
         # ----------------------------------------------------------------------
         # Create 5 leds on these Pins as outputs.
@@ -179,18 +176,18 @@ class clsRaspberry:
         # ----------------------------------------------------------------------
         self.display = self.displayConsole         # If invalid, on console
 
-        if   clv.OLEDdisplay == False:             # Not specified, no output
+        if   clv.OutputDisplay == False:           # Not specified, no output
             self.display = self.displayNone
 
-        elif clv.OLEDdisplay == 'console':         # Test output on console
+        elif clv.OutputDisplay == 'console':       # Test output on console
             pass
 
-        elif clv.OLEDdisplay == 'st7789':          # TFT mini OLED display
+        elif clv.OutputDisplay == 'st7789':        # TFT mini OLED display
             if self.SetupDisplaySt7789():
                 self.display = self.displaySt7789
 
         else:
-            logfile.Console('Unexpected value for -O %s' % clv.OLEDdisplay)
+            logfile.Console('Unexpected value for -O %s' % clv.OutputDisplay)
 
         # ----------------------------------------------------------------------
         # Show leds for power-up
@@ -349,13 +346,13 @@ class clsRaspberry:
         try:
             spi   = board.SPI()     # Setup SPI bus using hardware SPI
         except Exception as e:
-            logfile.Console ("OLED display st7778 cannot be initialized: %s" % e)
+            logfile.Console ("OLED display st7789 cannot be initialized: %s" % e)
             rtn   = False
         else:
             # ------------------------------------------------------------------
             # Now initialize the display
             # ------------------------------------------------------------------
-            disp = st7789.ST7789(
+            self.st7789 = st7789.ST7789(
                 spi,
                 cs=cs_pin,
                 dc=dc_pin,
@@ -368,10 +365,22 @@ class clsRaspberry:
             )
 
             # ------------------------------------------------------------------
+            # As copied from https://learn.adafruit.com
+            # For testing
+            # ------------------------------------------------------------------
+            self.backlight = digitalio.DigitalInOut(board.D22)
+            self.backlight.switch_to_output()
+            self.backlight.value = True
+            self.buttonA = digitalio.DigitalInOut(board.D23)
+            self.buttonB = digitalio.DigitalInOut(board.D24)
+            self.buttonA.switch_to_input()
+            self.buttonB.switch_to_input()
+
+            # ------------------------------------------------------------------
             # Swap height/width to rotate it to landscape:
             # ------------------------------------------------------------------
-            width  = disp.width  
-            height = disp.height
+            width  = self.st7789.width  
+            height = self.st7789.height
                 
             image = Image.new("RGB", (width, height))
 
@@ -414,7 +423,7 @@ class clsRaspberry:
             # ------------------------------------------------------------------
             # Display image:
             # ------------------------------------------------------------------
-            disp.image(image)
+            self.st7789.image(image)
 
         return rtn
 
@@ -434,7 +443,7 @@ class clsRaspberry:
         pass
 
     def displayConsole(self, FortiusAntState):
-        if True or self.OLEDdisplay:
+        if True or self.OutputDisplay:
             if   FortiusAntState == constants.faStarted:
                 print('+++++ faStarted')
             elif FortiusAntState == constants.faTrainer:
@@ -455,7 +464,7 @@ class clsRaspberry:
                 pass
 
     def displaySt7789(self, FortiusAntState):
-        if True or self.OLEDdisplay:
+        if True or self.OutputDisplay:
             if   FortiusAntState == constants.faStarted:
                 print('+++++ faStarted (st7789)')
             elif FortiusAntState == constants.faTrainer:
@@ -479,23 +488,68 @@ class clsRaspberry:
 # Code for test-purpose
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
-    rpi = clsRaspberry(None)
-    event = True                        # Use same event-flag for each led
-    first = True
+    # --------------------------------------------------------------------------
+    # Get command line variables; -l, -L and -O are relevant
+    # --------------------------------------------------------------------------
+    clv=cmd.CommandLineVariables()
+    if OnRaspberry:                 # switch on in testmode, so that -l -O not needed
+        clv.StatusLeds    = True
+        clv.OutputDisplay = 'st7789'
+        clv.rpiButton     = 16
+    clv.print()
 
+    # --------------------------------------------------------------------------
+    # Create RaspberryPi object
+    # --------------------------------------------------------------------------
+    rpi = clsRaspberry(clv)
+
+    event   = True                        # Use same event-flag for each led
+    first   = True
+    repeat  = 5
     while True:
-        if first: print('Test leds')
-        rpi.ANT     (event)
-        rpi.BLE     (event)
-        rpi.Tacx    (event)
-        rpi.Cadence (event)
-        rpi.Shutdown(event)
-        time.sleep(.25)
-        event = not event
+        # ----------------------------------------------------------------------
+        # Test leds (-l flag)
+        # ----------------------------------------------------------------------
+        if rpi.StatusLeds:
+            if first: print('Test leds')
+            rpi.ANT     (event)
+            rpi.BLE     (event)
+            rpi.Tacx    (event)
+            rpi.Cadence (event)
+            rpi.Shutdown(event)
+            event = not event
 
-        if first: print('Until button pressed')
-        if rpi.CheckShutdown(): break
+            if first: print('Until button pressed')
+            if rpi.CheckShutdown(): break
 
+        # ----------------------------------------------------------------------
+        # Test leds (-l flag)
+        # ----------------------------------------------------------------------
+        if rpi.OutputDisplay:
+            if first: print('Test OutputDisplay')
+
+            print('a, b, repeat', rpi.buttonA.value, rpi.buttonB.value, repeat)
+
+            if rpi.buttonA.value and rpi.buttonB.value:
+                rpi.backlight.value = False                     # turn off backlight
+                repeat -= 1
+                if repeat == 0: print('break, repeat = 0')                           # Stop no powerdown
+            else:
+                rpi.backlight.value = True                      # turn on backlight
+
+            if rpi.buttonB.value and not rpi.buttonA.value:     # just button A pressed
+                rpi.st7789.fill(color565(255, 0, 0))            # red
+
+            if rpi.buttonA.value and not rpi.buttonB.value:     # just button B pressed
+                rpi.st7789.fill(color565(0, 0, 255))            # blue
+
+            if not rpi.buttonA.value and not rpi.buttonB.value: # none pressed
+                rpi.st7789.fill(color565(0, 255, 0))            # green
+
+        # ----------------------------------------------------------------------
+        # Stop for next button press
+        # ----------------------------------------------------------------------
         first = False
+        time.sleep(.25)
 
     ShutdownIfRequested()

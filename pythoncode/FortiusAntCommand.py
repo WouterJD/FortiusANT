@@ -3,7 +3,7 @@
 #-------------------------------------------------------------------------------
 __version__ = "2021-03-24"
 # 2021-03-24    changed: command line help + validation
-# 2021-03-24    added: OLEDdisplay
+# 2021-03-24    added: OutputDisplay
 # 2021-03-22    changed: -l allowed for Raspberry or GUI
 #               leds active by default
 # 2021-03-02    added: -l Raspberry status Leds
@@ -110,7 +110,7 @@ class CommandLineVariables(object):
     StatusLeds      = False      # modified   2020-03-22; When specified, Status Led displayed (GUI / raspberry)
     CalibrateRR     = False      # introduced 2020-12-07; To calibrate Magnetic Brake power RollingResistance
     scs             = None       # introduced 2020-02-10; None=not specified, numeric=SCS device
-    OLEDdisplay     = False      # introduced 2021-03-24; Raspberry small display
+    OutputDisplay   = False      # introduced 2021-03-24; Raspberry small display
     PowerFactor     = 1.00
     SimulateTrainer = False
     TacxType        = False
@@ -227,7 +227,7 @@ class CommandLineVariables(object):
         parser.add_argument   ('-M', dest='manualGrade',                                help=constants.help_M,  required=False, action='store_true')
         parser.add_argument   ('-n', dest='calibrate',                                  help=constants.help_n,  required=False, action='store_false')
         if OnRaspberry:
-           parser.add_argument('-O', dest='OLEDdisplay', choices=['console', 'st7789'], help=constants.help_O, required=False, default=False)
+           parser.add_argument('-O', dest='OutputDisplay', choices=['console','st7789'],help=constants.help_O, required=False, default=False)
         else:
            parser.add_argument('-O', dest='O_IgnoredIfDefined',                         help=argparse.SUPPRESS, required=False, default=False)
         parser.add_argument   ('-p', dest='factor',             metavar='%',            help=constants.help_p,  required=False, default=False, type=int)
@@ -358,16 +358,16 @@ class CommandLineVariables(object):
                 logfile.Console('Command line error; -C incorrect SerialNumber in %s' % self.args.CtrlCommand)
 
         #-----------------------------------------------------------------------
-        # Get OLEDdisplay
+        # Get OutputDisplay
         #-----------------------------------------------------------------------
-        if OnRaspberry and self.args.OLEDdisplay:
-            self.OLEDdisplay = self.args.OLEDdisplay
+        if OnRaspberry and self.args.OutputDisplay:
+            self.OutputDisplay = self.args.OutputDisplay
 
             #---------------------------------------------------------------
-            # OLEDdisplay uses first 24 pins, so our button moves
+            # OutputDisplay uses first 24 pins, so our button moves
             # Refer to pinlayout in raspberry.py
             #---------------------------------------------------------------
-            if self.OLEDdisplay == 'st7789':
+            if self.OutputDisplay == 'st7789':
                 self.rpiButton = 16
 
         #-----------------------------------------------------------------------
@@ -643,7 +643,7 @@ class CommandLineVariables(object):
             if      self.manualGrade:        logfile.Console("-M")
             if      not self.args.calibrate: logfile.Console("-n")
             if v or self.args.factor:        logfile.Console("-p %s" % self.PowerFactor )
-            if v or self.args.OLEDdisplay:   logfile.Console("-O %s" % self.OLEDdisplay)
+            if v or self.args.OutputDisplay: logfile.Console("-O %s" % self.OutputDisplay)
             if      self.args.PowerMode:     logfile.Console("-P")
             if      self.args.Resistance:    logfile.Console("-r")
             if v or self.args.Runoff:        logfile.Console("-R defines Runoff: maxSpeed=%s dip=%s minSpeed=%s targetTime=%s power=%s" % \
