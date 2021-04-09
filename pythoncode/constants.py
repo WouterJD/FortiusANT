@@ -49,6 +49,7 @@ faActivate      = 6     # BLE-devices are activated
 faOperational   = 7     # Target=100W
 faStopped       = 8     # Stopped
 faDeactivated   = 9     # BLE-devices are deactivated
+faTerminated    = 10    # Shutting down
 
 #-------------------------------------------------------------------------------
 # Commandline / Settings constants
@@ -63,7 +64,7 @@ help_G = "Modify the requested grade with a factor/factorDownhill."
 help_H = "Pair this Heart Rate Monitor (0: any, -1: none). Tacx HRM is used if not specified."
 help_L = "Raspberry GPIO pin Layout button/Tacx/Shutdown/Cadence/BLE/ANT."
 help_M = "Run manual grade (ignore target from ANT+ Dongle)."
-help_O = "Output to Raspberry mini display."
+help_O = "Output to Raspberry mini display: console or st7789 / rotation."
 help_P = "Power mode has preference over Resistance mode (for 30 seconds)."
 help_S = "Pair this Speed Cadence Sensor (0: default device)"
 help_R = "The runoff procedure can be customized: maxSpeed/dip/minSpeed/targetTime/power."

@@ -111,6 +111,7 @@ class CommandLineVariables(object):
     CalibrateRR     = False      # introduced 2020-12-07; To calibrate Magnetic Brake power RollingResistance
     scs             = None       # introduced 2020-02-10; None=not specified, numeric=SCS device
     OutputDisplay   = False      # introduced 2021-03-24; Raspberry small display
+    OutputDisplayR  = 0          # introduced 2021-04-09; Rotation
     PowerFactor     = 1.00
     SimulateTrainer = False
     TacxType        = False
@@ -227,7 +228,7 @@ class CommandLineVariables(object):
         parser.add_argument   ('-M', dest='manualGrade',                                help=constants.help_M,  required=False, action='store_true')
         parser.add_argument   ('-n', dest='calibrate',                                  help=constants.help_n,  required=False, action='store_false')
         if OnRaspberry:
-           parser.add_argument('-O', dest='OutputDisplay', choices=['console','st7789'],help=constants.help_O, required=False, default=False)
+           parser.add_argument('-O', dest='OutputDisplay',      metavar='see text',     help=constants.help_O, required=False, default=False)
         else:
            parser.add_argument('-O', dest='O_IgnoredIfDefined',                         help=argparse.SUPPRESS, required=False, default=False)
         parser.add_argument   ('-p', dest='factor',             metavar='%',            help=constants.help_p,  required=False, default=False, type=int)
@@ -361,7 +362,20 @@ class CommandLineVariables(object):
         # Get OutputDisplay
         #-----------------------------------------------------------------------
         if OnRaspberry and self.args.OutputDisplay:
-            self.OutputDisplay = self.args.OutputDisplay
+            s = self.args.OutputDisplay.split("/")
+            try:
+                assert(len(s) <= 2)
+
+                if len(s) >= 1: self.OutputDisplay  = s[0]
+                if len(s) >= 2: self.OutputDisplayR = int( s[1] )   # Rotation
+
+                assert (self.OutputDisplay  in ('console', 'st7789'))
+                assert (self.OutputDisplayR in (0,90,180,270))
+
+                assert(self.CTRL_SerialL >= 0)
+                assert(self.CTRL_SerialR >= 0)
+            except:
+                logfile.Console('Command line error; -O incorrect OutputDisplay in %s' % self.args.CtrlCommand)
 
             #---------------------------------------------------------------
             # OutputDisplay uses first 24 pins, so our button moves

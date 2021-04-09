@@ -252,7 +252,7 @@ def Initialize(pclv):
     TacxTrainer = None
     tcx         = None
     rpi         = raspberry.clsRaspberry(clv)
-    rpi.display(constants.faStarted)
+    rpi.DisplayState(constants.faStarted)
     if clv.exportTCX: tcx = TCXexport.clsTcxExport()
     bleCTP = bleDongle.clsBleCTP(clv)
 
@@ -280,6 +280,11 @@ def Terminate():
 
         if debug.on(debug.Function): f ("AntDongle.dispose_resources()")
         usb.util.dispose_resources(AntDongle.devAntDongle)
+    # --------------------------------------------------------------------------
+    # Delete our globals to help python clean-up
+    # --------------------------------------------------------------------------
+    rpi.DisplayState(constants.faTerminated)
+
     # --------------------------------------------------------------------------
     # Delete our globals to help python clean-up
     # --------------------------------------------------------------------------
@@ -392,7 +397,7 @@ def LocateHW(FortiusAntGui):
     else:
         TacxTrainer = usbTrainer.clsTacxTrainer.GetTrainer(clv, AntDongle)
         FortiusAntGui.SetMessages(Tacx=TacxTrainer.Message)
-        if TacxTrainer.OK: rpi.display(constants.faTrainer)
+        if TacxTrainer.OK: rpi.DisplayState(constants.faTrainer)
 
     #---------------------------------------------------------------------------
     # Show where the heartrate comes from 
@@ -817,7 +822,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
         FortiusAntGui.SetMessages(Tacx="* * * * G I V E   A   P E D A L   K I C K   T O   S T A R T   C A L I B R A T I O N * * * *")
         if debug.on(debug.Function):
             logfile.Write('Tacx2Dongle; start pedaling for calibration')
-        rpi.display(constants.faWait2Calibrate)
+        rpi.DisplayState(constants.faWait2Calibrate)
     try:
     # if True:
         while         FortiusAntGui.RunningSwitch \
@@ -859,7 +864,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                 #---------------------------------------------------------------
                 if StartPedaling:
                     FortiusAntGui.SetMessages(Tacx="* * * * C A L I B R A T I N G   (Do not pedal) * * * *")
-                    rpi.display(constants.faCalibrating)
+                    rpi.DisplayState(constants.faCalibrating)
                     if debug.on(debug.Function):
                         logfile.Write('Tacx2Dongle; start calibration')
                     StartPedaling = False
@@ -949,7 +954,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     #---------------------------------------------------------------------------
     # Initialize antHRM and antFE module
     #---------------------------------------------------------------------------
-    rpi.display(constants.faActivate)
+    rpi.DisplayState(constants.faActivate)
 
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; initialize ANT')
     fe.Initialize()
@@ -993,7 +998,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     antEvent    = False
     pedalEvent  = False
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start main loop')
-    rpi.display(constants.faOperational)
+    rpi.DisplayState(constants.faOperational)
     try:
         while FortiusAntGui.RunningSwitch == True and not AntDongle.DongleReconnected:
             StartTime = time.time()
@@ -1041,9 +1046,11 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                 # print('Use heartrate from trainer', HeartRate)
             
             #-------------------------------------------------------------------
-            # Show actual status
+            # Show actual status; once for the GUI, once for Raspberry
             #-------------------------------------------------------------------
-            FortiusAntGui.SetValues(TacxTrainer.VirtualSpeedKmh, 
+            o = FortiusAntGui
+            for __ in (0,1):
+                o.SetValues(TacxTrainer.VirtualSpeedKmh, 
                             TacxTrainer.Cadence, \
                             TacxTrainer.CurrentPower, \
                             TacxTrainer.TargetMode, \
@@ -1053,6 +1060,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                             HeartRate, \
                             CrancksetIndex, \
                             CassetteIndex, ReductionCassetteX)
+                o = rpi
 
             #-------------------------------------------------------------------
             # Add trackpoint
@@ -1718,7 +1726,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     except KeyboardInterrupt:
         logfile.Console ("Stopped")
 
-    rpi.display(constants.faStopped)
+    rpi.DisplayState(constants.faStopped)
     #---------------------------------------------------------------------------
     # Stop devices, if not reconnecting ANT
     # - Create TCXexport
@@ -1732,7 +1740,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
         FortiusAntGui.SetMessages(Dongle=AntDongle.Message + bleCTP.Message + manualMsg)
         TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
         logfile.Console (ActivationMsg.replace('activated', 'deactivated'))
-        rpi.display(constants.faDeactivated)
+        rpi.DisplayState(constants.faDeactivated)
 
     #---------------------------------------------------------------------------
     # Stop devices

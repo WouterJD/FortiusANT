@@ -1,7 +1,9 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2021-03-03"
+__version__ = "2021-04-01"
+# 2021-04-01    DongleReconnected WAS initially True but should be False
+#               (Although the field should only be used when AntDongle.OK = True)
 # 2021-03-03    Message in ...Config() function only given if self.ConfigMsg:
 #               so that it's given only once.
 #               When -D -1 is specified, we don't even look for an ANTdongle
@@ -371,13 +373,13 @@ RfFrequency_2478Mhz     = 0x4e          # used for Tacx Vortex Headunit
 #
 #---------------------------------------------------------------------------
 class clsAntDongle():
-    devAntDongle        = None           # There is no dongle connected yet
+    devAntDongle        = None      # There is no dongle connected yet
     ConfigMsg           = True
     OK                  = False
     DeviceID            = None
     Message             = ''
     Cycplus             = False
-    DongleReconnected   = True
+    DongleReconnected   = False     # So can be used even when OK=False
     
     #-----------------------------------------------------------------------
     # _ _ i n i t _ _

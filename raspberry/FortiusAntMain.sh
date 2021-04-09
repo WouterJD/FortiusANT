@@ -4,14 +4,14 @@
 cd ~/FortiusANT/raspberry
 
 echo Trashcan emptied - keep 1 month
-find /home/pi/.local/share/Trash/ -name '*.log*'  -type f -mtime +30 -delete
-find /home/pi/.local/share/Trash/ -name '*.json*' -type f -mtime +30 -delete
-find /home/pi/.local/share/Trash/ -name '*.tcx*'  -type f -mtime +30 -delete
+find /home/pi/.local/share/Trash/ -name '*.log*'  -type f -mtime +30 -delete 2>/dev/null
+find /home/pi/.local/share/Trash/ -name '*.json*' -type f -mtime +30 -delete 2>/dev/null
+find /home/pi/.local/share/Trash/ -name '*.tcx*'  -type f -mtime +30 -delete 2>/dev/null
 
 echo Log-files from previous session are deleted - keep two days
-find ./ -name '*.log'  -type f -mtime +2 -delete
-find ./ -name '*.json' -type f -mtime +2 -delete
-find ./ -name '*.tcx'  -type f -mtime +2 -delete
+find ./ -name '*.log'  -type f -mtime +2 -delete 2>/dev/null
+find ./ -name '*.json' -type f -mtime +2 -delete 2>/dev/null
+find ./ -name '*.tcx'  -type f -mtime +2 -delete 2>/dev/null
 
 echo Stop standard Bluetooth Service
 sudo service bluetooth stop
