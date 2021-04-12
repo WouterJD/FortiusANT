@@ -367,7 +367,12 @@ class CommandLineVariables(object):
                 assert(len(s) <= 2)
 
                 if len(s) >= 1: self.OutputDisplay  = s[0]
-                if len(s) >= 2: self.OutputDisplayR = int( s[1] )   # Rotation
+                if len(s) >= 2: self.OutputDisplayR = int( s[1] )    # Rotation
+
+                if self.OutputDisplay == 'display':
+                    self.OutputDisplay = 'st7789'       # Default device driver
+                    # As long as no more devices supported, no reason to bother user
+                    # Like this we're ready for other devices in future 
 
                 assert (self.OutputDisplay  in ('console', 'st7789'))
                 assert (self.OutputDisplayR in (0,90,180,270))

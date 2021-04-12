@@ -314,14 +314,16 @@ def Terminate():
 # ------------------------------------------------------------------------------
 def IdleFunction(FortiusAntGui):
     global TacxTrainer, rpi
-    rtn = 0
+    rtn                   = 0
+    TacxTrainer.tacxEvent = False
     if TacxTrainer and TacxTrainer.OK:
-        FortiusAntGui.SetLeds(False,False,TacxTrainer.PedalEcho == 1,None,True)
-        rpi.SetLeds          (False,False,TacxTrainer.PedalEcho == 1,None,True) # ANT, BLE, Cadence, Shutdown, Tacx
+        FortiusAntGui.SetLeds(False, False, TacxTrainer.PedalEcho == 1, None, TacxTrainer.tacxEvent)
+        rpi.SetLeds          (False, False, TacxTrainer.PedalEcho == 1, None, TacxTrainer.tacxEvent)
         if rpi.CheckShutdown(FortiusAntGui):
             # If rpi shutdown button pressed, stop
             TacxTrainer.Buttons = usbTrainer.CancelButton
         else:
+            TacxTrainer.tacxEvent = False
             TacxTrainer.Refresh(True, usbTrainer.modeStop)
             # Cancel-button is disabled to avoid accidental stop
             if TacxTrainer.Buttons == usbTrainer.CancelButton:
@@ -807,16 +809,17 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                         # Extend countdown: 2 ==> 4 minutes, 4 ==> 8 minutes
                         # This will not cause the countdown to take longer,
                         # it only extends the maximum time untill a stable reading.
-    CountDown       = 120 * CountDownX # 2 minutes; 120 is the max on the cadence meter
-    ResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for calculating running average
-    AvgResistanceArray = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for collating running averages
-    TacxTrainer.Calibrate  = 0
-    StartPedaling   = True
-    Counter         = 0
+    CountDown             = 120 * CountDownX # 2 minutes; 120 is the max on the cadence meter
+    ResistanceArray       = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for calculating running average
+    AvgResistanceArray    = numpy.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) # Array for collating running averages
+    TacxTrainer.Calibrate = 0
+    StartPedaling         = True
+    Counter               = 0
 
-    bleEvent    = False
-    antEvent    = False
-    pedalEvent  = False
+    bleEvent              = False
+    antEvent              = False
+    pedalEvent            = False
+    TacxTrainer.tacxEvent = False
 
     if clv.calibrate and TacxTrainer.CalibrateSupported():
         FortiusAntGui.SetMessages(Tacx="* * * * G I V E   A   P E D A L   K I C K   T O   S T A R T   C A L I B R A T I O N * * * *")
@@ -835,9 +838,10 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             #-------------------------------------------------------------------
             # Receive / Send trainer
             #-------------------------------------------------------------------
+            TacxTrainer.tacxEvent = False
             TacxTrainer.Refresh(True, usbTrainer.modeCalibrate)
-            FortiusAntGui.SetLeds(antEvent,bleEvent,pedalEvent,None,True)
-            rpi.SetLeds          (antEvent,bleEvent,pedalEvent,None,True) # ANT, BLE, Cadence, Shutdown, Tacx
+            FortiusAntGui.SetLeds(antEvent, bleEvent, pedalEvent, None, TacxTrainer.tacxEvent)
+            rpi.SetLeds          (antEvent, bleEvent, pedalEvent, None, TacxTrainer.tacxEvent)
             if rpi.CheckShutdown(FortiusAntGui): FortiusAntGui.RunningSwitch = False
 
             #-------------------------------------------------------------------
@@ -993,10 +997,11 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     # -- Pedal stroke analysis
     # -- Modify data, due to Buttons or ANT
     #---------------------------------------------------------------------------
-    flush       = True
-    bleEvent    = False
-    antEvent    = False
-    pedalEvent  = False
+    flush                 = True
+    bleEvent              = False
+    antEvent              = False
+    pedalEvent            = False
+    TacxTrainer.tacxEvent = False
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start main loop')
     rpi.DisplayState(constants.faOperational)
     try:
@@ -1023,12 +1028,13 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             # Raspberry PI leds
             #-------------------------------------------------------------------
             if QuarterSecond:
-                FortiusAntGui.SetLeds(antEvent,bleEvent,pedalEvent,None,True)
-                rpi.SetLeds          (antEvent,bleEvent,pedalEvent,None,True) # ANT, BLE, Cadence, Shutdown, Tacx
+                FortiusAntGui.SetLeds(antEvent, bleEvent, pedalEvent, None, TacxTrainer.tacxEvent)
+                rpi.SetLeds          (antEvent, bleEvent, pedalEvent, None, TacxTrainer.tacxEvent)
                 if rpi.CheckShutdown(FortiusAntGui): FortiusAntGui.RunningSwitch = False
-                bleEvent   = False
-                antEvent   = False
-                pedalEvent = False
+                bleEvent              = False
+                antEvent              = False
+                pedalEvent            = False
+                TacxTrainer.tacxEvent = False
 
             #-------------------------------------------------------------------
             # If NO Speed Cadence Sensor defined, use Trainer-info

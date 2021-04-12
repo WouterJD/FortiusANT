@@ -1,7 +1,10 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2021-04-09"
+__version__ = "2021-04-12"
+# 2021-04-12  StatusLeds (-l) flag means that GPIO leds/buttons are used,
+#                   the status of the leds is processed on behalf of the
+#                   -O display.
 # 2021-04-09  Display realized; only [st7789 240x240 1.3"] supported!
 #                   No other form-factors considered
 #                   e.g. 120x240 would need other layout
@@ -109,6 +112,16 @@ def ShutdownIfRequested():
             MySelf.LedCadence  .on()
             MySelf.LedBLE      .on()
             MySelf.LedANT      .on()
+        if MySelf != None and MySelf.OutputDisplay:
+            MySelf._DrawTextTable ( [ [ '',                     None ],\
+                                      [ '',                     None ],\
+                                      [ '',                     None ],\
+                                      [ '',                     None ],\
+                                      [ '',                     None ],\
+                                      [ '',                     None ],\
+                                      [ '',                     None ],\
+                                      [ 'Power',                FORTIUS ],\
+                                      [ 'can be disconnected',  FORTIUS ]])
         subprocess.call("sudo shutdown -P now", shell=True)
 
 # ==============================================================================
@@ -257,6 +270,7 @@ class clsRaspberry:
     # [ L E D ]   T o g g l e
     # --------------------------------------------------------------------------
     # Input     led, event, ledState
+    #           self.StatusLeds: 
     #
     # Function  If no event occurred, led is switched off
     #           If an event occurred, led is toggled on/off
@@ -265,19 +279,20 @@ class clsRaspberry:
     #           blink on/off when events are received; when no events received
     #           the led willl go off.
     #
+    #           Only if self.StatusLeds, the GPIO functions are called.
+    #
     # Output    Led is switched off or toggled
     #
     # Returns   new state of the led
     # --------------------------------------------------------------------------
     def _Toggle(self, led, event, ledState):
         rtn = None
-        if self.StatusLeds:
-            if not event:
-                led.off()
-                rtn = False
-            else:
-                led.toggle()
-                rtn = not ledState
+        if not event:
+            if self.StatusLeds: led.off()
+            rtn = False
+        else:
+            if self.StatusLeds: led.toggle()
+            rtn = not ledState
         return rtn
 
     # --------------------------------------------------------------------------
@@ -546,7 +561,7 @@ class clsRaspberry:
             # Show image with text on top
             self.image  = self.faImage
             self.draw   = ImageDraw.Draw(self.image)
-            self.draw.text( (10, 0), 'FortiusAnt', font=self.fontLb, fill=FORTIUS)
+            self.draw.text    ( (10, 0     ), 'FortiusAnt',          font=self.fontLb, fill=FORTIUS)
 
         self.st7789.image(self.faImage, self.rotation)
 
@@ -708,7 +723,7 @@ class clsRaspberry:
         # Show texts, corresponding to state
         # ----------------------------------------------------------------------
         if True or self.OutputDisplay:
-            if  FortiusAntState == constants.faTerminated:
+            if  False and FortiusAntState == constants.faTerminated:
                 # In this case, show the image again
                 self._ShowImage()
             else:
@@ -730,9 +745,9 @@ class clsRaspberry:
                                         [ 'Calibrating...',        c3 ],\
                                         [ 'Activate ' + device,    c4 ],\
                                         [ 'Ready to Zwift',        c5 ],\
-                                        [ 'Stopped',               c6 ],\
+                                        [ 'Bridge stopped',        c6 ],\
                                         [ device + ' stopped',     c7 ],\
-                                        [ 'Shutting down',         c8 ]])
+                                        [ 'FortiusAnt stopped',    c8 ]])
 
     # --------------------------------------------------------------------------
     # [ O U T P U T ] S e t V a l u e s - implementations for the -L displays

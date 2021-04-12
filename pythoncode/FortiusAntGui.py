@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-22"
+__version__ = "2021-04-12"
+# 2021-04-12    Status leds are fixed part of GUI, clv.StatusLeds is for Raspberry only
 # 2021-03-22    Status leds added to screen; SetLeds() added
 # 2021-03-02    Buttons enlarged for Raspberry rendering
 # 2021-02-22    Button correction removed from timer
@@ -608,7 +609,7 @@ class frmFortiusAntGui(wx.Frame):
         # right-aligns with Power
         # bottom-aligns with Pda
         # ----------------------------------------------------------------------
-        if self.clv.StatusLeds:
+        if True or self.clv.StatusLeds:
             self.StatusLedsXr = self.Power.Position[0] + self.Power.Size[0]
             self.StatusLedsYb = y + wh
 
@@ -1240,7 +1241,7 @@ class frmFortiusAntGui(wx.Frame):
         # - If there is no BLE interface, do not show BLE-led
         # - Only on Raspberry, not show shutdown-led
         # ----------------------------------------------------------------------
-        if self.clv.StatusLeds:
+        if True or self.clv.StatusLeds:
             all = FixedForDocu
             x   = self.StatusLedsXr         # Right side of rightmost label
             y   = self.StatusLedsYb - 10    # Upper size of status leds

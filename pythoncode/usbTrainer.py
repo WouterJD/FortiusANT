@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-16"
+__version__ = "2021-04-12"
+# 2021-04-12    self.tacxEvent = set to True when valid data is received
+#                   which can be used as trigger to blink the corresponding led
 # 2021-03-16    @Meanhat's odd T1902 supported: 0547:2131
 # 2021-02-11    added: -e homeTrainer --> MultiplyPower()
 #               removed: self.DynamicAdjust code (which was experimental code)
@@ -311,6 +313,9 @@ class clsTacxTrainer():
     CalculatedSpeedKmh      = 0             # see #Power2Speed#
     TargetResistanceFT      = 0             # int       Returned from trainer
     WheelSpeed              = 0             # int
+    tacxEvent               = False         # is set to True after received from USB or ANT
+                                            # is set to False after unsuccesful USB-receive
+                                            # must be set to False by caller setting leds
 
     # Other general variables
     clv                     = None          # Command line variables
@@ -1182,6 +1187,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
             # BroadcastData - info received from the master device
             #-------------------------------------------------------------------
             if id == ant.msgID_BroadcastData:
+                self.tacxEvent = True
                 #---------------------------------------------------------------
                 # Ask what device is paired
                 #---------------------------------------------------------------
@@ -1475,7 +1481,7 @@ class clsTacxAntTrainer(clsTacxTrainer):
             # BroadcastData - info received from the master device
             #-------------------------------------------------------------------
             if id == ant.msgID_BroadcastData:
-
+                self.tacxEvent = True
                 #-----------------------------------------------------------------
                 # Data page 221 (0x01) msgUnpage221_01_TacxGeniusSpeedPowerCadence
                 #-----------------------------------------------------------------
@@ -1723,6 +1729,7 @@ class clsTacxAntGeniusTrainer(clsTacxAntTrainer):
             # BroadcastData - info received from the master device
             #-------------------------------------------------------------------
             if id == ant.msgID_BroadcastData:
+                self.tacxEvent = True
                 #---------------------------------------------------------------
                 # Ask what device is paired
                 #---------------------------------------------------------------
@@ -1976,6 +1983,7 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
             # BroadcastData - info received from the master device
             # -------------------------------------------------------------------
             elif id == ant.msgID_BroadcastData:
+                self.tacxEvent = True
                 # ---------------------------------------------------------------
                 # Ask what device is paired
                 # ---------------------------------------------------------------
@@ -2127,12 +2135,15 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     # returns   data
     #---------------------------------------------------------------------------
     def USB_Read(self):
+        self.tacxEvent = True                   # Assume we receive correct buffer
         data = array.array('B', [])             # Empty array of bytes
         try:
             data = self.UsbDevice.read(0x82, 64, 30)
         except TimeoutError:
+            self.tacxEvent = False              # No data received
             pass
         except Exception as e:
+            self.tacxEvent = False              # No data received
             if "timeout error" in str(e) or "timed out" in str(e): # trainer did not return any data
                 pass
             else:
@@ -2187,6 +2198,7 @@ class clsTacxUsbTrainer(clsTacxTrainer):
         # Inform when there's something unexpected
         #-----------------------------------------------------------------------
         if len(data) < 40:
+            self.tacxEvent = False
             # 2020-09-29 the buffer is ignored when too short (was processed before)
             logfile.Console('Tacx head unit returns insufficient data, len=%s' % len(data))
             if self.clv.PedalStrokeAnalysis:
@@ -2195,6 +2207,7 @@ class clsTacxUsbTrainer(clsTacxTrainer):
                 logfile.Console('To resolve, check all (signal AND power) cabling for loose contacts.')
 
         elif self.Header != expectedHeader:
+            self.tacxEvent = False
             logfile.Console('Tacx head unit returns incorrect header %s (expected: %s)' % \
                                         (hex(expectedHeader), hex(self.Header)))
 
