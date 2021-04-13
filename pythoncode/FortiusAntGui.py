@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-04-12"
+__version__ = "2021-04-13"
+# 2021-04-13  clv.imperial: speed in mph
 # 2021-04-12    Status leds are fixed part of GUI, clv.StatusLeds is for Raspberry only
 # 2021-03-22    Status leds added to screen; SetLeds() added
 # 2021-03-02    Buttons enlarged for Raspberry rendering
@@ -99,7 +100,7 @@ import webbrowser
 import wx
 import wx.lib.agw.speedmeter as SM
 
-from   constants                    import mode_Power, mode_Grade, OnRaspberry
+from   constants                    import mode_Power, mode_Grade, OnRaspberry, mile
 import debug
 import logfile
 import FortiusAntCommand     as cmd
@@ -503,9 +504,9 @@ class frmFortiusAntGui(wx.Frame):
         _TextCtrlW2  = int(SpeedWH/2)
 
         # ----------------------------------------------------------------------
-		# self.Speed label & text
+		# self.Speed label & text; speed in km/h or mph
         # ----------------------------------------------------------------------
-        self.txtSpeed = wx.TextCtrl(self.panel, value="99.9 km/h", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtSpeed = wx.TextCtrl(self.panel, value="99.9", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtSpeed.SetBackgroundColour(bg)
         self.txtSpeed.SetPosition((int(self.Speed.Position[0] + (self.Speed.Size[0] - self.txtSpeed.Size[0])/2), \
                                     self.Speed.Position[1] + self.Speed.Size[1] - 2 * self.txtSpeed.Size[1]))
@@ -952,29 +953,35 @@ class frmFortiusAntGui(wx.Frame):
 
             # 2020-02-07: LargeTexts implemented
             if LargeTexts:
-                self.txtSpeed.SetValue      ("%4.1fkm/h"% fSpeed  + suffix)
+                if self.clv.imperial:
+                    self.txtSpeed.SetValue (("%4.1fmph" % (fSpeed / mile))+ suffix)
+                else:
+                    self.txtSpeed.SetValue ("%4.1fkm/h"% fSpeed           + suffix)
 
                 if self.Calibrating:
-                    self.txtRevs.SetValue   ("%i"       % iRevs   + suffix)
+                    self.txtRevs.SetValue  ("%i"       % iRevs            + suffix)
                 else:
-                    self.txtRevs.SetValue   ("%i/min"   % iRevs   + suffix)
+                    self.txtRevs.SetValue  ("%i/min"   % iRevs            + suffix)
 
-                self.txtPower.SetValue      ("%iW"      % iPower  + suffix)
+                self.txtPower.SetValue     ("%iW"      % iPower           + suffix)
 
                 if iTacx == 0:
                     self.txtTacx.SetValue  ("")
                 else:
-                    self.txtTacx.SetValue  ("%i"      % iTacx   + suffix)
+                    self.txtTacx.SetValue  ("%i"       % iTacx            + suffix)
                 fTargetPower = "%iW"
             else:
-                self.txtSpeed.SetValue ("%4.1f km/h"  % fSpeed  + suffix)
-                self.txtRevs.SetValue  ("%i revs/min" % iRevs   + suffix)
-                self.txtPower.SetValue ("%i Watt"     % iPower  + suffix)
-                self.txtTacx.SetValue  ("Tacx=%i"     % iTacx   + suffix)
+                if self.clv.imperial:
+                    self.txtSpeed.SetValue (("%4.1f mph"  % (fSpeed/mile))+ suffix)
+                else:
+                    self.txtSpeed.SetValue ("%4.1f km/h" % fSpeed         + suffix)
+                self.txtRevs.SetValue  ("%i revs/min"    % iRevs          + suffix)
+                self.txtPower.SetValue ("%i Watt"        % iPower         + suffix)
+                self.txtTacx.SetValue  ("Tacx=%i"        % iTacx          + suffix)
                 fTargetPower = "%i Watt"
 
             if   iTargetMode == mode_Power:
-                self.txtTarget.SetValue(fTargetPower % iTargetPower + suffix)
+                self.txtTarget.SetValue(fTargetPower     % iTargetPower + suffix)
 
             elif iTargetMode == mode_Grade:
                 s = "%2.0f%%" % fTargetGrade

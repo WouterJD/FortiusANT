@@ -2,7 +2,7 @@
 cd $HOME
 # ----------------------------------------------------------
 # https://learn.adafruit.com/adafruit-mini-pitft-135x240-color-tft-add-on-for-raspberry-pi/python-setup
-# Install OLED display dependencies
+# Install OutputDisplay dependencies
 # ----------------------------------------------------------
 pip3 install adafruit-circuitpython-rgb-display
 pip3 install --upgrade --force-reinstall spidev
@@ -37,5 +37,5 @@ sudo apt-get install python3-numpy
 
 # ----------------------------------------------------- Done
 Raspberry='\033[0;35m'
-printf "${Raspberry} OLEDdisplay dependencies installed, press Enter to continue: "
+printf "${Raspberry} OutputDisplay dependencies installed, press Enter to continue: "
 read reply

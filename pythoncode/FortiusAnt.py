@@ -23,7 +23,7 @@ __version__ = "2021-03-22"
 #               This module contains program startup, GUI-binding and
 #               multi-processing functionality only
 #-------------------------------------------------------------------------------
-from   constants import mode_Power, mode_Grade, UseGui, UseBluetooth, UseMultiProcessing, OnRaspberry
+from   constants import mode_Power, mode_Grade, UseGui, UseBluetooth, UseMultiProcessing, OnRaspberry, mile
 import constants                        #  for __version__
 
 import argparse
@@ -215,12 +215,20 @@ class clsFortiusAntConsole:
 
     def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, \
             fTargetGrade, iTacx, iHeartRate, iCrancksetIndex, iCassetteIndex, fReduction):
+        global clv
         # ----------------------------------------------------------------------
         # Console: Update current readings, once per second
         # ----------------------------------------------------------------------
         delta = time.time() - self.LastTime   # Delta time since previous
         if delta >= 1 and (not clv.gui or debug.on(debug.Application)):
             self.LastTime = time.time()           # Time in seconds
+
+            if clv.imperial:
+                s1 = fSpeed / mile
+                s2 = "mph"
+            else:
+                s1 = fSpeed
+                s2 = "km/h"
 
             if   iTargetMode == mode_Power:
                 sTarget = "%3.0fW" % iTargetPower
@@ -230,10 +238,9 @@ class clsFortiusAntConsole:
                     sTarget += "(%iW)" % iTargetPower        # Target power added for reference
             else:
                 sTarget = "None"
-            msg = "Target=%s Speed=%4.1fkmh hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f T=%2s %2s %s" % \
-                  (sTarget,       fSpeed,  iHeartRate,       iPower,    iRevs,  iTacx, iCrancksetIndex, iCassetteIndex, fReduction)
-            msg = "Target=%s %4.1fkmh hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f %3s%%" % \
-                  (sTarget,  fSpeed,  iHeartRate,       iPower,    iRevs,  iTacx, int(fReduction*100))
+
+            msg = "Target=%s %4.1f%s hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f %3s%%" % \
+                  (sTarget,  s1,  s2,   iHeartRate,   iPower,    iRevs,  iTacx, int(fReduction*100))
             logfile.Console (msg)
 
     def SetMessages(self, Tacx=None, Dongle=None, HRM=None):

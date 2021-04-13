@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2021-04-12"
+__version__ = "2021-04-13"
+# 2021-04-13  clv.imperial: speed in mph
 # 2021-04-12  StatusLeds (-l) flag means that GPIO leds/buttons are used,
 #                   the status of the leds is processed on behalf of the
 #                   -O display.
@@ -34,7 +35,7 @@ import sys
 import time
 
 MySelf = None
-from   constants            import mode_Power, mode_Grade, OnRaspberry
+from   constants            import mode_Power, mode_Grade, OnRaspberry, mile
 import constants
 import FortiusAntCommand    as cmd
 import logfile
@@ -129,26 +130,28 @@ def ShutdownIfRequested():
 # ------------------------------------------------------------------------------
 #       Raspberry Pi Pin  Pin Raspberry Pi          | Default leds/buttons (-L) | OLED display 
 #    + 3,3 V           1  2   + 5 V                 |                           | x x
-#  (SDA1) GPI_O2       3  4   + 5 V                 |                           | x x
-#  (SCL1) GPI_O3       5  6   GND                   | clv.rpiButton  fanGround  | x x
-#  (GPIO_GCLK) GPI_O4  7  8   GPIO_14 (TXD0)        |                Fan        | x x
-#    GND               9  10  GPIO_15 (RXD0)        | btnGround                 | x x
+#  (SDA1) GPIO_2       3  4   + 5 V                 |                           | x x
+#  (SCL1) GPIO_3       5  6   GND                   | clv.rpiButton  fanGround  | x x
+#  (GPIO_GCLK) GPIO_4  7  8   GPIO_14 (TXD)         |                Fan        | x x
+#    GND               9  10  GPIO_15 (RXD)         | btnGround                 | x x
 # (GPIO_GEN0) GPIO_17 11  12  GPIO_18 (GPIO_GEN1)   |                           | x x
 # (GPIO_GEN2) GPIO_27 13  14  GND                   |                           | x x
 # (GPIO_GEN3) GPIO_22 15  16  GPIO_23 (GPIO_GEN4)   |                           | x x
 #    + 3,3 V          17  18  GPIO_24 (GPIO_GEN5)   |                           | x x
 # (SPI_MISO) GPIO_9   21  22  GPIO_25 (GPIO_GEN6)   |                           | x x
-# (SPI_SLCK) GPIO_11  23  24  GPIO_8 (SPI_CE0_N)    |                           | x x
-#    GND              25  26  GPIO_7 (SPI_CE1_N)    |                           |
+# (SPI_SLCK) GPIO_11  23  24  GPIO_8  (SPI_CE0_N)   |                           | x x
+#    GND              25  26  GPIO_7  (SPI_CE1_N)   |                           |
 # (für I2C) ID_SD     27  28  ID_SC (nur für I2C)   |                           |
-#    GPI_O5           29  30  GND                   | clv.rpiTacx               | Tacx fanGnd
-#    GPI_O6           31  32  GPIO_12               | clv.rpiShutdown           | Shut Fan
-#    GPI_O13          33  34  GND                   | clv.rpiCadence            | Cade btnGnd
-#    GPI_O19          35  36  GPIO_16               | clv.rpiBLE                | BLE  Button
+#    GPIO_5           29  30  GND                   | clv.rpiTacx               | Tacx fanGnd
+#    GPIO_6           31  32  GPIO_12               | clv.rpiShutdown           | Shut Fan
+#    GPIO_13          33  34  GND                   | clv.rpiCadence            | Cade btnGnd
+#    GPIO_19          35  36  GPIO_16               | clv.rpiBLE                | BLE  Button
 #    GPIO_26          37  38  GPIO 20               | clv.rpiANT                | ANT
 #    GND              39  40  GPIO 21               | clv.rpiGround             | Gnd
 #
-# Reference https://gpiozero.readthedocs.io/en/stable/api_output.html#led
+# References:
+#           https://www.raspberrypi.org/documentation/usage/gpio/ 
+#           https://gpiozero.readthedocs.io/en/stable/api_output.html#led
 #           https://gpiozero.readthedocs.io/en/stable/api_input.html#button
 # ==============================================================================
 class clsRaspberry:
@@ -773,6 +776,11 @@ class clsRaspberry:
                     iTacx, iHeartRate, \
                     iCrancksetIndex, iCassetteIndex, fReduction):
 
+            if self.clv.imperial:
+                s = "%4.1fmph"  % (fSpeed / mile)
+            else:
+                s = "%4.1fkm/h" % fSpeed
+
             if   iTargetMode == mode_Power:
                 t = "%iW" % iTargetPower
 
@@ -783,7 +791,7 @@ class clsRaspberry:
             else:
                 t = "No target"
 
-            self._DrawTextTable ( [ [ 'Speed'  , "%4.1fkm/h" % fSpeed ],\
+            self._DrawTextTable ( [ [ 'Speed'  , s                    ],\
                                     [ 'Cadence', "%i/min"    % iRevs  ],\
                                     [ 'Power'  , "%iW"       % iPower ],\
                                     [ 'Target ', t                    ]], True)

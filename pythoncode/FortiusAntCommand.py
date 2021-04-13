@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-24"
+__version__ = "2021-04-13"
+# 2021-04-13    added: mph
+# 2021-04-13    If AntRequired and self.antDeviceID == -1, a message is given
 # 2021-03-24    changed: command line help + validation
 # 2021-03-24    added: OutputDisplay
 # 2021-03-22    changed: -l allowed for Raspberry or GUI
@@ -102,6 +104,7 @@ class CommandLineVariables(object):
     gui             = False
     hrm             = None       # introduced 2020-02-09; None=not specified, numeric=HRM device, -1=no HRM
     homeTrainer     = False
+    imperial        = False      # introduced 2021-04-13; If True, speed is displayed in mph
     manual          = False
     manualGrade     = False
     PedalStrokeAnalysis = False
@@ -216,6 +219,7 @@ class CommandLineVariables(object):
            parser.add_argument('-g', dest='g_IgnoredIfDefined',                         help=argparse.SUPPRESS, required=False, action='store_true')
         parser.add_argument   ('-G', dest='GradeAdjust',        metavar='% / % / %',    help=constants.help_G,  required=False, default=False)
         parser.add_argument   ('-H', dest='hrm',                metavar='ANT+DeviceID', help=constants.help_H,  required=False, default=False, type=int)
+        parser.add_argument   ('-i', dest='imperial',                                   help=constants.help_i,  required=False, action='store_true')
         if UseGui or OnRaspberry:
            parser.add_argument('-l', dest='StatusLeds',                                 help=constants.help_l,  required=False, action='store_true')
         else:
@@ -238,8 +242,9 @@ class CommandLineVariables(object):
         parser.add_argument   ('-s', dest='simulate',                                   help=constants.help_s,  required=False, action='store_true')
 #scs    parser.add_argument   ('-S', dest='scs',                metavar='ANT+ DeviceID',help=constants.help_S,  required=False, default=False, type=int)
         parser.add_argument   ('-T', dest='Transmission',       metavar='see text',     help=constants.help_T,  required=False, default=False)
+        self.ant_tacx_models = ['Bushido', 'Genius', 'Vortex', 'Magneticbrake', 'Motorbrake']
         parser.add_argument   ('-t', dest='TacxType',                                   help=constants.help_t, required=False, default=False, \
-                    choices=['Bushido', 'Genius', 'Vortex', 'Magneticbrake', 'Motorbrake'] + ['i-Vortex'])
+                    choices=self.ant_tacx_models + ['i-Vortex'])
                     # i-Vortex is still allowed for compatibility
         parser.add_argument   ('-x', dest='exportTCX',                                  help=constants.help_x,  required=False, action='store_true')
 
@@ -298,6 +303,7 @@ class CommandLineVariables(object):
             self.gui                = self.args.gui
         self.homeTrainer            = self.args.homeTrainer # Exersize Bike
         self.StatusLeds             = self.args.StatusLeds
+        self.imperial               = self.args.imperial
         self.manual                 = self.args.manual
         self.manualGrade            = self.args.manualGrade
         self.calibrate              = self.args.calibrate
@@ -542,17 +548,21 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         # Get TacxType
         #-----------------------------------------------------------------------
+        AntRequired = False
         if self.args.TacxType:
             self.TacxType = self.args.TacxType
             if 'Vortex' in self.TacxType:
                 self.Tacx_Vortex  = True
                 self.Tacx_Cadence = False
+                AntRequired = True
             elif 'Genius' in  self.TacxType:
                 self.Tacx_Genius  = True
                 self.Tacx_Cadence = False
+                AntRequired = True
             elif 'Bushido' in self.TacxType:
                 self.Tacx_Bushido = True
                 self.Tacx_Cadence = False
+                AntRequired = True
             elif 'Magneticbrake' in self.TacxType:
                 self.Tacx_Magneticbrake = True
             elif 'Motorbrake' in self.TacxType:
@@ -560,6 +570,10 @@ class CommandLineVariables(object):
             else:
                 logfile.Console('Command line error; -t incorrect value=%s' % self.args.TacxType)
                 self.args.TacxType = False
+
+        if AntRequired and self.antDeviceID == -1:
+            logfile.Console('You have selected an ANT-trainer (-t %s) and de-selected ANT-dongle (-D-1); -D-1 ignored.' % self.TacxType)
+            self.antDeviceID = None
 
         #-----------------------------------------------------------------------
         # Get Transmission
@@ -660,6 +674,7 @@ class CommandLineVariables(object):
                 logfile.Console("-L %s/%s/%s/%s/%s/%s" % (self.rpiButton, self.rpiTacx, self.rpiShutdown, self.rpiCadence, self.rpiBLE, self.rpiANT) )
             if      self.manual:             logfile.Console("-m")
             if      self.manualGrade:        logfile.Console("-M")
+            if      self.imperial:           logfile.Console("-i")
             if      not self.args.calibrate: logfile.Console("-n")
             if v or self.args.factor:        logfile.Console("-p %s" % self.PowerFactor )
             if v or self.args.OutputDisplay: logfile.Console("-O %s" % self.OutputDisplay)

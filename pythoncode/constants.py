@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-24"
+__version__ = "2021-04-13"
+# 2021-04-13    added: help_i
 # 2021-03-24    added: help_L, help_O
 # 2021-03-22    added: OnRaspberry; status leds also for GUI
 # 2021-03-02    added: -l Raspberry status Leds
@@ -52,6 +53,11 @@ faDeactivated   = 9     # BLE-devices are deactivated
 faTerminated    = 10    # Shutting down
 
 #-------------------------------------------------------------------------------
+# Miscellaneous
+#-------------------------------------------------------------------------------
+mile            = 1.609344  # km
+
+#-------------------------------------------------------------------------------
 # Commandline / Settings constants
 #-------------------------------------------------------------------------------
 Transmission = "34-50*x34-30-27-25-23-21-19*-17-15-13-11"      # No spaces here!
@@ -75,6 +81,7 @@ help_d = "Create logfile with debugging data."
 help_e = "Operate as homeTrainer (excersize bike); up/down increments/decrements power with 10%%."
 help_g = "Run with graphical user interface."
 help_h = "Reserved for help!!"
+help_i = "Imperial, speed in mph."
 help_l = "Display status leds."
 help_m = "Run manual power (ignore target from ANT+ Dongle)."
 help_n = "Do not calibrate before start."
