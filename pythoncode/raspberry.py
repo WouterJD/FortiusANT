@@ -195,6 +195,10 @@ class clsRaspberry:
 
     buttonA         = None
     buttonB         = None
+    buttonUp        = False     # button was pressed, must be reset by user
+    buttonDown      = False     # same
+
+    ButtonDefaultValue = True   # The value when the button is NOT pressed
 
     def __init__(self, clv):
         global MySelf
@@ -367,7 +371,9 @@ class clsRaspberry:
     # Returns   True when button pressed firmly
     # --------------------------------------------------------------------------
     def CheckShutdown(self, FortiusAntGui=None):
-        repeat = 5      # timeout = n * .25 seconds        # 5 blinks is enough
+        repeat = 7      # timeout = n * .25 seconds        # 5 blinks is enough
+                        # 7 because the first two cycles are blink to allow
+                        #       for a "short button press" without messages.
         rtn    = True   # Assume button will remain pressed
                         # If we don't use leds/buttons ==> False
         ResetLeds= False
@@ -382,17 +388,18 @@ class clsRaspberry:
             # Blink the (red) Shutdown led while button pressed
             # ------------------------------------------------------------------
             while repeat:
-                repeat -= 1
                 if self.ShutdownButtonIsHeld():
-                    self.SetLeds             (False, False, False, True, False)
-                    if FortiusAntGui != None:
-                        FortiusAntGui.SetLeds(False, False, False, True, False)
+                    if repeat <= 5:
+                        self.SetLeds             (False, False, False, True, False)
+                        if FortiusAntGui != None:
+                            FortiusAntGui.SetLeds(False, False, False, True, False)
+                        logfile.Console('Raspberry will be shutdown ... %s ' % repeat)
                     ResetLeds = True
                     time.sleep(.25)
-                    logfile.Console('Raspberry will be shutdown ... %s ' % repeat)
                 else:
                     rtn = False
                     break
+                repeat -= 1
 
             # ------------------------------------------------------------------
             # Final warning
@@ -434,8 +441,8 @@ class clsRaspberry:
         # ----------------------------------------------------------------------
         if     self.buttonA       != None  \
            and self.buttonB       != None  \
-           and self.buttonA.value == False \
-           and self.buttonB.value == False: return True
+           and self.buttonA.value != self.ButtonDefaultValue \
+           and self.buttonB.value != self.ButtonDefaultValue: return True
         return False
 
     # --------------------------------------------------------------------------
@@ -498,6 +505,7 @@ class clsRaspberry:
             self.buttonA.switch_to_input()
             self.buttonB.switch_to_input()
 
+            self.ButtonDefaultValue = self.buttonA.value
             # ------------------------------------------------------------------
             # Startup image is in directory of the .py [or embedded in .exe]
             # ------------------------------------------------------------------
@@ -681,6 +689,17 @@ class clsRaspberry:
         # ----------------------------------------------------------------------
         self.st7789.image(self.image, self.rotation)
 
+        # ----------------------------------------------------------------------
+        # Translate buttons on the ST7789 display to Up/DOWN
+        # Rotation-dependant: Left/Bottom = Down, Right/Top   = Up
+        # ----------------------------------------------------------------------
+        if self.rotation in (180,270):
+            if self.buttonA.value != self.ButtonDefaultValue: self.buttonUp   = True
+            if self.buttonB.value != self.ButtonDefaultValue: self.buttonDown = True
+        else:
+            if self.buttonA.value != self.ButtonDefaultValue: self.buttonDown = True
+            if self.buttonB.value != self.ButtonDefaultValue: self.buttonUp   = True
+
     # --------------------------------------------------------------------------
     # [ O U T P U T ] D i s p l a y S t a t e - implementations for the -L displays
     # --------------------------------------------------------------------------
@@ -747,8 +766,8 @@ class clsRaspberry:
                                         [ 'Give pedal kick',       c2 ],\
                                         [ 'Calibrating...',        c3 ],\
                                         [ 'Activate ' + device,    c4 ],\
-                                        [ 'Ready to Zwift',        c5 ],\
-                                        [ 'Bridge stopped',        c6 ],\
+                                        [ 'Ready for training',    c5 ],\
+                                        [ 'Trainer stopped',       c6 ],\
                                         [ device + ' stopped',     c7 ],\
                                         [ 'FortiusAnt stopped',    c8 ]])
 

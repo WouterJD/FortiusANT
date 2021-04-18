@@ -1,7 +1,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-22"
+__version__ = "2021-04-15"
+# 2021-04-15    Messages were flushed in AntDongle.Write() which is resolved
+#                   in our loop there is only one place where ANT-messages are
+#                   received: AntDongle.Write(msg, True, False)
+# 2021-04-15    Raspberry display integrated, buttons can control loop
 # 2021-03-22    StatusLeds also on GUI
 # 2021-03-03    AntDongle.ConfigMsg set to False after first cycle.
 #                   This avoids repeated sets of messages.
@@ -314,8 +318,7 @@ def Terminate():
 # ------------------------------------------------------------------------------
 def IdleFunction(FortiusAntGui):
     global TacxTrainer, rpi
-    rtn                   = 0
-    TacxTrainer.tacxEvent = False
+    rtn = 0
     if TacxTrainer and TacxTrainer.OK:
         FortiusAntGui.SetLeds(False, False, TacxTrainer.PedalEcho == 1, None, TacxTrainer.tacxEvent)
         rpi.SetLeds          (False, False, TacxTrainer.PedalEcho == 1, None, TacxTrainer.tacxEvent)
@@ -459,6 +462,7 @@ def Runoff(FortiusAntGui):
     # Initialize
     #---------------------------------------------------------------------------
     TacxTrainer.SetPower(clv.RunoffPower)
+    rpi.DisplayState(constants.faTrainer)
     rolldown        = False
     rolldown_time   = 0
     #ShortMessage   = TacxTrainer.Message + " | Runoff - "
@@ -487,6 +491,16 @@ def Runoff(FortiusAntGui):
         # Get data from trainer
         #-----------------------------------------------------------------------
         TacxTrainer.Refresh(True, usbTrainer.modeResistance) # This cannot be an ANT trainer
+
+        FortiusAntGui.SetLeds(False, False, TacxTrainer.PedalEcho == 1, None, TacxTrainer.tacxEvent)
+        rpi.SetLeds          (False, False, TacxTrainer.PedalEcho == 1, None, TacxTrainer.tacxEvent)
+        if rpi.CheckShutdown(FortiusAntGui): FortiusAntGui.RunningSwitch = False
+
+        if rpi.buttonUp and rpi.buttonDown: pass    # No cancel action
+        elif rpi.buttonUp:   TacxTrainer.Buttons = usbTrainer.UpButton
+        elif rpi.buttonDown: TacxTrainer.Buttons = usbTrainer.DownButton
+        rpi.buttonUp    = False
+        rpi.buttonDown  = False
 
         #-----------------------------------------------------------------------
         # Show what happens
@@ -721,7 +735,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
         # No pairing-loop: HRM perhaps not yet active and avoid delay
         #-------------------------------------------------------------------
         # msg = ant.msg4D_RequestMessage(ant.channel_HRM_s, ant.msgID_ChannelID)
-        # AntDongle.Write([msg], False, False)
+        # AntDongle.Write([msg], False)
 
     if clv.Tacx_Vortex:
         #-------------------------------------------------------------------
@@ -731,7 +745,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
         AntDongle.SlaveVTX_ChannelConfig(0)
 
         # msg = ant.msg4D_RequestMessage(ant.channel_VTX_s, ant.msgID_ChannelID)
-        # AntDongle.Write([msg], False, False)
+        # AntDongle.Write([msg], False)
 
         #-------------------------------------------------------------------
         # Create ANT slave channel for VHU
@@ -840,9 +854,14 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             #-------------------------------------------------------------------
             TacxTrainer.tacxEvent = False
             TacxTrainer.Refresh(True, usbTrainer.modeCalibrate)
+
             FortiusAntGui.SetLeds(antEvent, bleEvent, pedalEvent, None, TacxTrainer.tacxEvent)
             rpi.SetLeds          (antEvent, bleEvent, pedalEvent, None, TacxTrainer.tacxEvent)
             if rpi.CheckShutdown(FortiusAntGui): FortiusAntGui.RunningSwitch = False
+
+            if rpi.buttonUp and rpi.buttonDown: TacxTrainer.Buttons = usbTrainer.CancelButton
+            rpi.buttonUp   = False
+            rpi.buttonDown = False
 
             #-------------------------------------------------------------------
             # When calibration IS supported, the following condition will NOT occur.
@@ -1026,15 +1045,26 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
 
             #-------------------------------------------------------------------
             # Raspberry PI leds
+            # here:
+            # - we set the leds, and analogously GUI-leds are added
+            # - we check whether both bottons are pressed to shutdown
+            # - we check that a single button is pressed, to emulate UP/DOWN
             #-------------------------------------------------------------------
             if QuarterSecond:
                 FortiusAntGui.SetLeds(antEvent, bleEvent, pedalEvent, None, TacxTrainer.tacxEvent)
                 rpi.SetLeds          (antEvent, bleEvent, pedalEvent, None, TacxTrainer.tacxEvent)
                 if rpi.CheckShutdown(FortiusAntGui): FortiusAntGui.RunningSwitch = False
+
+                if   rpi.buttonUp and rpi.buttonDown: pass # No cancel action
+                elif rpi.buttonUp:   TacxTrainer.Buttons = usbTrainer.UpButton
+                elif rpi.buttonDown: TacxTrainer.Buttons = usbTrainer.DownButton
+
                 bleEvent              = False
                 antEvent              = False
                 pedalEvent            = False
                 TacxTrainer.tacxEvent = False
+                rpi.buttonUp          = False
+                rpi.buttonDown        = False
 
             #-------------------------------------------------------------------
             # If NO Speed Cadence Sensor defined, use Trainer-info
@@ -1616,7 +1646,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                         #-------------------------------------------------------
                         if not AntHRMpaired:
                             msg = ant.msg4D_RequestMessage(ant.channel_HRM_s, ant.msgID_ChannelID)
-                            AntDongle.Write([msg], False, False)
+                            AntDongle.Write([msg], False)
 
                         #-------------------------------------------------------
                         # Data page 0...4 HRM data
