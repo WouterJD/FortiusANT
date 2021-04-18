@@ -982,6 +982,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     bleEvent    = False
     antEvent    = False
     pedalEvent  = False
+    TacxMessage = ''
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start main loop')
     try:
         while FortiusAntGui.RunningSwitch == True and not AntDongle.DongleReconnected:
@@ -1001,7 +1002,11 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             #-------------------------------------------------------------------
             TacxTrainer.Refresh(QuarterSecond, usbTrainer.modeResistance)
             if TacxTrainer.PedalEcho == 1: pedalEvent = True
-            if clv.gui: FortiusAntGui.SetMessages(Tacx=TacxTrainer.Message + PowerModeActive)
+
+            if TacxMessage != TacxTrainer.Message + PowerModeActive:
+                # Show when changed; wich is most relevant for console-mode
+                TacxMessage = TacxTrainer.Message + PowerModeActive
+                FortiusAntGui.SetMessages(Tacx=TacxMessage)
 
             #-------------------------------------------------------------------
             # Raspberry PI leds

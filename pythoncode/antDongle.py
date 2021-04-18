@@ -562,7 +562,7 @@ class clsAntDongle():
             # able to write (if too many messages pending: Write exception,
             # message lost)
             #---------------------------------------------------------------
-            if flush:
+            if receive and flush:
                 rtn = self.Read(drop)   # Flush -> default timeout = proven!
 
             for message in messages:
