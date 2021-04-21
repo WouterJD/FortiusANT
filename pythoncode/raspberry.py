@@ -740,6 +740,16 @@ class clsRaspberry:
                 pass
 
     def _DisplayStateSt7789(self, FortiusAntState=None, TacxTrainer=None):
+        global PreviousState
+        # ----------------------------------------------------------------------
+        # If no state provided, show previous state
+        # ----------------------------------------------------------------------
+        if FortiusAntState == None:
+            try:
+                FortiusAntState = PreviousState   # pylint: disable=used-before-assignment
+            except:
+                FortiusAntState = constants.faStarted
+
         # ----------------------------------------------------------------------
         # Show texts, corresponding to state of FortiusAnt AND trainer.
         # ----------------------------------------------------------------------
@@ -747,21 +757,26 @@ class clsRaspberry:
             if TacxTrainer == None:
                 # There is no trainer yet, so trainer-dependant text is not there
                 # FortiusAnt is started, next step will be connecting to trainer
-                # Empty lines, so that the first two are top-aligned
-                t = [[ 'FortiusAnt started', constants.WHITE],\
-                     [ 'Trainer connected',  constants.GREY ],\
+                # FortiusAnt is stopped, no trainer ever connected
+                # First and last line according the contents in usbTrainer.py
+                c0  = constants.WHITE if FortiusAntState == constants.faStarted    else constants.BLACK
+                c0a = constants.GREY  if FortiusAntState == constants.faStarted    else constants.BLACK
+                c8  = constants.WHITE if FortiusAntState == constants.faTerminated else constants.BLACK
+                t = [[ 'FortiusAnt started', c0   ],\
+                     [ '',                   None ],\
+                     [ 'Press [Locate HW]',  c0a  ],\
+                     [ 'to continue',        c0a  ],\
                      [ '',                   None ],\
                      [ '',                   None ],\
                      [ '',                   None ],\
                      [ '',                   None ],\
-                     [ '',                   None ],\
-                     [ '',                   None ],\
-                     [ '',                   None ],\
+                     [ 'FortiusAnt stopped', c8   ],\
                     ]
             else:
                 # Show the trainer-enhanced status
                 t = TacxTrainer.DisplayStateTable(FortiusAntState)
             self._DrawTextTable (t)
+        PreviousState = FortiusAntState
 
     # --------------------------------------------------------------------------
     # [ O U T P U T ] S e t V a l u e s - implementations for the -L displays

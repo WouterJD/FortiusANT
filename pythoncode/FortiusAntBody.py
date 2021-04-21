@@ -258,7 +258,7 @@ def Initialize(pclv):
     TacxTrainer = None
     tcx         = None
     rpi         = raspberry.clsRaspberry(clv)
-    rpi.DisplayState(constants.faStarted, TacxTrainer)
+    rpi.DisplayState(constants.faStarted)
     if clv.exportTCX: tcx = TCXexport.clsTcxExport()
     bleCTP = bleDongle.clsBleCTP(clv)
 
@@ -321,6 +321,7 @@ def Terminate():
 def IdleFunction(FortiusAntGui):
     global TacxTrainer, rpi
     rtn = 0
+    rpi.DisplayState(None, TacxTrainer)                   # Repeat last message
     if TacxTrainer and TacxTrainer.OK:
         FortiusAntGui.SetLeds(False, False, TacxTrainer.PedalEcho == 1, None, TacxTrainer.tacxEvent)
         rpi.SetLeds          (False, False, TacxTrainer.PedalEcho == 1, None, TacxTrainer.tacxEvent)
@@ -404,7 +405,10 @@ def LocateHW(FortiusAntGui):
     else:
         TacxTrainer = usbTrainer.clsTacxTrainer.GetTrainer(clv, AntDongle)
         FortiusAntGui.SetMessages(Tacx=TacxTrainer.Message)
-        if TacxTrainer.OK: rpi.DisplayState(constants.faTrainer, TacxTrainer)
+        if TacxTrainer.OK:
+            rpi.DisplayState(constants.faTrainer, TacxTrainer)
+        else:
+            rpi.DisplayState(constants.faStarted, TacxTrainer)
 
     #---------------------------------------------------------------------------
     # Show where the heartrate comes from 
@@ -1107,7 +1111,10 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                             HeartRate, \
                             CrancksetIndex, \
                             CassetteIndex, ReductionCassetteX)
-                o = rpi
+                if TacxTrainer.Operational:
+                    o = rpi
+                else:
+                    break # Do not display values yet, pairing/calibrating!!
 
             #-------------------------------------------------------------------
             # Add trackpoint

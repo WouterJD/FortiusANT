@@ -199,7 +199,8 @@ class frmFortiusAntGui(wx.Frame):
         self.panel.Bind(wx.EVT_PAINT, self.OnPaint)    # Draw the bitmap
         self.Iconize(False)                            # un-iconize
 #       print(self.GetPosition())
-#       self.Center()                                      # It does not center the frame on the screen...
+        self.Center() # Windows: It does not center the frame on the screen...
+                      # Raspberry: A little bit better
 #       print(self.GetPosition())
 
         if True:
