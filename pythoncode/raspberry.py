@@ -40,16 +40,6 @@ import constants
 import FortiusAntCommand    as cmd
 import logfile
 
-# define colours to use:
-WHITE   = "#FFFFFF"
-BLUE    = "#0000FF"
-GREY    = "#7A7A7A"
-AMBER   = "#fc8106"
-GREEN   = "#00EE00"
-RED     = "#FF3030"
-BLACK   = "#000000"
-FORTIUS = "#7894E3"            # 120,148,227
-
 UseOutputDisplay = False
 if OnRaspberry:
     import gpiozero                                     # pylint: disable=import-error
@@ -121,8 +111,8 @@ def ShutdownIfRequested():
                                       [ '',                     None ],\
                                       [ '',                     None ],\
                                       [ '',                     None ],\
-                                      [ 'Power',                FORTIUS ],\
-                                      [ 'can be disconnected',  FORTIUS ]])
+                                      [ 'Power',                constants.FORTIUS ],\
+                                      [ 'can be disconnected',  constants.FORTIUS ]])
         subprocess.call("sudo shutdown -P now", shell=True)
 
 # ==============================================================================
@@ -572,7 +562,7 @@ class clsRaspberry:
             # Show image with text on top
             self.image  = self.faImage
             self.draw   = ImageDraw.Draw(self.image)
-            self.draw.text    ( (10, 0     ), 'FortiusAnt',          font=self.fontLb, fill=FORTIUS)
+            self.draw.text    ( (10, 0     ), 'FortiusAnt',          font=self.fontLb, fill=constants.FORTIUS)
 
         self.st7789.image(self.faImage, self.rotation)
 
@@ -607,13 +597,18 @@ class clsRaspberry:
 
         # ----------------------------------------------------------------------
         # Draw each of supplied lines
+        # h       = line heigth, depending on number of lines provided
+        #           23 for 9 lines proved OK, now dynamic for 1...9 lines
+        #           Note: if (many) more lines provided, it will be a mess!
+        # x=0/120 = column 1, 2
         # ----------------------------------------------------------------------
+        h = int(207 / max(1,len(t)))
         for i in range(0, len(t)):
             if values:
-                self.draw.text( (  0, 20 + i * 46), t[i][0], font=self.fontS, fill=GREY)
-                self.draw.text( (120, 20 + i * 46), t[i][1], font=self.fontS, fill=WHITE)
+                self.draw.text( (  0, i * h), t[i][0], font=self.fontS, fill=constants.GREY)
+                self.draw.text( (120, i * h), t[i][1], font=self.fontS, fill=constants.WHITE)
             else:
-                self.draw.text( (  0,      i * 23), t[i][0], font=self.fontS, fill=t[i][1])
+                self.draw.text( (  0, i * h), t[i][0], font=self.fontS, fill=t[i][1])
 
         # ----------------------------------------------------------------------
         # Add leds and show image
@@ -660,29 +655,29 @@ class clsRaspberry:
         # ----------------------------------------------------------------------
         # Fill depending on led-state
         # ----------------------------------------------------------------------
-        f1 = AMBER if self.LedTacxState     else BLACK
-        f2 = RED   if self.LedShutdownState else BLACK
-        f3 = WHITE if self.LedCadenceState  else BLACK
-        f4 = BLUE  if self.LedBLEState      else BLACK
-        f5 = GREEN if self.LedANTState      else BLACK
+        f1 = constants.AMBER if self.LedTacxState     else constants.BLACK
+        f2 = constants.RED   if self.LedShutdownState else constants.BLACK
+        f3 = constants.WHITE if self.LedCadenceState  else constants.BLACK
+        f4 = constants.BLUE  if self.LedBLEState      else constants.BLACK
+        f5 = constants.GREEN if self.LedANTState      else constants.BLACK
 
         # ----------------------------------------------------------------------
         # Separating line
         # ----------------------------------------------------------------------
-        self.draw.line((0, y - 8, self.st7789.width, y - 8), fill=FORTIUS, width=1, joint=None)
+        self.draw.line((0, y - 8, self.st7789.width, y - 8), fill=constants.FORTIUS, width=1, joint=None)
 
         # ----------------------------------------------------------------------
         # Five circles to represent the leds
         # ----------------------------------------------------------------------
         #                                         x1 y2 x2     y2
-        x  = int(dx/2 - d/2); self.draw.ellipse( (x, y, x + d, y + d), fill=f1, outline=AMBER, width=1)
-        x += int(dx);         self.draw.ellipse( (x, y, x + d, y + d), fill=f2, outline=RED,   width=1)
+        x  = int(dx/2 - d/2); self.draw.ellipse( (x, y, x + d, y + d), fill=f1, outline=constants.AMBER, width=1)
+        x += int(dx);         self.draw.ellipse( (x, y, x + d, y + d), fill=f2, outline=constants.RED,   width=1)
         if self.clv.Tacx_Cadence:
-            x += int(dx);     self.draw.ellipse( (x, y, x + d, y + d), fill=f3, outline=WHITE, width=1)
+            x += int(dx);     self.draw.ellipse( (x, y, x + d, y + d), fill=f3, outline=constants.WHITE, width=1)
         if self.clv.ble:
-            x += int(dx);     self.draw.ellipse( (x, y, x + d, y + d), fill=f4, outline=BLUE,  width=1)
+            x += int(dx);     self.draw.ellipse( (x, y, x + d, y + d), fill=f4, outline=constants.BLUE,  width=1)
         if self.clv.antDeviceID != -1:
-            x += int(dx);     self.draw.ellipse( (x, y, x + d, y + d), fill=f5, outline=GREEN, width=1)
+            x += int(dx);     self.draw.ellipse( (x, y, x + d, y + d), fill=f5, outline=constants.GREEN, width=1)
 
         # ----------------------------------------------------------------------
         # Show the image
@@ -715,7 +710,11 @@ class clsRaspberry:
     def _DisplayStateNone(self, *argv):
         pass
 
-    def _DisplayStateConsole(self, FortiusAntState=None):
+    def _DisplayStateConsole(self, FortiusAntState=None, TacxTrainer=None):
+        # ----------------------------------------------------------------------
+        # Show texts, corresponding to state of FortiusAnt
+        # One line is enough, since colouring/enhancing is not possible
+        # ----------------------------------------------------------------------
         if True or self.OutputDisplay:
             if   FortiusAntState == None:
                 print('+++++ initialized')
@@ -740,36 +739,29 @@ class clsRaspberry:
             else:
                 pass
 
-    def _DisplayStateSt7789(self, FortiusAntState=None):
+    def _DisplayStateSt7789(self, FortiusAntState=None, TacxTrainer=None):
         # ----------------------------------------------------------------------
-        # Show texts, corresponding to state
+        # Show texts, corresponding to state of FortiusAnt AND trainer.
         # ----------------------------------------------------------------------
-        if True or self.OutputDisplay:
-            if  False and FortiusAntState == constants.faTerminated:
-                # In this case, show the image again
-                self._ShowImage()
+        if self.OutputDisplay:
+            if TacxTrainer == None:
+                # There is no trainer yet, so trainer-dependant text is not there
+                # FortiusAnt is started, next step will be connecting to trainer
+                # Empty lines, so that the first two are top-aligned
+                t = [[ 'FortiusAnt started', constants.WHITE],\
+                     [ 'Trainer connected',  constants.GREY ],\
+                     [ '',                   None ],\
+                     [ '',                   None ],\
+                     [ '',                   None ],\
+                     [ '',                   None ],\
+                     [ '',                   None ],\
+                     [ '',                   None ],\
+                     [ '',                   None ],\
+                    ]
             else:
-                c0 = WHITE if FortiusAntState == constants.faStarted        else GREY
-                c1 = WHITE if FortiusAntState == constants.faTrainer        else GREY
-                c2 = WHITE if FortiusAntState == constants.faWait2Calibrate else GREY
-                c3 = WHITE if FortiusAntState == constants.faCalibrating    else GREY
-                c4 = WHITE if FortiusAntState == constants.faActivate       else GREY
-                c5 = WHITE if FortiusAntState == constants.faOperational    else GREY
-                c6 = WHITE if FortiusAntState == constants.faStopped        else GREY
-                c7 = WHITE if FortiusAntState == constants.faDeactivated    else GREY
-                c8 = WHITE if FortiusAntState == constants.faTerminated     else GREY
-
-                device = 'Bluetooth' if self.clv.ble else 'ANT+'
-
-                self._DrawTextTable ( [ [ 'FortiusAnt started',    c0 ],\
-                                        [ 'Trainer connected',     c1 ],\
-                                        [ 'Give pedal kick',       c2 ],\
-                                        [ 'Calibrating...',        c3 ],\
-                                        [ 'Activate ' + device,    c4 ],\
-                                        [ 'Ready for training',    c5 ],\
-                                        [ 'Trainer stopped',       c6 ],\
-                                        [ device + ' stopped',     c7 ],\
-                                        [ 'FortiusAnt stopped',    c8 ]])
+                # Show the trainer-enhanced status
+                t = TacxTrainer.DisplayStateTable(FortiusAntState)
+            self._DrawTextTable (t)
 
     # --------------------------------------------------------------------------
     # [ O U T P U T ] S e t V a l u e s - implementations for the -L displays
@@ -795,25 +787,46 @@ class clsRaspberry:
                     iTacx, iHeartRate, \
                     iCrancksetIndex, iCassetteIndex, fReduction):
 
+            # ------------------------------------------------------------------
+            # Format Speed
+            # ------------------------------------------------------------------
             if self.clv.imperial:
-                s = "%4.1fmph"  % (fSpeed / mile)
+                s = "{:<4.1f}mph".format(fSpeed / mile)
             else:
-                s = "%4.1fkm/h" % fSpeed
+                s = "{:<4.1f}km/h".format(fSpeed)
 
+            # ------------------------------------------------------------------
+            # Format Power
+            # ------------------------------------------------------------------
             if   iTargetMode == mode_Power:
-                t = "%iW" % iTargetPower
+                t = "{:d}Watt".format(iTargetPower)
 
             elif iTargetMode == mode_Grade:
-                t = "%2.0f%%" % fTargetGrade
-                t += "%iW" % iTargetPower        # Target power added for reference
-                                                 # Can be negative!
+                t  = "{:<2.0f}%".format(fTargetGrade)
+                t += "{:d}Watt" .format(iTargetPower)   # Target power added for reference
+                                                        # Can be negative!
             else:
                 t = "No target"
 
-            self._DrawTextTable ( [ [ 'Speed'  , s                    ],\
-                                    [ 'Cadence', "%i/min"    % iRevs  ],\
-                                    [ 'Power'  , "%iW"       % iPower ],\
-                                    [ 'Target ', t                    ]], True)
+            # ------------------------------------------------------------------
+            # Format Gears
+            # ------------------------------------------------------------------
+            if iCassetteIndex < 0:      # IF out of bounds: Reduction <> 1
+                teeth = self.clv.Cassette[0]
+            elif iCassetteIndex >= len(self.clv.Cassette):
+                teeth = self.clv.Cassette[len(self.clv.Cassette) - 1]
+            else:
+                teeth = self.clv.Cassette[iCassetteIndex]
+            g = "%i : %i" % (self.clv.Cranckset[iCrancksetIndex], teeth ) # int(round(teeth / self.Reduction)
+
+            # ------------------------------------------------------------------
+            # And draw on the display
+            # ------------------------------------------------------------------
+            self._DrawTextTable ( [ [ 'Speed'  , s                         ],\
+                                    [ 'Cadence', "{:d}/min".format(iRevs)  ],\
+                                    [ 'Power'  , "{:d}Watt".format(iPower) ],\
+                                    [ 'Target ', t                         ],\
+                                    [ 'Gears'  , g                         ]], True)
 
 # ------------------------------------------------------------------------------
 # Code for test-purpose

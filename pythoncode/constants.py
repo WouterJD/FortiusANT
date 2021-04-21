@@ -91,3 +91,15 @@ help_s = "Simulate trainer to test ANT+ connectivity."
 help_t = "Specify Tacx Type; if not specified, USB-trainers will be detected automatically."
 help_T = "Transmission, default value = " + Transmission
 help_x = "Export TCX file to upload into Strava, Sporttracks, Training peaks."
+
+#-------------------------------------------------------------------------------
+# define colours to use, in raspberry but perhaps also elsewhere
+#-------------------------------------------------------------------------------
+WHITE   = "#FFFFFF"
+BLUE    = "#0000FF"
+GREY    = "#7A7A7A"
+AMBER   = "#fc8106"
+GREEN   = "#00EE00"
+RED     = "#FF3030"
+BLACK   = "#000000"
+FORTIUS = "#7894E3"            # 120,148,227

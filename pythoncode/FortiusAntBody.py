@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-04-15"
+__version__ = "2021-04-18"
+# 2021-04-18    Tacx message displayed (on console) when changed, was suppressed
+#               to avoid messages on console, but needed for ANT-trainers.
 # 2021-04-15    Messages were flushed in AntDongle.Write() which is resolved
 #                   in our loop there is only one place where ANT-messages are
 #                   received: AntDongle.Write(msg, True, False)
@@ -256,7 +258,7 @@ def Initialize(pclv):
     TacxTrainer = None
     tcx         = None
     rpi         = raspberry.clsRaspberry(clv)
-    rpi.DisplayState(constants.faStarted)
+    rpi.DisplayState(constants.faStarted, TacxTrainer)
     if clv.exportTCX: tcx = TCXexport.clsTcxExport()
     bleCTP = bleDongle.clsBleCTP(clv)
 
@@ -287,7 +289,7 @@ def Terminate():
     # --------------------------------------------------------------------------
     # Delete our globals to help python clean-up
     # --------------------------------------------------------------------------
-    rpi.DisplayState(constants.faTerminated)
+    rpi.DisplayState(constants.faTerminated, TacxTrainer)
 
     # --------------------------------------------------------------------------
     # Delete our globals to help python clean-up
@@ -402,7 +404,7 @@ def LocateHW(FortiusAntGui):
     else:
         TacxTrainer = usbTrainer.clsTacxTrainer.GetTrainer(clv, AntDongle)
         FortiusAntGui.SetMessages(Tacx=TacxTrainer.Message)
-        if TacxTrainer.OK: rpi.DisplayState(constants.faTrainer)
+        if TacxTrainer.OK: rpi.DisplayState(constants.faTrainer, TacxTrainer)
 
     #---------------------------------------------------------------------------
     # Show where the heartrate comes from 
@@ -462,7 +464,7 @@ def Runoff(FortiusAntGui):
     # Initialize
     #---------------------------------------------------------------------------
     TacxTrainer.SetPower(clv.RunoffPower)
-    rpi.DisplayState(constants.faTrainer)
+    rpi.DisplayState(constants.faTrainer, TacxTrainer)
     rolldown        = False
     rolldown_time   = 0
     #ShortMessage   = TacxTrainer.Message + " | Runoff - "
@@ -839,7 +841,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
         FortiusAntGui.SetMessages(Tacx="* * * * G I V E   A   P E D A L   K I C K   T O   S T A R T   C A L I B R A T I O N * * * *")
         if debug.on(debug.Function):
             logfile.Write('Tacx2Dongle; start pedaling for calibration')
-        rpi.DisplayState(constants.faWait2Calibrate)
+        rpi.DisplayState(constants.faWait2Calibrate, TacxTrainer)
     try:
     # if True:
         while         FortiusAntGui.RunningSwitch \
@@ -887,7 +889,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                 #---------------------------------------------------------------
                 if StartPedaling:
                     FortiusAntGui.SetMessages(Tacx="* * * * C A L I B R A T I N G   (Do not pedal) * * * *")
-                    rpi.DisplayState(constants.faCalibrating)
+                    rpi.DisplayState(constants.faCalibrating, TacxTrainer)
                     if debug.on(debug.Function):
                         logfile.Write('Tacx2Dongle; start calibration')
                     StartPedaling = False
@@ -977,7 +979,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     #---------------------------------------------------------------------------
     # Initialize antHRM and antFE module
     #---------------------------------------------------------------------------
-    rpi.DisplayState(constants.faActivate)
+    rpi.DisplayState(constants.faActivate, TacxTrainer)
 
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; initialize ANT')
     fe.Initialize()
@@ -1021,8 +1023,9 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     antEvent              = False
     pedalEvent            = False
     TacxTrainer.tacxEvent = False
+    TacxMessage           = ''
     if debug.on(debug.Function): logfile.Write('Tacx2Dongle; start main loop')
-    rpi.DisplayState(constants.faOperational)
+    rpi.DisplayState(constants.faOperational, TacxTrainer)
     try:
         while FortiusAntGui.RunningSwitch == True and not AntDongle.DongleReconnected:
             StartTime = time.time()
@@ -1041,7 +1044,15 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             #-------------------------------------------------------------------
             TacxTrainer.Refresh(QuarterSecond, usbTrainer.modeResistance)
             if TacxTrainer.PedalEcho == 1: pedalEvent = True
-            if clv.gui: FortiusAntGui.SetMessages(Tacx=TacxTrainer.Message + PowerModeActive)
+
+            #-------------------------------------------------------------------
+            # Update displayed status; most relevant for Console-mode.
+            # Also the DisplayState texts may have changed (due to trainer state)
+            #-------------------------------------------------------------------
+            if TacxMessage != TacxTrainer.Message + PowerModeActive:
+                TacxMessage = TacxTrainer.Message + PowerModeActive
+                FortiusAntGui.SetMessages(Tacx=TacxMessage)
+                rpi.DisplayState(constants.faOperational, TacxTrainer)
 
             #-------------------------------------------------------------------
             # Raspberry PI leds
@@ -1762,7 +1773,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     except KeyboardInterrupt:
         logfile.Console ("Stopped")
 
-    rpi.DisplayState(constants.faStopped)
+    rpi.DisplayState(constants.faStopped, TacxTrainer)
     #---------------------------------------------------------------------------
     # Stop devices, if not reconnecting ANT
     # - Create TCXexport
@@ -1776,7 +1787,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
         FortiusAntGui.SetMessages(Dongle=AntDongle.Message + bleCTP.Message + manualMsg)
         TacxTrainer.SendToTrainer(True, usbTrainer.modeStop)
         logfile.Console (ActivationMsg.replace('activated', 'deactivated'))
-        rpi.DisplayState(constants.faDeactivated)
+        rpi.DisplayState(constants.faDeactivated, TacxTrainer)
 
     #---------------------------------------------------------------------------
     # Stop devices

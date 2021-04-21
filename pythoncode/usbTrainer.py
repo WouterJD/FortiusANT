@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-04-12"
+__version__ = "2021-04-20"
+# 2021-04-20    DisplayStateTable() added, for raspberry status display
 # 2021-04-12    self.tacxEvent = set to True when valid data is received
 #                   which can be used as trigger to blink the corresponding led
 # 2021-03-16    @Meanhat's odd T1902 supported: 0547:2131
@@ -150,6 +151,7 @@ import time
 
 import antDongle         as ant
 from   constants                    import mode_Power, mode_Grade
+import constants
 import debug
 import logfile
 import structConstants   as sc
@@ -235,6 +237,8 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 #
 #     def _Grade2Power()                                      # Calculate required Power from Grade
 #                                                             # This is where the magic is done!
+#
+#     def DisplayStateTable()                                 # return FortiusAnt state
 #
 # class clsSimulatedTrainer(clsTacxTrainer)
 #     def Refresh(QuarterSecond, Tacxmode)                    # Randomize data (does not receive/send!)
@@ -888,6 +892,63 @@ class clsTacxTrainer():
         # ----------------------------------------------------------------------
         self.CalculatedSpeedKmh = Speed
 
+    # --------------------------------------------------------------------------
+    # D i s p l a y S t a t e T a b l e
+    # --------------------------------------------------------------------------
+    # input:        FortiusAntState, self.CalibrateSupported and self.clv.calibrate
+    #
+    # Description:  This function returns a table with texts, showing the state
+    #               of FortiusAntBody, enhanced with knowledge of the trainer.
+    #
+    #               The function is defined here, so that the USB-trainers are
+    #               covered; the function can be overwritten in (ANT)classes
+    #               where that is applicable.
+    #
+    # Output:       None
+    #
+    # Returns:      table with texts and colour
+    # --------------------------------------------------------------------------
+    def DisplayStateTable(self, FortiusAntState):
+        c0 = constants.WHITE if FortiusAntState == constants.faStarted        else constants.GREY
+        c1 = constants.WHITE if FortiusAntState == constants.faTrainer        else constants.GREY
+        c2 = constants.WHITE if FortiusAntState == constants.faWait2Calibrate else constants.GREY
+        c3 = constants.WHITE if FortiusAntState == constants.faCalibrating    else constants.GREY
+        c4 = constants.WHITE if FortiusAntState == constants.faActivate       else constants.GREY
+        c5 = constants.WHITE if FortiusAntState == constants.faOperational    else constants.GREY
+        c6 = constants.WHITE if FortiusAntState == constants.faStopped        else constants.GREY
+        c7 = constants.WHITE if FortiusAntState == constants.faDeactivated    else constants.GREY
+        c8 = constants.WHITE if FortiusAntState == constants.faTerminated     else constants.GREY
+
+        # ----------------------------------------------------------------------
+        # Show devices that are in-scope; not sure whethere they are present.
+        # ----------------------------------------------------------------------
+        device = 'ANT+' if self.clv.antDeviceID != -1 else ''
+        if self.clv.ble:
+            if device: device += ', '       # ' and ' is too long
+            device += 'BLE'
+
+        # ----------------------------------------------------------------------
+        # Show status of FortiusAnt, assuminig that calibration is supported
+        # ----------------------------------------------------------------------
+        rtn = [ [ 'FortiusAnt started',    c0 ],\
+                [ 'Trainer connected',     c1 ],\
+                [ 'Give pedal kick',       c2 ],\
+                [ 'Calibrating...',        c3 ],\
+                [ 'Activate ' + device,    c4 ],\
+                [ 'Ready for training',    c5 ],\
+                [ 'Trainer stopped',       c6 ],\
+                [ device + ' stopped',     c7 ],\
+                [ 'FortiusAnt stopped',    c8 ]]
+
+        # ----------------------------------------------------------------------
+        # Remove calibration if not
+        # ----------------------------------------------------------------------
+        if not (self.CalibrateSupported and self.clv.calibrate):
+            del rtn[3]	# Give pedal kick
+            del rtn[2]	# Calibrating...
+
+        return rtn
+
 #-------------------------------------------------------------------------------
 # c l s S i m u l a t e d T r a i n e r
 #-------------------------------------------------------------------------------
@@ -1311,6 +1372,58 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
 
         return dataHandled
 
+    # --------------------------------------------------------------------------
+    # D i s p l a y S t a t e T a b l e
+    # --------------------------------------------------------------------------
+    # input:        FortiusAntState, self.__AntVHUpaired
+    #
+    # Description:  This function returns a table with texts, showing the state
+    #               of FortiusAntBody, enhanced with knowledge of the trainer.
+    #
+    # Output:       None
+    #
+    # Returns:      table with texts and colour
+    # --------------------------------------------------------------------------
+    def DisplayStateTable(self, FortiusAntState):
+        c0 = constants.WHITE if FortiusAntState == constants.faStarted        else constants.GREY
+       #c1 = constants.WHITE if FortiusAntState == constants.faTrainer        else constants.GREY
+       #c2 = constants.WHITE if FortiusAntState == constants.faWait2Calibrate else constants.GREY
+       #c3 = constants.WHITE if FortiusAntState == constants.faCalibrating    else constants.GREY
+        c4 = constants.WHITE if FortiusAntState == constants.faActivate       else constants.GREY
+       #c5 = constants.WHITE if FortiusAntState == constants.faOperational    else constants.GREY
+        c6 = constants.WHITE if FortiusAntState == constants.faStopped        else constants.GREY
+        c7 = constants.WHITE if FortiusAntState == constants.faDeactivated    else constants.GREY
+        c8 = constants.WHITE if FortiusAntState == constants.faTerminated     else constants.GREY
+
+        if FortiusAntState == constants.faOperational:
+            #if self.__AntVHUpaired:    Not used, because does not influence operation
+
+            if not self.__AntVTXpaired:
+                c5w= True       # Waiting for Vortex
+                c5 = False
+            else:
+                c5w= False
+                c5 = True       # Operational
+
+        # ----------------------------------------------------------------------
+        # Show devices that are in-scope; not sure whethere they are present.
+        # ----------------------------------------------------------------------
+        device = 'ANT+'                # Of course, otherwise no vortex possible
+        if self.clv.ble:
+            device += ', BLE'
+
+        # ----------------------------------------------------------------------
+        # Show status of FortiusAnt and Vortex
+        # ----------------------------------------------------------------------
+        rtn = [ [ 'FortiusAnt started',    c0 ],\
+                [ 'Activate ' + device,    c4 ],\
+                [ 'Waiting for Vortex',    c5w],\
+                [ 'Ready for training',    c5 ],\
+                [ 'Trainer stopped',       c6 ],\
+                [ device + ' stopped',     c7 ],\
+                [ 'FortiusAnt stopped',    c8 ]]
+
+        return rtn
 
 #-------------------------------------------------------------------------------
 # c l s T a c x A n t T r a i n e r
@@ -1816,6 +1929,69 @@ class clsTacxAntGeniusTrainer(clsTacxAntTrainer):
 
         return dataHandled
 
+    # --------------------------------------------------------------------------
+    # D i s p l a y S t a t e T a b l e
+    # --------------------------------------------------------------------------
+    # input:        FortiusAntState, self.__AntVHUpaired
+    #
+    # Description:  This function returns a table with texts, showing the state
+    #               of FortiusAntBody, enhanced with knowledge of the trainer.
+    #
+    # Output:       None
+    #
+    # Returns:      table with texts and colour
+    # --------------------------------------------------------------------------
+    def DisplayStateTable(self, FortiusAntState):
+        c0 = constants.WHITE if FortiusAntState == constants.faStarted        else constants.GREY
+       #c1 = constants.WHITE if FortiusAntState == constants.faTrainer        else constants.GREY
+       #c2 = constants.WHITE if FortiusAntState == constants.faWait2Calibrate else constants.GREY
+       #c3 = constants.WHITE if FortiusAntState == constants.faCalibrating    else constants.GREY
+        c4 = constants.WHITE if FortiusAntState == constants.faActivate       else constants.GREY
+       #c5 = constants.WHITE if FortiusAntState == constants.faOperational    else constants.GREY
+        c6 = constants.WHITE if FortiusAntState == constants.faStopped        else constants.GREY
+        c7 = constants.WHITE if FortiusAntState == constants.faDeactivated    else constants.GREY
+        c8 = constants.WHITE if FortiusAntState == constants.faTerminated     else constants.GREY
+
+        c2 = False
+        c3 = False
+        c5w= False
+        c5 = False
+        if FortiusAntState == constants.faOperational:
+            if self.__State == GeniusState.CalibrationStarted:
+                c2 = True
+            elif self.__State == GeniusState.CalibrationRunning:
+                c3 = True
+            elif self.__State == GeniusState.CalibrationDone:
+                c5 = True
+            elif self.__State == GeniusState.CalibrationFailed:
+                c5 = True
+            elif self._DeviceNumber:
+                c5 = True
+            else:
+                c5w = True
+
+        # ----------------------------------------------------------------------
+        # Show devices that are in-scope; not sure whethere they are present.
+        # ----------------------------------------------------------------------
+        device = 'ANT+'                # Of course, otherwise no genius possible
+        if self.clv.ble:
+            device += ', BLE'
+
+        # ----------------------------------------------------------------------
+        # Show status of FortiusAnt and Genius
+        # ----------------------------------------------------------------------
+        rtn = [ [ 'FortiusAnt started',    c0 ],\
+                [ 'Activate ' + device,    c4 ],\
+                [ 'Waiting for Genius',    c5w],\
+                [ 'Give pedal kick',       c2 ],\
+                [ 'Calibrating...',        c3 ],\
+                [ 'Ready for training',    c5 ],\
+                [ 'Trainer stopped',       c6 ],\
+                [ device + ' stopped',     c7 ],\
+                [ 'FortiusAnt stopped',    c8 ]]
+
+        return rtn
+
 #-------------------------------------------------------------------------------
 # c l s T a c x A n t B u s h i d o T r a i n e r
 #-------------------------------------------------------------------------------
@@ -2063,6 +2239,56 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
 
         return dataHandled
 
+    # --------------------------------------------------------------------------
+    # D i s p l a y S t a t e T a b l e
+    # --------------------------------------------------------------------------
+    # input:        FortiusAntState, self.__AntVHUpaired
+    #
+    # Description:  This function returns a table with texts, showing the state
+    #               of FortiusAntBody, enhanced with knowledge of the trainer.
+    #
+    # Output:       None
+    #
+    # Returns:      table with texts and colour
+    # --------------------------------------------------------------------------
+    def DisplayStateTable(self, FortiusAntState):
+        c0 = constants.WHITE if FortiusAntState == constants.faStarted        else constants.GREY
+       #c1 = constants.WHITE if FortiusAntState == constants.faTrainer        else constants.GREY
+       #c2 = constants.WHITE if FortiusAntState == constants.faWait2Calibrate else constants.GREY
+       #c3 = constants.WHITE if FortiusAntState == constants.faCalibrating    else constants.GREY
+        c4 = constants.WHITE if FortiusAntState == constants.faActivate       else constants.GREY
+       #c5 = constants.WHITE if FortiusAntState == constants.faOperational    else constants.GREY
+        c6 = constants.WHITE if FortiusAntState == constants.faStopped        else constants.GREY
+        c7 = constants.WHITE if FortiusAntState == constants.faDeactivated    else constants.GREY
+        c8 = constants.WHITE if FortiusAntState == constants.faTerminated     else constants.GREY
+
+        if FortiusAntState == constants.faOperational:
+            if not self._DeviceNumber:
+                c5w= True       # Waiting for Bushido
+                c5 = False
+            else:
+                c5w= False
+                c5 = True       # Operational
+
+        # ----------------------------------------------------------------------
+        # Show devices that are in-scope; not sure whethere they are present.
+        # ----------------------------------------------------------------------
+        device = 'ANT+'               # Of course, otherwise no bushido possible
+        if self.clv.ble:
+            device += ', BLE'
+
+        # ----------------------------------------------------------------------
+        # Show status of FortiusAnt and Bushido
+        # ----------------------------------------------------------------------
+        rtn = [ [ 'FortiusAnt started',    c0 ],\
+                [ 'Activate ' + device,    c4 ],\
+                [ 'Waiting for Bushido',   c5w],\
+                [ 'Ready for training',    c5 ],\
+                [ 'Trainer stopped',       c6 ],\
+                [ device + ' stopped',     c7 ],\
+                [ 'FortiusAnt stopped',    c8 ]]
+
+        return rtn
 
 #-------------------------------------------------------------------------------
 # c l s T a c x U s b T r a i n e r
