@@ -1,51 +1,51 @@
-usage: FortiusAnt.py [-h] [-a] [-A] [-b] [-c CALIBRATERR] [-d DEBUG]
-                     [-D ANTDEVICEID] [-g] [-G GRADEADJUST] [-H HRM] [-m] [-M]
-                     [-n] [-p FACTOR] [-P] [-r] [-R RUNOFF] [-s]
-                     [-T TRANSMISSION] [-t] [-x]
+usage: FortiusAnt.py [-h] [-a] [-A] [-b] [-B 0...65535] [-c 0...100]
+                     [-d 0...255] [-D USB-DeviceID] [-e] [-g] [-G % / % / %]
+                     [-H ANT+DeviceID] [-i] [-l] [-m] [-M] [-n] [-p %] [-P]
+                     [-r] [-R see text] [-s] [-T see text]
+                     [-t {Bushido,Genius,Vortex,Magneticbrake,Motorbrake,i-Vortex}]
+                     [-x]
 
-Program to broadcast data from USB Tacx Fortius trainer, and to receive
-resistance data for the trainer
+FortiusAnt exchanges data between USB or ANT+ Tacx trainer with an ANT+ or BLE
+Cycling Training Program
 
 optional arguments:
   -h, --help            show this help message and exit
-  -a, --autostart       Automatically start; “Locate HW” and “Start” if the
+  -a                    Automatically start; “Locate HW” and “Start” if the
                         required devices were found.
-  -A, --PedalStrokeAnalysis
-                        Pedal Stroke Analysis.
-  -b, --ble             Advertise FortiusAnt as “FortiusAnt Trainer” on a
+  -A                    Pedal Stroke Analysis.
+  -b                    Advertise FortiusAnt as “FortiusAnt Trainer” on a
                         Bluetooth Low Energy dongle.
-  -c CALIBRATERR, --CalibrateRR CALIBRATERR
-                        Calibrate the rolling resistance for magnetic brake.
-  -d DEBUG, --debug DEBUG
-                        Create logfile with debugging data.
-  -D ANTDEVICEID, --antDeviceID ANTDEVICEID
-                        Select one specific antDongle (perhaps with a non-
+  -B 0...65535          ANT DeviceNumber range Base, making multiple
+                        FortiusAnt sessions unique.
+  -c 0...100            Calibrate the rolling resistance for magnetic brake.
+  -d 0...255            Create logfile with debugging data.
+  -D USB-DeviceID       Select one specific antDongle (perhaps with a non-
                         standard deviceID).
-  -g, --gui             Run with graphical user interface.
-  -G GRADEADJUST, --GradeAdjust GRADEADJUST
-                        Modify the requested grade with a
+  -e                    Operate as homeTrainer (excersize bike); up/down
+                        increments/decrements power with 10%.
+  -g                    Run with graphical user interface.
+  -G % / % / %          Modify the requested grade with a
                         factor/factorDownhill.
-  -H HRM, --hrm HRM     Pair this Heart Rate Monitor (0: any, -1: none). Tacx
+  -H ANT+DeviceID       Pair this Heart Rate Monitor (0: any, -1: none). Tacx
                         HRM is used if not specified.
-  -m, --manual          Run manual power (ignore target from ANT+ Dongle).
-  -M, --manualGrade     Run manual grade (ignore target from ANT+ Dongle).
-  -n, --calibrate       Do not calibrate before start.
-  -p FACTOR, --factor FACTOR
-                        Adjust target Power by multiplying by this factor for
+  -i                    Imperial, speed in mph.
+  -l                    Display status leds.
+  -m                    Run manual power (ignore target from ANT+ Dongle).
+  -M                    Run manual grade (ignore target from ANT+ Dongle).
+  -n                    Do not calibrate before start.
+  -p %                  Adjust target Power by multiplying by this factor for
                         static calibration.
-  -P, --PowerMode       Power mode has preference over Resistance mode (for 30
+  -P                    Power mode has preference over Resistance mode (for 30
                         seconds).
-  -r, --Resistance      Target Resistance = Target Power (to create power
+  -r                    Target Resistance = Target Power (to create power
                         curve).
-  -R RUNOFF, --Runoff RUNOFF
-                        The runoff procedure can be customized:
+  -R see text           The runoff procedure can be customized:
                         maxSpeed/dip/minSpeed/targetTime/power.
-  -s, --simulate        Simulate trainer to test ANT+ connectivity.
-  -T TRANSMISSION, --Transmission TRANSMISSION
-                        Transmission, default value =
+  -s                    Simulate trainer to test ANT+ connectivity.
+  -T see text           Transmission, default value =
                         34-50*x34-30-27-25-23-21-19*-17-15-13-11
-  -t , --TacxType       Specify Tacx Type; if not specified, USB-trainers will
-                        be detected automatically. Allowed values are:
-                        Bushido, Genius, Vortex, Magneticbrake, Motorbrake
-  -x, --exportTCX       Export TCX file to upload into Strava, Sporttracks,
+  -t {Bushido,Genius,Vortex,Magneticbrake,Motorbrake,i-Vortex}
+                        Specify Tacx Type; if not specified, USB-trainers will
+                        be detected automatically.
+  -x                    Export TCX file to upload into Strava, Sporttracks,
                         Training peaks.
