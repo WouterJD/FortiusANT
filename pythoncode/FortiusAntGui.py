@@ -1,8 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-04-13"
-# 2021-04-13  clv.imperial: speed in mph
+__version__ = "2021-04-22"
+# 2021-04-22    centre() done when all controls created
+# 2021-04-13    clv.imperial: speed in mph
 # 2021-04-12    Status leds are fixed part of GUI, clv.StatusLeds is for Raspberry only
 # 2021-03-22    Status leds added to screen; SetLeds() added
 # 2021-03-02    Buttons enlarged for Raspberry rendering
@@ -198,10 +199,7 @@ class frmFortiusAntGui(wx.Frame):
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.panel.Bind(wx.EVT_PAINT, self.OnPaint)    # Draw the bitmap
         self.Iconize(False)                            # un-iconize
-#       print(self.GetPosition())
-        self.Center() # Windows: It does not center the frame on the screen...
-                      # Raspberry: A little bit better
-#       print(self.GetPosition())
+        #self.Centre() # Too early, do after all controls created
 
         if True:
             TIMER_ID = 250
@@ -684,12 +682,18 @@ class frmFortiusAntGui(wx.Frame):
         self.btnSponsor.SetPosition((ButtonX, self.btnHelp.Position[1] - self.btnHelp.Size[1] - Margin))
 
         # ----------------------------------------------------------------------
+		# Frame resizes based upon the created controles, se center here!
+        # ----------------------------------------------------------------------
+        self.Centre()
+
+        # ----------------------------------------------------------------------
 		# Set initial values
         # ----------------------------------------------------------------------
         self.ResetValues()
         self.SetMessages(Tacx  ="Tacx Trainer")
         self.SetMessages(Dongle="ANT+ Dongle")
         self.SetMessages(HRM   ="ANT+ Heart Rate Monitor")
+
 
     # --------------------------------------------------------------------------
     # F u n c t i o n s  --  to be provided by subclass.
