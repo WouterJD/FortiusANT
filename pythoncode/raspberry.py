@@ -878,7 +878,7 @@ if __name__ == "__main__":
             if rpi.CheckShutdown(): break
 
         # ----------------------------------------------------------------------
-        # Test leds (-l flag)
+        # Test leds (-O flag)
         # ----------------------------------------------------------------------
         if rpi.OutputDisplay:
             if first: print('Test OutputDisplay')
