@@ -16,5 +16,5 @@ requests==2.25.1
 six==1.15.0
 stravalib==0.10.2
 units==0.7
-urllib3==1.26.3
+urllib3==1.26.4
 Werkzeug==1.0.1
