@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-12-20"
+__version__ = "2021-04-28"
+# 2021-04-28    If paused (> 5 minutes), close and start new TCX file.
+#               Do not write is empty
 # 2020-12-20    Constants used from constants.py
 # 2020-11-15    Distance added to produce a valid TCX
 # 2020-11-05    First version
@@ -142,7 +144,10 @@ class clsTcxExport():
         self.HeartRateMax           = 0                 # Max of HeartRate
         self.NrTrackpoints          = 0                 # Count
 
-        self.TrackpointXcalled      = 0
+        self.TrackpointXcalled      = 0                 # Last call to avoid too
+                                                        #       many track points
+        self.TrackpointXwritten     = 0                 # Last trackpoint written
+                                                        #       to detect long break
 
         self.Distance               = 0                 # Temp field
         self.ElapsedTime            = 0
@@ -242,6 +247,15 @@ class clsTcxExport():
                                 self.TrackpointCurrentPower,    \
                                 self.TrackpointSpeedKmh)
                 self.Distance = 0
+                self.TrackpointXwritten = time.time()
+            else:
+                #---------------------------------------------------------------
+                # If trackpoints are written and there is 5 minutes of 
+                # inactivity, close and start new TCX file.
+                #---------------------------------------------------------------
+                if self.TrackpointXwritten > 0 and self.TrackpointXwritten < time.time() - 300:
+                    self.Stop()     # Writes the TCX file
+                                    # AND executes self.Start() to reinitialize
 
     #---------------------------------------------------------------------------
     # T r a c k p o i n t
@@ -353,10 +367,11 @@ class clsTcxExport():
         #-----------------------------------------------------------------------
         # Write tcx file
         #-----------------------------------------------------------------------
-        filename = 'FortiusANT.' + self.StartTime.strftime('%Y-%m-%d %H-%M-%S') + ".tcx"
-        tcxFile = open(filename,"w+")
-        tcxFile.write(self.tcx)
-        tcxFile.close
+        if self.TrackpointXwritten > 0:
+            filename = 'FortiusANT.' + self.StartTime.strftime('%Y-%m-%d %H-%M-%S') + ".tcx"
+            tcxFile = open(filename,"w+")
+            tcxFile.write(self.tcx)
+            tcxFile.close
 
         #-----------------------------------------------------------------------
         # Cleanup

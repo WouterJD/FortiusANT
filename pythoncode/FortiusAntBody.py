@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-04-18"
+__version__ = "2021-04-29"
+# 2021-04-29    HRM message if no ANT/TAcx used
 # 2021-04-18    Tacx message displayed (on console) when changed, was suppressed
 #               to avoid messages on console, but needed for ANT-trainers.
 # 2021-04-15    Messages were flushed in AntDongle.Write() which is resolved
@@ -415,6 +416,8 @@ def LocateHW(FortiusAntGui):
     #---------------------------------------------------------------------------
     if clv.hrm == None:
         FortiusAntGui.SetMessages(HRM="Heartrate expected from Tacx Trainer")
+    elif clv.hrm < 0:
+        FortiusAntGui.SetMessages(HRM="No heartrate monitor connected")
     else:
         FortiusAntGui.SetMessages(HRM="Heartrate expected from ANT+ HRM")
 

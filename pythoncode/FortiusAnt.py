@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-22"
+__version__ = "2021-04-29"
+# 2021-04-29    If no hrm used (-H-1) thgen do not show on console.
+#               Leds shown on console
 # 2021-03-22    Added; SetLeds
 # 2021-03-03    Change 2020-12-16 undone; modification moved to GUI itself
 #                   so that raspberry can powerdown.
@@ -205,8 +207,10 @@ if UseGui:
 class clsFortiusAntConsole:
 
     def __init__(self):
-        self.RunningSwitch       = False
-        self.LastTime            = 0
+        self.RunningSwitch = False
+        self.LastTime      = 0
+        self.leds          = "- - -"  # Remember leds for SetValues() on console
+        self.StatusLeds    = [False,False,False,False,False]   # 5 True/False flags
 
     def Autostart(self):
         if LocateHW(self):
@@ -239,8 +243,30 @@ class clsFortiusAntConsole:
             else:
                 sTarget = "None"
 
-            msg = "Target=%s %4.1f%s hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f %3s%%" % \
-                  (sTarget,  s1,  s2,   iHeartRate,   iPower,    iRevs,  iTacx, int(fReduction*100))
+            if clv.hrm == -1:
+                h = ""
+            else:
+                h = "hr=%3.0f " % iHeartRate
+
+            all  = False
+            self.leds = ""
+            if all or True:                  # Led 1 = Tacx trainer; USB, ANT or Simulated
+                self.leds += "t" if self.StatusLeds[0] else "-"
+
+            if all or OnRaspberry:           # Led 2 = on raspberry only
+                self.leds += "s" if self.StatusLeds[1] else "-"
+
+            if all or clv.Tacx_Cadence:      # Led 3 = Cadence sensor (black because backgroup is white)
+                self.leds += "c" if self.StatusLeds[2] else "-"
+
+            if all or clv.ble:               # Led 4 = Bluetooth CTP
+                self.leds += "b" if self.StatusLeds[3] else "-"
+
+            if all or clv.antDeviceID != -1: # Led 5 = ANT CTP
+                self.leds += "a" if self.StatusLeds[4] else "-"
+
+            msg = "Target=%s %4.1f%s %sCurrent=%3.0fW Cad=%3.0f r=%4.0f %3s%% %s" % \
+                    (sTarget,  s1,s2, h,      iPower,     iRevs,  iTacx, int(fReduction*100), self.leds)
             logfile.Console (msg)
 
     def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
@@ -254,7 +280,14 @@ class clsFortiusAntConsole:
             logfile.Console ("AntHRM - " + HRM)
 
     def SetLeds(self, ANT=None, BLE=None, Cadence=None, Shutdown=None, Tacx=None):
-        pass
+        if self.leds != "":
+            self.leds = ""  # leds only change after that the are displayed in SetValues()
+            # print (ANT, BLE, Cadence, Shutdown, Tacx, self.StatusLeds)
+            if Tacx     != None: self.StatusLeds[0] = not self.StatusLeds[0] if Tacx     else False
+            if Shutdown != None: self.StatusLeds[1] = not self.StatusLeds[1] if Shutdown else False
+            if Cadence  != None: self.StatusLeds[2] = not self.StatusLeds[2] if Cadence  else False
+            if BLE      != None: self.StatusLeds[3] = not self.StatusLeds[3] if BLE      else False
+            if ANT      != None: self.StatusLeds[4] = not self.StatusLeds[4] if ANT      else False
 
 # ==============================================================================
 # Subclass FortiusAnt GUI with our multi-processing functions
