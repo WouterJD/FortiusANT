@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-04-20"
+__version__ = "2021-04-29"
+# 2021-04-29    Short message warning message comment added for Raspberry
 # 2021-04-20    DisplayStateTable() added, for raspberry status display
 #               Operational attribute added
 # 2021-04-12    self.tacxEvent = set to True when valid data is received
@@ -2442,6 +2443,11 @@ class clsTacxUsbTrainer(clsTacxTrainer):
                 logfile.Console('To resolve, try to run without Pedal Stroke Analysis.')
             else:
                 logfile.Console('To resolve, check all (signal AND power) cabling for loose contacts.')
+                # 2021-04-29 On Raspberry Pi Zero W this also occurs when the
+                #            system is too busy. 
+                #            When the system is less busy (FortiusAnt only active
+                #            process) then the message disappears automatically.
+                #            A longer timeout does not help (tried: 100ms).
 
         elif self.Header != expectedHeader:
             self.tacxEvent = False
