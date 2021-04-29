@@ -1,7 +1,12 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-16"
+__version__ = "2021-04-29"
+# 2021-04-29    Short message warning message comment added for Raspberry
+# 2021-04-20    DisplayStateTable() added, for raspberry status display
+#               Operational attribute added
+# 2021-04-12    self.tacxEvent = set to True when valid data is received
+#                   which can be used as trigger to blink the corresponding led
 # 2021-03-16    @Meanhat's odd T1902 supported: 0547:2131
 # 2021-02-11    added: -e homeTrainer --> MultiplyPower()
 #               removed: self.DynamicAdjust code (which was experimental code)
@@ -148,6 +153,7 @@ import time
 
 import antDongle         as ant
 from   constants                    import mode_Power, mode_Grade
+import constants
 import debug
 import logfile
 import structConstants   as sc
@@ -234,6 +240,8 @@ fortius_fw = os.path.join(dirname, 'tacxfortius_1942_firmware.hex')
 #     def _Grade2Power()                                      # Calculate required Power from Grade
 #                                                             # This is where the magic is done!
 #
+#     def DisplayStateTable()                                 # return FortiusAnt state
+#
 # class clsSimulatedTrainer(clsTacxTrainer)
 #     def Refresh(QuarterSecond, Tacxmode)                    # Randomize data (does not receive/send!)
 #                                                             # Completely replaces parent.Refresh()
@@ -311,6 +319,13 @@ class clsTacxTrainer():
     CalculatedSpeedKmh      = 0             # see #Power2Speed#
     TargetResistanceFT      = 0             # int       Returned from trainer
     WheelSpeed              = 0             # int
+    tacxEvent               = False         # is set to True after received from USB or ANT
+                                            # is set to False after unsuccesful USB-receive
+                                            # must be set to False by caller setting leds
+    # set by HandleANTmessage(), __SetState()
+    Operational             = False         # Is set true when trainer connected
+                                            # USB: after connection
+                                            # ANT: after pairing [and calibration]
 
     # Other general variables
     clv                     = None          # Command line variables
@@ -350,6 +365,7 @@ class clsTacxTrainer():
         # Usually I do not like multiple exit points, but here it's too handy
         #-----------------------------------------------------------------------
         if clv.SimulateTrainer: return clsSimulatedTrainer(clv)
+
         if clv.Tacx_Vortex:     return clsTacxAntVortexTrainer(clv, AntDevice)
         if clv.Tacx_Genius:     return clsTacxAntGeniusTrainer(clv, AntDevice)
         if clv.Tacx_Bushido:    return clsTacxAntBushidoTrainer(clv, AntDevice)
@@ -883,6 +899,63 @@ class clsTacxTrainer():
         # ----------------------------------------------------------------------
         self.CalculatedSpeedKmh = Speed
 
+    # --------------------------------------------------------------------------
+    # D i s p l a y S t a t e T a b l e
+    # --------------------------------------------------------------------------
+    # input:        FortiusAntState, self.CalibrateSupported and self.clv.calibrate
+    #
+    # Description:  This function returns a table with texts, showing the state
+    #               of FortiusAntBody, enhanced with knowledge of the trainer.
+    #
+    #               The function is defined here, so that the USB-trainers are
+    #               covered; the function can be overwritten in (ANT)classes
+    #               where that is applicable.
+    #
+    # Output:       None
+    #
+    # Returns:      table with texts and colour
+    # --------------------------------------------------------------------------
+    def DisplayStateTable(self, FortiusAntState):
+        c0 = constants.WHITE if FortiusAntState == constants.faStarted        else constants.GREY
+        c1 = constants.WHITE if FortiusAntState == constants.faTrainer        else constants.GREY
+        c2 = constants.WHITE if FortiusAntState == constants.faWait2Calibrate else constants.GREY
+        c3 = constants.WHITE if FortiusAntState == constants.faCalibrating    else constants.GREY
+        c4 = constants.WHITE if FortiusAntState == constants.faActivate       else constants.GREY
+        c5 = constants.WHITE if FortiusAntState == constants.faOperational    else constants.GREY
+        c6 = constants.WHITE if FortiusAntState == constants.faStopped        else constants.GREY
+        c7 = constants.WHITE if FortiusAntState == constants.faDeactivated    else constants.GREY
+        c8 = constants.WHITE if FortiusAntState == constants.faTerminated     else constants.GREY
+
+        # ----------------------------------------------------------------------
+        # Show devices that are in-scope; not sure whethere they are present.
+        # ----------------------------------------------------------------------
+        device = 'ANT+' if self.clv.antDeviceID != -1 else ''
+        if self.clv.ble:
+            if device: device += ', '       # ' and ' is too long
+            device += 'BLE'
+
+        # ----------------------------------------------------------------------
+        # Show status of FortiusAnt, assuminig that calibration is supported
+        # ----------------------------------------------------------------------
+        rtn = [ [ 'FortiusAnt started',    c0 ],\
+                [ 'Tacx T%s trainer' % hex(self.Headunit)[2:], c1 ],\
+                [ 'Give pedal kick',       c2 ],\
+                [ 'Calibrating...',        c3 ],\
+                [ 'Activate ' + device,    c4 ],\
+                [ 'Ready for training',    c5 ],\
+                [ 'Trainer stopped',       c6 ],\
+                [ device + ' stopped',     c7 ],\
+                [ 'FortiusAnt stopped',    c8 ]]
+
+        # ----------------------------------------------------------------------
+        # Remove calibration if not
+        # ----------------------------------------------------------------------
+        if not (self.CalibrateSupported and self.clv.calibrate):
+            del rtn[3]	# Give pedal kick
+            del rtn[2]	# Calibrating...
+
+        return rtn
+
 #-------------------------------------------------------------------------------
 # c l s S i m u l a t e d T r a i n e r
 #-------------------------------------------------------------------------------
@@ -894,6 +967,7 @@ class clsSimulatedTrainer(clsTacxTrainer):
         if debug.on(debug.Function):logfile.Write ("clsSimulatedTrainer.__init__()")
         self.OK              = True
         self.clv.PowerFactor = 1            # Not applicable for simulation
+        self.Operational     = True         # Always true
 
     # --------------------------------------------------------------------------
     # R e f r e s h
@@ -1182,6 +1256,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
             # BroadcastData - info received from the master device
             #-------------------------------------------------------------------
             if id == ant.msgID_BroadcastData:
+                self.tacxEvent = True
                 #---------------------------------------------------------------
                 # Ask what device is paired
                 #---------------------------------------------------------------
@@ -1238,6 +1313,7 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
                 if DeviceTypeID == ant.DeviceTypeID_VTX:
                     self.__AntVTXpaired    = True
                     self.__DeviceNumberVTX = DeviceNumber
+                    self.Operational       = True # FortiusAnt can send/receive to brake
 
             #-------------------------------------------------------------------
             # Outer loop does not need to handle channel_VTX_s messages
@@ -1305,6 +1381,58 @@ class clsTacxAntVortexTrainer(clsTacxTrainer):
 
         return dataHandled
 
+    # --------------------------------------------------------------------------
+    # D i s p l a y S t a t e T a b l e
+    # --------------------------------------------------------------------------
+    # input:        FortiusAntState, self.__AntVHUpaired
+    #
+    # Description:  This function returns a table with texts, showing the state
+    #               of FortiusAntBody, enhanced with knowledge of the trainer.
+    #
+    # Output:       None
+    #
+    # Returns:      table with texts and colour
+    # --------------------------------------------------------------------------
+    def DisplayStateTable(self, FortiusAntState):
+        c0 = constants.WHITE if FortiusAntState == constants.faStarted        else constants.GREY
+        c1 = constants.WHITE if FortiusAntState == constants.faTrainer        else constants.GREY
+       #c2 = constants.WHITE if FortiusAntState == constants.faWait2Calibrate else constants.GREY
+       #c3 = constants.WHITE if FortiusAntState == constants.faCalibrating    else constants.GREY
+        c4 = constants.WHITE if FortiusAntState == constants.faActivate       else constants.GREY
+       #c5 = constants.WHITE if FortiusAntState == constants.faOperational    else constants.GREY
+        c6 = constants.WHITE if FortiusAntState == constants.faStopped        else constants.GREY
+        c7 = constants.WHITE if FortiusAntState == constants.faDeactivated    else constants.GREY
+        c8 = constants.WHITE if FortiusAntState == constants.faTerminated     else constants.GREY
+
+        c5 = constants.GREY
+        c5w= constants.GREY
+        if FortiusAntState == constants.faOperational:
+            #if self.__AntVHUpaired:    Not used, because does not influence operation
+            if not self.__AntVTXpaired:
+                c5w= constants.WHITE       # Waiting for Vortex
+            else:
+                c5 = constants.WHITE       # Operational
+
+        # ----------------------------------------------------------------------
+        # Show devices that are in-scope; not sure whethere they are present.
+        # ----------------------------------------------------------------------
+        device = 'ANT+'                # Of course, otherwise no vortex possible
+        if self.clv.ble:
+            device += ', BLE'
+
+        # ----------------------------------------------------------------------
+        # Show status of FortiusAnt and Vortex
+        # ----------------------------------------------------------------------
+        rtn = [ [ 'FortiusAnt started',    c0 ],\
+                [ 'Tacx Vortex trainer',   c1 ],\
+                [ 'Activate ' + device,    c4 ],\
+                [ 'Waiting for Vortex',    c5w],\
+                [ 'Ready for training',    c5 ],\
+                [ 'Trainer stopped',       c6 ],\
+                [ device + ' stopped',     c7 ],\
+                [ 'FortiusAnt stopped',    c8 ]]
+
+        return rtn
 
 #-------------------------------------------------------------------------------
 # c l s T a c x A n t T r a i n e r
@@ -1475,7 +1603,7 @@ class clsTacxAntTrainer(clsTacxTrainer):
             # BroadcastData - info received from the master device
             #-------------------------------------------------------------------
             if id == ant.msgID_BroadcastData:
-
+                self.tacxEvent = True
                 #-----------------------------------------------------------------
                 # Data page 221 (0x01) msgUnpage221_01_TacxGeniusSpeedPowerCadence
                 #-----------------------------------------------------------------
@@ -1540,7 +1668,6 @@ class GeniusState(Enum):
     CalibrationFailed = 6,
     Running = 7
 
-
 class clsTacxAntGeniusTrainer(clsTacxAntTrainer):
     def __init__(self, clv, AntDevice):
         msg = "Pair with Tacx Genius"
@@ -1558,6 +1685,9 @@ class clsTacxAntGeniusTrainer(clsTacxAntTrainer):
             logfile.Write("Genius state %s -> %s" % (self.__State, state))
         self.__State = state
         self.__CommandCounter = 0
+
+        if self.__State == GeniusState.Running:
+            self.Operational = True       # FortiusAnt can send/receive to brake
 
     def __ResetTimeout(self):
         self.__WatchdogTime = time.time()
@@ -1723,6 +1853,7 @@ class clsTacxAntGeniusTrainer(clsTacxAntTrainer):
             # BroadcastData - info received from the master device
             #-------------------------------------------------------------------
             if id == ant.msgID_BroadcastData:
+                self.tacxEvent = True
                 #---------------------------------------------------------------
                 # Ask what device is paired
                 #---------------------------------------------------------------
@@ -1809,6 +1940,66 @@ class clsTacxAntGeniusTrainer(clsTacxAntTrainer):
 
         return dataHandled
 
+    # --------------------------------------------------------------------------
+    # D i s p l a y S t a t e T a b l e
+    # --------------------------------------------------------------------------
+    # input:        FortiusAntState, self.__State
+    #
+    # Description:  This function returns a table with texts, showing the state
+    #               of FortiusAntBody, enhanced with knowledge of the trainer.
+    #
+    # Output:       None
+    #
+    # Returns:      table with texts and colour
+    # --------------------------------------------------------------------------
+    def DisplayStateTable(self, FortiusAntState):
+       #c0 = constants.WHITE if FortiusAntState == constants.faStarted        else constants.GREY
+        c1 = constants.WHITE if FortiusAntState == constants.faTrainer        else constants.GREY
+       #c2 = constants.WHITE if FortiusAntState == constants.faWait2Calibrate else constants.GREY
+       #c3 = constants.WHITE if FortiusAntState == constants.faCalibrating    else constants.GREY
+        c4 = constants.WHITE if FortiusAntState == constants.faActivate       else constants.GREY
+       #c5 = constants.WHITE if FortiusAntState == constants.faOperational    else constants.GREY
+        c6 = constants.WHITE if FortiusAntState == constants.faStopped        else constants.GREY
+        c7 = constants.WHITE if FortiusAntState == constants.faDeactivated    else constants.GREY
+        c8 = constants.WHITE if FortiusAntState == constants.faTerminated     else constants.GREY
+
+        c5w= constants.GREY # pairing
+        c2 = constants.GREY # nudge
+        c3 = constants.GREY # calibrating
+        c5 = constants.GREY # operational
+        if FortiusAntState == constants.faOperational:
+            if self.__State == GeniusState.Pairing:
+                c5w = constants.WHITE
+            elif self.__State == GeniusState.CalibrationStarted:
+                c2 = constants.WHITE
+            elif self.__State == GeniusState.Running:
+                c5 = constants.WHITE
+            else:                               # All calibration states
+                c3 = constants.WHITE
+
+        # ----------------------------------------------------------------------
+        # Show devices that are in-scope; not sure whethere they are present.
+        # ----------------------------------------------------------------------
+        device = 'ANT+'                # Of course, otherwise no genius possible
+        if self.clv.ble:
+            device += ', BLE'
+
+        # ----------------------------------------------------------------------
+        # Show status of FortiusAnt and Genius
+        # ----------------------------------------------------------------------
+       #rtn = [ [ 'FortiusAnt started',    c0 ],\       That's a line too many
+        rtn = [ [ 'Tacx Genius trainer',   c1 ],\
+                [ 'Activate ' + device,    c4 ],\
+                [ 'Waiting for Genius',    c5w],\
+                [ 'Nudge wheel forward',   c2 ],\
+                [ 'Calibrating...',        c3 ],\
+                [ 'Ready for training',    c5 ],\
+                [ 'Trainer stopped',       c6 ],\
+                [ device + ' stopped',     c7 ],\
+                [ 'FortiusAnt stopped',    c8 ]]
+
+        return rtn
+
 #-------------------------------------------------------------------------------
 # c l s T a c x A n t B u s h i d o T r a i n e r
 #-------------------------------------------------------------------------------
@@ -1839,6 +2030,9 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
             logfile.Write("Bushido state %s -> %s" % (self.__State, state))
         self.__State = state
         self._CommandCounter = 0
+
+        if self.__State == BushidoState.Running:
+            self.Operational = True       # FortiusAnt can send/receive to brake
 
     #---------------------------------------------------------------------------
     # R e c e i v e F r o m T r a i n e r
@@ -1976,6 +2170,7 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
             # BroadcastData - info received from the master device
             # -------------------------------------------------------------------
             elif id == ant.msgID_BroadcastData:
+                self.tacxEvent = True
                 # ---------------------------------------------------------------
                 # Ask what device is paired
                 # ---------------------------------------------------------------
@@ -2055,6 +2250,57 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
 
         return dataHandled
 
+    # --------------------------------------------------------------------------
+    # D i s p l a y S t a t e T a b l e
+    # --------------------------------------------------------------------------
+    # input:        FortiusAntState, self.__AntVHUpaired
+    #
+    # Description:  This function returns a table with texts, showing the state
+    #               of FortiusAntBody, enhanced with knowledge of the trainer.
+    #
+    # Output:       None
+    #
+    # Returns:      table with texts and colour
+    # --------------------------------------------------------------------------
+    def DisplayStateTable(self, FortiusAntState):
+        c0 = constants.WHITE if FortiusAntState == constants.faStarted        else constants.GREY
+        c1 = constants.WHITE if FortiusAntState == constants.faTrainer        else constants.GREY
+       #c2 = constants.WHITE if FortiusAntState == constants.faWait2Calibrate else constants.GREY
+       #c3 = constants.WHITE if FortiusAntState == constants.faCalibrating    else constants.GREY
+        c4 = constants.WHITE if FortiusAntState == constants.faActivate       else constants.GREY
+       #c5 = constants.WHITE if FortiusAntState == constants.faOperational    else constants.GREY
+        c6 = constants.WHITE if FortiusAntState == constants.faStopped        else constants.GREY
+        c7 = constants.WHITE if FortiusAntState == constants.faDeactivated    else constants.GREY
+        c8 = constants.WHITE if FortiusAntState == constants.faTerminated     else constants.GREY
+
+        c5 = constants.GREY
+        c5w= constants.GREY
+        if FortiusAntState == constants.faOperational:
+            if not self._DeviceNumber:
+                c5w= constants.WHITE       # Waiting for Bushido
+            else:
+                c5 = constants.WHITE       # Operational
+
+        # ----------------------------------------------------------------------
+        # Show devices that are in-scope; not sure whethere they are present.
+        # ----------------------------------------------------------------------
+        device = 'ANT+'               # Of course, otherwise no bushido possible
+        if self.clv.ble:
+            device += ', BLE'
+
+        # ----------------------------------------------------------------------
+        # Show status of FortiusAnt and Bushido
+        # ----------------------------------------------------------------------
+        rtn = [ [ 'FortiusAnt started',    c0 ],\
+                [ 'Tacx Bushido trainer',  c1 ],\
+                [ 'Activate ' + device,    c4 ],\
+                [ 'Waiting for Bushido',   c5w],\
+                [ 'Ready for training',    c5 ],\
+                [ 'Trainer stopped',       c6 ],\
+                [ device + ' stopped',     c7 ],\
+                [ 'FortiusAnt stopped',    c8 ]]
+
+        return rtn
 
 #-------------------------------------------------------------------------------
 # c l s T a c x U s b T r a i n e r
@@ -2127,12 +2373,15 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     # returns   data
     #---------------------------------------------------------------------------
     def USB_Read(self):
+        self.tacxEvent = True                   # Assume we receive correct buffer
         data = array.array('B', [])             # Empty array of bytes
         try:
             data = self.UsbDevice.read(0x82, 64, 30)
         except TimeoutError:
+            self.tacxEvent = False              # No data received
             pass
         except Exception as e:
+            self.tacxEvent = False              # No data received
             if "timeout error" in str(e) or "timed out" in str(e): # trainer did not return any data
                 pass
             else:
@@ -2187,14 +2436,21 @@ class clsTacxUsbTrainer(clsTacxTrainer):
         # Inform when there's something unexpected
         #-----------------------------------------------------------------------
         if len(data) < 40:
+            self.tacxEvent = False
             # 2020-09-29 the buffer is ignored when too short (was processed before)
             logfile.Console('Tacx head unit returns insufficient data, len=%s' % len(data))
             if self.clv.PedalStrokeAnalysis:
                 logfile.Console('To resolve, try to run without Pedal Stroke Analysis.')
             else:
                 logfile.Console('To resolve, check all (signal AND power) cabling for loose contacts.')
+                # 2021-04-29 On Raspberry Pi Zero W this also occurs when the
+                #            system is too busy. 
+                #            When the system is less busy (FortiusAnt only active
+                #            process) then the message disappears automatically.
+                #            A longer timeout does not help (tried: 100ms).
 
         elif self.Header != expectedHeader:
+            self.tacxEvent = False
             logfile.Console('Tacx head unit returns incorrect header %s (expected: %s)' % \
                                         (hex(expectedHeader), hex(self.Header)))
 
@@ -2307,8 +2563,9 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
         self.OK         = True
+        self.Operational= True                    # Always true for USB-trainers
         self.SpeedScale = 11.9 # GoldenCheetah: curSpeed = curSpeedInternal / (1.19f * 10.0f);
-        #PowerResistanceFactor = (1 / 0.0036)       # GoldenCheetah ~= 277.778
+        #PowerResistanceFactor = (1 / 0.0036)     # GoldenCheetah ~= 277.778
 
     #---------------------------------------------------------------------------
     # Basic physics: Power = Resistance * Speed  <==> Resistance = Power / Speed
@@ -2511,6 +2768,7 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
         self.Headunit   = Headunit
         self.UsbDevice  = UsbDevice
         self.OK         = True
+        self.Operational= True                      # Always true for USB-trainers
 
         self.MotorBrakeUnitFirmware = 0             # Introduced 2020-11-23
         self.MotorBrakeUnitSerial   = 0

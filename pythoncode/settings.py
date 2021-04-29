@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-02"
+__version__ = "2021-04-13"
+# 2021-04-13    added: -i, leds renamed into StatusLeds
 # 2021-03-02    added: -l Raspberry status Leds
 # 2021-02-11    added: -e homeTrainer
 # 2021-02-21    Return load result from ReadJsonFile
@@ -46,6 +47,7 @@ json_gui                = 'gui'
 json_leds               = 'leds'
 json_homeTrainer        = 'home trainer'      # User function, although technically like simulation
 json_hrm                = 'hrm'
+json_imperial           = 'imperial'
 #json_scs               = 'scs'
 json_exportTCX          = 'export TCX-file'
 
@@ -164,11 +166,12 @@ def ReadJsonFile (args):
                     for q in data[json_General]:
                         if   q == json_autostart:           args.autostart            = w[q]
                         elif q == json_debug:               args.debug                = w[q]
+                        elif q == json_exportTCX:           args.exportTCX            = w[q]
                         elif q == json_gui:                 args.gui                  = w[q]
-                        elif q == json_leds:                args.leds                 = w[q]
                         elif q == json_homeTrainer:         args.homeTrainer          = w[q]
                         elif q == json_hrm:                 args.hrm                  = w[q]
-                        elif q == json_exportTCX:           args.exportTCX            = w[q]
+                        elif q == json_imperial:            args.imperial             = w[q]
+                        elif q == json_leds:                args.StatusLeds           = w[q]
                         else: logfile.Console ('Json file contains unknown parameter %s %s' % (p, q))
 
                 elif p == json_Simulation:
@@ -340,6 +343,7 @@ if constants.UseGui:
             json_gui:                   DialogWindow.cb_g   .GetValue(),
             json_homeTrainer:           DialogWindow.cb_e   .GetValue(),
             json_hrm:                   DialogWindow.txt_H  .GetValue(),
+            json_imperial:              DialogWindow.cb_i   .GetValue(),
             #'scs':                     DialogWindow.txt_S  .GetValue(),
             json_exportTCX:             DialogWindow.cb_x   .GetValue(),
         }
@@ -561,9 +565,15 @@ if constants.UseGui:
             self.cb_g = wx.CheckBox(panel, id=wx.ID_ANY, label=l, pos=p, size=s, style=0, validator=wx.DefaultValidator, name=wx.CheckBoxNameStr)
             self.cb_g.Bind(wx.EVT_CHECKBOX, self.EVT_CHECKBOX_cb_g)
             
-            l = constants.help_e + " (-e *)"
+            l = constants.help_i + " (-i *)"
             s = (-1, -1)
             p = Under(self.cb_g)
+            self.cb_i = wx.CheckBox(panel, id=wx.ID_ANY, label=l, pos=p, size=s, style=0, validator=wx.DefaultValidator, name=wx.CheckBoxNameStr)
+            self.cb_i.Bind(wx.EVT_CHECKBOX, self.EVT_CHECKBOX_cb_i)
+            
+            l = constants.help_e + " (-e *)"
+            s = (-1, -1)
+            p = Under(self.cb_i)
             self.cb_e = wx.CheckBox(panel, id=wx.ID_ANY, label=l, pos=p, size=s, style=0, validator=wx.DefaultValidator, name=wx.CheckBoxNameStr)
             self.cb_e.Bind(wx.EVT_CHECKBOX, self.EVT_CHECKBOX_cb_e)
             
@@ -991,6 +1001,12 @@ if constants.UseGui:
             if  self.cb_g.GetValue() == False and \
                 wx.MessageBox(msg, TitleText, wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION) == wx.NO:
                 self.cb_g.SetValue(True)
+                
+        # --------------------------------------------------------------------------
+        # Checkbox -i
+        # --------------------------------------------------------------------------
+        def EVT_CHECKBOX_cb_i (self, event):
+            self.cb_restart.SetValue(True)
                 
         # --------------------------------------------------------------------------
         # Checkbox -G

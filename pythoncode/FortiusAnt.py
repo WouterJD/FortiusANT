@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-03-03"
+__version__ = "2021-04-29"
+# 2021-04-29    If no hrm used (-H-1) thgen do not show on console.
+#               Leds shown on console
+# 2021-03-22    Added; SetLeds
 # 2021-03-03    Change 2020-12-16 undone; modification moved to GUI itself
 #                   so that raspberry can powerdown.
 # 2021-03-01    raspberry added
@@ -22,7 +25,7 @@ __version__ = "2021-03-03"
 #               This module contains program startup, GUI-binding and
 #               multi-processing functionality only
 #-------------------------------------------------------------------------------
-from   constants import mode_Power, mode_Grade, UseGui, UseBluetooth, UseMultiProcessing
+from   constants import mode_Power, mode_Grade, UseGui, UseBluetooth, UseMultiProcessing, OnRaspberry, mile
 import constants                        #  for __version__
 
 import argparse
@@ -80,6 +83,7 @@ cmd_Settings            = 19596         # Child->Main; Response = True
 cmd_SetMessages         = 19596         # Main->Child; No response expected
 cmd_SetValues           = 19597         # Main->Child; No response expected
 cmd_PedalStrokeAnalysis = 19598         # Main->Child; No response expected
+cmd_SetLeds             = 19599         # Main->Child; No response expected
 
 # ==============================================================================
 # The following functions are called from the GUI, Console or multi-processing
@@ -203,8 +207,10 @@ if UseGui:
 class clsFortiusAntConsole:
 
     def __init__(self):
-        self.RunningSwitch       = False
-        self.LastTime            = 0
+        self.RunningSwitch = False
+        self.LastTime      = 0
+        self.leds          = "- - -"  # Remember leds for SetValues() on console
+        self.StatusLeds    = [False,False,False,False,False]   # 5 True/False flags
 
     def Autostart(self):
         if LocateHW(self):
@@ -213,12 +219,20 @@ class clsFortiusAntConsole:
 
     def SetValues(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, \
             fTargetGrade, iTacx, iHeartRate, iCrancksetIndex, iCassetteIndex, fReduction):
+        global clv
         # ----------------------------------------------------------------------
         # Console: Update current readings, once per second
         # ----------------------------------------------------------------------
         delta = time.time() - self.LastTime   # Delta time since previous
         if delta >= 1 and (not clv.gui or debug.on(debug.Application)):
             self.LastTime = time.time()           # Time in seconds
+
+            if clv.imperial:
+                s1 = fSpeed / mile
+                s2 = "mph"
+            else:
+                s1 = fSpeed
+                s2 = "km/h"
 
             if   iTargetMode == mode_Power:
                 sTarget = "%3.0fW" % iTargetPower
@@ -228,10 +242,31 @@ class clsFortiusAntConsole:
                     sTarget += "(%iW)" % iTargetPower        # Target power added for reference
             else:
                 sTarget = "None"
-            msg = "Target=%s Speed=%4.1fkmh hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f T=%2s %2s %s" % \
-                  (sTarget,       fSpeed,  iHeartRate,       iPower,    iRevs,  iTacx, iCrancksetIndex, iCassetteIndex, fReduction)
-            msg = "Target=%s %4.1fkmh hr=%3.0f Current=%3.0fW Cad=%3.0f r=%4.0f %3s%%" % \
-                  (sTarget,  fSpeed,  iHeartRate,       iPower,    iRevs,  iTacx, int(fReduction*100))
+
+            if clv.hrm == -1:
+                h = ""
+            else:
+                h = "hr=%3.0f " % iHeartRate
+
+            all  = False
+            self.leds = ""
+            if all or True:                  # Led 1 = Tacx trainer; USB, ANT or Simulated
+                self.leds += "t" if self.StatusLeds[0] else "-"
+
+            if all or OnRaspberry:           # Led 2 = on raspberry only
+                self.leds += "s" if self.StatusLeds[1] else "-"
+
+            if all or clv.Tacx_Cadence:      # Led 3 = Cadence sensor (black because backgroup is white)
+                self.leds += "c" if self.StatusLeds[2] else "-"
+
+            if all or clv.ble:               # Led 4 = Bluetooth CTP
+                self.leds += "b" if self.StatusLeds[3] else "-"
+
+            if all or clv.antDeviceID != -1: # Led 5 = ANT CTP
+                self.leds += "a" if self.StatusLeds[4] else "-"
+
+            msg = "Target=%s %4.1f%s %sCurrent=%3.0fW Cad=%3.0f r=%4.0f %3s%% %s" % \
+                    (sTarget,  s1,s2, h,      iPower,     iRevs,  iTacx, int(fReduction*100), self.leds)
             logfile.Console (msg)
 
     def SetMessages(self, Tacx=None, Dongle=None, HRM=None):
@@ -243,6 +278,16 @@ class clsFortiusAntConsole:
 
         if HRM != None:
             logfile.Console ("AntHRM - " + HRM)
+
+    def SetLeds(self, ANT=None, BLE=None, Cadence=None, Shutdown=None, Tacx=None):
+        if self.leds != "":
+            self.leds = ""  # leds only change after that the are displayed in SetValues()
+            # print (ANT, BLE, Cadence, Shutdown, Tacx, self.StatusLeds)
+            if Tacx     != None: self.StatusLeds[0] = not self.StatusLeds[0] if Tacx     else False
+            if Shutdown != None: self.StatusLeds[1] = not self.StatusLeds[1] if Shutdown else False
+            if Cadence  != None: self.StatusLeds[2] = not self.StatusLeds[2] if Cadence  else False
+            if BLE      != None: self.StatusLeds[3] = not self.StatusLeds[3] if BLE      else False
+            if ANT      != None: self.StatusLeds[4] = not self.StatusLeds[4] if ANT      else False
 
 # ==============================================================================
 # Subclass FortiusAnt GUI with our multi-processing functions
@@ -309,7 +354,8 @@ if UseGui:
                     self.SetMessages(rtn[0], rtn[1], rtn[2])# rtn is (Tacx, Dongle, HRM) tuple
                 elif cmd == cmd_PedalStrokeAnalysis:
                     self.PedalStrokeAnalysis(rtn[0], rtn[1])# rtn is (info, Cadence) tuple
-                    pass
+                elif cmd == cmd_SetLeds:
+                    self.SetLeds(rtn[0], rtn[1], rtn[2], rtn[3], rtn[4])# rtn is (ANT, BLE, Cadence, Shutdown, Tacx) tuple
                 else:
                     logfile.Console('%s active but unknown response received (%s, %s); the message is ignored.' % (command, cmd, rtn))
                     break
@@ -421,7 +467,10 @@ class clsFortiusAntParent:
     def PedalStrokeAnalysis(self, info, Cadence):
         if debug.on(debug.MultiProcessing): logfile.Write ("mp-MainDataToGUI(%s, (info, %s))" % (cmd_PedalStrokeAnalysis, Cadence))
         self.app_conn.send((cmd_PedalStrokeAnalysis, (info, Cadence)))  # x. Main sends messages to GUI; no response expected
-        pass
+
+    def SetLeds(self, ANT=None, BLE=None, Cadence=None, Shutdown=None, Tacx=None):
+        if debug.on(debug.MultiProcessing): logfile.Write ("mp-MainDataToGUI(%s, (%s, %s, %s, %d, %s))" % (cmd_SetLeds, Tacx, Shutdown, Cadence, BLE, ANT))
+        self.app_conn.send((cmd_SetLeds, (ANT, BLE, Cadence, Shutdown, Tacx)))  # x. Main sends messages to GUI; no response expected
 
     def RunoffThread(self):
         rtn = Runoff(self)
@@ -670,5 +719,5 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------
     # If so requested, shutdown Raspberry pi
     # ------------------------------------------------------------------------------
-    if raspberry.UseLeds:
+    if OnRaspberry:
         raspberry.ShutdownIfRequested()

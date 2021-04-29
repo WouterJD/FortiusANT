@@ -1,7 +1,10 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2021-03-03"
+__version__ = "2021-04-15"
+# 2021-04-15    flush improved, #286
+# 2021-04-01    DongleReconnected WAS initially True but should be False
+#               (Although the field should only be used when AntDongle.OK = True)
 # 2021-03-03    Message in ...Config() function only given if self.ConfigMsg:
 #               so that it's given only once.
 #               When -D -1 is specified, we don't even look for an ANTdongle
@@ -371,13 +374,13 @@ RfFrequency_2478Mhz     = 0x4e          # used for Tacx Vortex Headunit
 #
 #---------------------------------------------------------------------------
 class clsAntDongle():
-    devAntDongle        = None           # There is no dongle connected yet
+    devAntDongle        = None      # There is no dongle connected yet
     ConfigMsg           = True
     OK                  = False
     DeviceID            = None
     Message             = ''
     Cycplus             = False
-    DongleReconnected   = True
+    DongleReconnected   = False     # So can be used even when OK=False
     
     #-----------------------------------------------------------------------
     # _ _ i n i t _ _
@@ -548,6 +551,8 @@ class clsAntDongle():
     #                       filled ANT-dongle (device driver) because many
     #                       messages are waiting to be processed.
     #                       Default = True, which is safe behaviour
+    #                       2021-04-15 initial flush only done when data is
+    #                                  to be received, messages were lost!
     #
     # function  write all strings to antDongle
     #           read responses from antDongle
@@ -813,7 +818,7 @@ class clsAntDongle():
             msg60_ChannelTransmitPower  (channel_pair, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_pair)
         ]
-        self.Write(messages, True, False)
+        self.Write(messages) # 2021-04-15 ", True, False"  removed because it's inconsistent
 
     def Trainer_ChannelConfig(self):
         if self.OK:
