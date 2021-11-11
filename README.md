@@ -24,6 +24,8 @@ The CTP can be run on another computer or Smartphone.
 # User manual and version information
 Refer [wiki](https://github.com/WouterJD/FortiusANT/wiki) first, then ask questions raising an issue. Succes!
 
+For inspiration, visit the [Raspberry Pi Hall of Fame](https://github.com/WouterJD/FortiusANT/wiki/Raspberry-Pi-Hall-of-Fame) and [The Tacx Training Cave](https://github.com/WouterJD/FortiusANT/wiki/The-Tacx-Training-Cave)
+
 ![image](https://raw.githubusercontent.com/WouterJD/FortiusANT/master/supportfiles/FortiusAntWorld.jpg)
 
 # License
