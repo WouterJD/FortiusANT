@@ -505,36 +505,31 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
 		# self.Speed label & text; speed in km/h or mph
         # ----------------------------------------------------------------------
-        self.txtSpeed = wx.TextCtrl(self.panel, value="99.9", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtSpeed = wx.TextCtrl(self.Speed, value="99.9", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtSpeed.SetBackgroundColour(bg)
-        self.txtSpeed.SetPosition((int(self.Speed.Position[0] + (self.Speed.Size[0] - self.txtSpeed.Size[0])/2), \
-                                    self.Speed.Position[1] + self.Speed.Size[1] - 2 * self.txtSpeed.Size[1]))
+        self.txtSpeed.SetPosition(((self.Speed.Width - self.txtSpeed.MinWidth) / 2, self.Speed.Height - self.txtSpeed.MinHeight))
 
         # ----------------------------------------------------------------------
 		# self.Revs
         # ----------------------------------------------------------------------
-        self.txtRevs = wx.TextCtrl(self.panel, value="999/min", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtRevs = wx.TextCtrl(self.Revs, value="999/min", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtRevs.SetBackgroundColour(bg)
-        self.txtRevs.SetPosition((int(self.Revs.Position[0] + (self.Revs.Size[0] - self.txtRevs.Size[0])/2), \
-                                    self.Revs.Position[1] + self.Revs.Size[1] - 2 * self.txtRevs.Size[1]))
+        self.txtRevs.SetPosition(((self.Revs.Width - self.txtRevs.MinWidth) / 2, self.Revs.Height - self.txtRevs.MinHeight))
 
         # ----------------------------------------------------------------------
 		# self.Power
         # ----------------------------------------------------------------------
-        self.txtPower = wx.TextCtrl(self.panel, value="999 Watt", size=(TextCtrlW,TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtPower = wx.TextCtrl(self.Power, value="999 Watt", size=(TextCtrlW,TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtPower.SetBackgroundColour(bg)
-        self.txtPower.SetPosition((int(self.Power.Position[0] + (self.Power.Size[0] - self.txtPower.Size[0])/2), \
-                                    self.Power.Position[1] + self.Power.Size[1] - 2 * self.txtPower.Size[1]))
+        self.txtPower.SetPosition(((self.Power.Width - self.txtPower.MinWidth) / 2, self.Power.Height - 2 * self.txtPower.MinHeight))
 
-        self.txtTarget = wx.TextCtrl(self.panel, value="Target=999 Watt", size=(int(TextCtrlW *1.3),TextCtrlH), style=wx.TE_LEFT | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtTarget = wx.TextCtrl(self.Power, value="Target=999 Watt", size=(int(TextCtrlW *1.3),TextCtrlH), style=wx.TE_LEFT | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtTarget.SetBackgroundColour(bg)
-        self.txtTarget.SetPosition((self.Power.Position[0], \
-                                    self.Power.Position[1] + self.Power.Size[1] - self.txtTarget.Size[1]))
+        self.txtTarget.SetPosition((0, self.Power.Height - self.txtTarget.MinHeight))
 
-        self.txtTacx = wx.TextCtrl(self.panel, value="Tacx=9999", size=(int(TextCtrlW * 0.7),TextCtrlH), style=wx.TE_RIGHT | wx.TE_READONLY | wx.BORDER_NONE)
+        self.txtTacx = wx.TextCtrl(self.Power, value="Tacx=9999", size=(int(TextCtrlW * 0.7),TextCtrlH), style=wx.TE_RIGHT | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtTacx.SetBackgroundColour(bg)
-        self.txtTacx.SetPosition((self.Power.Position[0] + self.Power.Size[0] - self.txtTacx.Size[0], \
-                                    self.Power.Position[1] + self.Power.Size[1] - self.txtTacx.Size[1]))
+        self.txtTacx.SetPosition((self.Power.Width - self.txtTacx.MinWidth, self.txtTarget.Position[1]))
 
         # ----------------------------------------------------------------------
 		# USB Trainer
@@ -693,6 +688,8 @@ class frmFortiusAntGui(wx.Frame):
         self.SetMessages(Tacx  ="Tacx Trainer")
         self.SetMessages(Dongle="ANT+ Dongle")
         self.SetMessages(HRM   ="ANT+ Heart Rate Monitor")
+
+        self.SetDoubleBuffered(True)
 
 
     # --------------------------------------------------------------------------
