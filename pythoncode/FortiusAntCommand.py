@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-04-13"
+__version__ = "2021-12-02"
+# 2021-12-02    default command line value for HRM was False, changed to None
+#                   HRM=0 has another meaning than "HRM not specified"
+#                   same applied to all other integer command-line variables
 # 2021-04-13    added: mph
 # 2021-04-13    If AntRequired and self.antDeviceID == -1, a message is given
 # 2021-03-24    changed: command line help + validation
@@ -205,12 +208,12 @@ class CommandLineVariables(object):
            parser.add_argument('-b', dest='ble',                                        help=constants.help_b,  required=False, action='store_true')
         else:
            pass # If -b is requested but not available, then an error is appropriate
-        parser.add_argument   ('-B', dest='DeviceNumberBase',   metavar='0...65535',    help=constants.help_B,  required=False, default=False, type=int)
-        parser.add_argument   ('-c', dest='CalibrateRR',        metavar='0...100',      help=constants.help_c,  required=False, default=False, type=int)
+        parser.add_argument   ('-B', dest='DeviceNumberBase',   metavar='0...65535',    help=constants.help_B,  required=False, default=None,  type=int)
+        parser.add_argument   ('-c', dest='CalibrateRR',        metavar='0...100',      help=constants.help_c,  required=False, default=None,  type=int)
 #       parser.add_argument   ('-C', dest='CtrlCommand',        metavar='ANT+DeviceID', help=constants.help_C,  required=False, default=False, type=int)
         parser.add_argument   ('-C', dest='CtrlCommand',        metavar='ANT+DeviceID', help=argparse.SUPPRESS, required=False, default=False, type=int)
-        parser.add_argument   ('-d', dest='debug',              metavar='0...255',      help=constants.help_d,  required=False, default=False, type=int)
-        parser.add_argument   ('-D', dest='antDeviceID',        metavar='USB-DeviceID', help=constants.help_D,  required=False, default=False, type=int)
+        parser.add_argument   ('-d', dest='debug',              metavar='0...255',      help=constants.help_d,  required=False, default=None,  type=int)
+        parser.add_argument   ('-D', dest='antDeviceID',        metavar='USB-DeviceID', help=constants.help_D,  required=False, default=None,  type=int)
         parser.add_argument   ('-e', dest='homeTrainer',                                help=constants.help_e,  required=False, action='store_true')
         #                       -h     help!!
         if UseGui:
@@ -218,7 +221,7 @@ class CommandLineVariables(object):
         else:
            parser.add_argument('-g', dest='g_IgnoredIfDefined',                         help=argparse.SUPPRESS, required=False, action='store_true')
         parser.add_argument   ('-G', dest='GradeAdjust',        metavar='% / % / %',    help=constants.help_G,  required=False, default=False)
-        parser.add_argument   ('-H', dest='hrm',                metavar='ANT+DeviceID', help=constants.help_H,  required=False, default=False, type=int)
+        parser.add_argument   ('-H', dest='hrm',                metavar='ANT+DeviceID', help=constants.help_H,  required=False, default=None, type=int)
         parser.add_argument   ('-i', dest='imperial',                                   help=constants.help_i,  required=False, action='store_true')
         if UseGui or OnRaspberry:
            parser.add_argument('-l', dest='StatusLeds',                                 help=constants.help_l,  required=False, action='store_true')
@@ -235,12 +238,12 @@ class CommandLineVariables(object):
            parser.add_argument('-O', dest='OutputDisplay',      metavar='see text',     help=constants.help_O, required=False, default=False)
         else:
            parser.add_argument('-O', dest='O_IgnoredIfDefined',                         help=argparse.SUPPRESS, required=False, default=False)
-        parser.add_argument   ('-p', dest='factor',             metavar='%',            help=constants.help_p,  required=False, default=False, type=int)
+        parser.add_argument   ('-p', dest='factor',             metavar='%',            help=constants.help_p,  required=False, default=None,  type=int)
         parser.add_argument   ('-P', dest='PowerMode',                                  help=constants.help_P,  required=False, action='store_true')
         parser.add_argument   ('-r', dest='Resistance',                                 help=constants.help_r,  required=False, action='store_true')
         parser.add_argument   ('-R', dest='Runoff',             metavar='see text',     help=constants.help_R,  required=False, default=False)
         parser.add_argument   ('-s', dest='simulate',                                   help=constants.help_s,  required=False, action='store_true')
-#scs    parser.add_argument   ('-S', dest='scs',                metavar='ANT+ DeviceID',help=constants.help_S,  required=False, default=False, type=int)
+#scs    parser.add_argument   ('-S', dest='scs',                metavar='ANT+ DeviceID',help=constants.help_S,  required=False, default=None,  type=int)
         parser.add_argument   ('-T', dest='Transmission',       metavar='see text',     help=constants.help_T,  required=False, default=False)
         self.ant_tacx_models = ['Bushido', 'Genius', 'Vortex', 'Magneticbrake', 'Motorbrake']
         parser.add_argument   ('-t', dest='TacxType',                                   help=constants.help_t, required=False, default=False, \
@@ -331,7 +334,7 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         # Get DeviceNumberBase
         #-----------------------------------------------------------------------
-        if self.args.DeviceNumberBase:
+        if self.args.DeviceNumberBase != None:
             try:
                 self.DeviceNumberBase = int(self.args.DeviceNumberBase)
             except:
@@ -342,7 +345,7 @@ class CommandLineVariables(object):
         # Not limitted to a range here, because can be different for different
         #       types of brakes, although initially only used for Magnetic Brake
         #-----------------------------------------------------------------------
-        if self.args.CalibrateRR:
+        if self.args.CalibrateRR != None:
             try:
                 self.CalibrateRR = float(self.args.CalibrateRR.replace(',', '.'))
             except:
@@ -434,7 +437,7 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         # Get debug-flags, used in debug module
         #-----------------------------------------------------------------------
-        if self.args.debug:
+        if self.args.debug != None:
             try:
                 self.debug = int(self.args.debug)
             except:
@@ -443,7 +446,7 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         # Get antDeviceID
         #-----------------------------------------------------------------------
-        if self.args.antDeviceID:
+        if self.args.antDeviceID != None:
             try:
                 self.antDeviceID = int(self.args.antDeviceID)
             except:
@@ -457,7 +460,10 @@ class CommandLineVariables(object):
         # - next: pair with the defined ANT+ HRM monitor
         #             the number can be found with ExplorANT
         #-----------------------------------------------------------------------
-        if self.args.hrm:
+        # 2021-12-02 False==0 and therefore False is a bad default if zero is
+        #                     a valid value. Therefore default changed to None
+        #-----------------------------------------------------------------------
+        if self.args.hrm != None:
             try:
                 self.hrm = int(self.args.hrm)
             except:
@@ -470,7 +476,7 @@ class CommandLineVariables(object):
         # - next: pair with the defined ANT+ SCS
         #             the number can be found with ExplorANT
         #-----------------------------------------------------------------------
-#scs    if self.args.scs:
+#scs    if self.args.scs != None:
 #scs        try:
 #scs            self.scs = int(self.args.scs)
 #scs        except:
@@ -479,7 +485,7 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         # Get powerfactor
         #-----------------------------------------------------------------------
-        if self.args.factor:
+        if self.args.factor != None:
             try:
                 self.PowerFactor = int(self.args.factor) / 100
                 # I would expect +/- 15% would be enough for compensation, but
@@ -650,48 +656,47 @@ class CommandLineVariables(object):
     def print(self):
         try:
             v = self.debug                          # Verbose: print all command-line variables with values
-            if      self.autostart:          logfile.Console("-a")
-            if      self.PedalStrokeAnalysis:logfile.Console("-A")
-            if      self.ble:                logfile.Console("-b")
-            if v or self.args.DeviceNumberBase: logfile.Console("-B %s" % self.DeviceNumberBase )
-            if v or self.args.CalibrateRR:   logfile.Console("-c %s" % self.CalibrateRR )
+            if      self.autostart:                     logfile.Console("-a")
+            if      self.PedalStrokeAnalysis:           logfile.Console("-A")
+            if      self.ble:                           logfile.Console("-b")
+            if v or self.args.DeviceNumberBase != None: logfile.Console("-B %s" % self.DeviceNumberBase )
+            if v or self.args.CalibrateRR != None:      logfile.Console("-c %s" % self.CalibrateRR )
             if v or self.CTRL_SerialL or self.CTRL_SerialR:
                 logfile.Console("-C %s/%s" % (self.CTRL_SerialL, self.CTRL_SerialR ) )
-            if v or self.args.debug:         logfile.Console("-d %s (%s)" % (self.debug, bin(self.debug) ) )
-            if v or self.args.antDeviceID:   logfile.Console("-D %s" % self.antDeviceID )
+            if v or self.args.debug != None:            logfile.Console("-d %s (%s)" % (self.debug, bin(self.debug) ) )
+            if v or self.args.antDeviceID != None:      logfile.Console("-D %s" % self.antDeviceID )
             if v or self.args.GradeAdjust:
-                if self.GradeAdjust == 1: logfile.Console("-G defines Grade = antGrade * %s" \
-                                                    % (self.GradeFactor ) )
-                if self.GradeAdjust == 2: logfile.Console("-G defines Grade = antGrade * %s [* %s (downhill)]" \
-                                                    % (self.GradeFactor, self.GradeFactorDH) )
-                if self.GradeAdjust == 3: logfile.Console("-G defines Grade = (antGrade - %s) * %s [* %s (downhill)]" \
-                                                    % (self.GradeShift, self.GradeFactor, self.GradeFactorDH) )
-            if      self.gui:                logfile.Console("-g")
-            if      self.homeTrainer:        logfile.Console("-e")
-            if v or self.args.hrm:           logfile.Console("-H %s" % self.hrm )
-            if      self.StatusLeds:         logfile.Console("-l")
+                if self.GradeAdjust == 1:               logfile.Console("-G defines Grade = antGrade * %s" \
+                                                                            % (self.GradeFactor ) )
+                if self.GradeAdjust == 2:               logfile.Console("-G defines Grade = antGrade * %s [* %s (downhill)]" \
+                                                                            % (self.GradeFactor, self.GradeFactorDH) )
+                if self.GradeAdjust == 3:               logfile.Console("-G defines Grade = (antGrade - %s) * %s [* %s (downhill)]" \
+                                                                            % (self.GradeShift, self.GradeFactor, self.GradeFactorDH) )
+            if      self.gui:                           logfile.Console("-g")
+            if      self.homeTrainer:                   logfile.Console("-e")
+            if v or self.args.hrm != None:              logfile.Console("-H %s" % self.hrm )
+            if      self.StatusLeds:                    logfile.Console("-l")
             if OnRaspberry and (v or self.args.gpioLayout):
                 logfile.Console("-L %s/%s/%s/%s/%s/%s" % (self.rpiButton, self.rpiTacx, self.rpiShutdown, self.rpiCadence, self.rpiBLE, self.rpiANT) )
-            if      self.manual:             logfile.Console("-m")
-            if      self.manualGrade:        logfile.Console("-M")
-            if      self.imperial:           logfile.Console("-i")
-            if      not self.args.calibrate: logfile.Console("-n")
-            if v or self.args.factor:        logfile.Console("-p %s" % self.PowerFactor )
-            if v or self.args.OutputDisplay: logfile.Console("-O %s" % self.OutputDisplay)
-            if      self.args.PowerMode:     logfile.Console("-P")
-            if      self.args.Resistance:    logfile.Console("-r")
-            if v or self.args.Runoff:        logfile.Console("-R defines Runoff: maxSpeed=%s dip=%s minSpeed=%s targetTime=%s power=%s" % \
+            if      self.manual:                        logfile.Console("-m")
+            if      self.manualGrade:                   logfile.Console("-M")
+            if      self.imperial:                      logfile.Console("-i")
+            if      not self.args.calibrate:            logfile.Console("-n")
+            if v or self.args.factor != None:           logfile.Console("-p %s" % self.PowerFactor )
+            if v or self.args.OutputDisplay:            logfile.Console("-O %s" % self.OutputDisplay)
+            if      self.args.PowerMode:                logfile.Console("-P")
+            if      self.args.Resistance:               logfile.Console("-r")
+            if v or self.args.Runoff:                   logfile.Console("-R defines Runoff: maxSpeed=%s dip=%s minSpeed=%s targetTime=%s power=%s" % \
                         (self.RunoffMaxSpeed, self.RunoffDip, self.RunoffMinSpeed, self.RunoffTime, self.RunoffPower) )
-            if      self.args.simulate:      logfile.Console("-s")
-#scs        if v or self.args.scs:           logfile.Console("-S %s" % self.scs )
-            if v or self.args.TacxType:      logfile.Console("-t %s" % self.TacxType)
-#           if v or self.args.Transmission != constants.Transmission:
+            if      self.args.simulate:                 logfile.Console("-s")
+#scs        if v or self.args.scs != None:              logfile.Console("-S %s" % self.scs )
+            if v or self.args.TacxType:                 logfile.Console("-t %s" % self.TacxType)
             if v or self.args.Transmission:
-                                            logfile.Console('-T %s x %s (start=%sx%s)' % \
+                                                        logfile.Console('-T %s x %s (start=%sx%s)' % \
                                                                     (self.Cranckset, self.Cassette, \
                                                                      self.Cranckset[self.CrancksetStart], \
                                                                      self.Cassette [self.CassetteStart]) )
-            if      self.exportTCX:          logfile.Console("-x")
+            if      self.exportTCX:                     logfile.Console("-x")
 
         except:
             pass # May occur when incorrect command line parameters, error already given before

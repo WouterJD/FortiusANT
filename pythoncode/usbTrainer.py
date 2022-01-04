@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-04-29"
+__version__ = "2021-11-15"
+# 2021-11-15    "Steering axis = " commented code added for investigation
+# 2021-05-18    TargetResistanceFT used in logfile (instead of TargetResistance)
 # 2021-04-29    Short message warning message comment added for Raspberry
 # 2021-04-20    DisplayStateTable() added, for raspberry status display
 #               Operational attribute added
@@ -3227,9 +3229,11 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             self.Wheel2Speed()
             self.CurrentResistance2Power()
 
+            # print('Steering axis = ', self.Axis) # To investigate steering behaviour
+
             if debug.on(debug.Function):
                 logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s hdr=%s %s" % \
-                            (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistance, self.CurrentResistance, self.CurrentPower, self.PedalEcho, hex(self.Header), self.Message) \
+                            (  self.HeartRate, self.Buttons, self.Cadence, self.SpeedKmh, self.TargetResistanceFT, self.CurrentResistance, self.CurrentPower, self.PedalEcho, hex(self.Header), self.Message) \
                             )
     #---------------------------------------------------------------------------
     # R e c e i v e F r o m T r a i n e r

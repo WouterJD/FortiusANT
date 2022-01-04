@@ -1,17 +1,18 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v6.2" # Double quotes, see below!
-# 2020-03-23    Version 6.2     Leds also for GUI, Raspberry TFT display
-# 2020-03-17    Version 6.1     Vortex Quality Improvement
-# 2020-03-17    Version 6.0     major change: Raspberry integrated!
-# 2020-01-25    Version 5.2     Issues #189, #216, #222
-# 2020-01-21    Version 5.1     Published
+WindowTitle = "Fortius Antifier v6.3" # Double quotes, see below!
+# 2022-01-04    Version 6.3     Issues 340, 342, 353 implemented
+# 2021-03-23    Version 6.2     Leds also for GUI, Raspberry TFT display
+# 2021-03-17    Version 6.1     Vortex Quality Improvement
+# 2021-03-17    Version 6.0     major change: Raspberry integrated!
+# 2021-01-25    Version 5.2     Issues #189, #216, #222
+# 2021-01-21    Version 5.1     Published
 #                               settings can be modified interactively
 #                               #120 font/rear changing
 #                               #195 power changing from headunit
-# 2020-01-04                    master branch (5.0) merged into 4.2 Quality upgrade branch
-# 2020-01-04    Version 5.0     #117 Tacx Bushido and #101 Genius implemented
+# 2021-01-04                    master branch (5.0) merged into 4.2 Quality upgrade branch
+# 2021-01-04    Version 5.0     #117 Tacx Bushido and #101 Genius implemented
 # 2020-12-20    Version 4.2     #173 Version 4.0 Communicates Much Higher Power vs. 3.8
 #                               #184 Power in Rouvy issue
 # 2020-12-20    Version 4.1.1   #137 Improvements for Raspberry PI
