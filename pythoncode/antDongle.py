@@ -1,7 +1,15 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2021-04-15"
+__version__ = "2021-12-03"
+# 2021-12-03    When pairing, TransmissionType must be zero (TransmissionType_Pairing)
+#               this became apparent when using another make of HRM, returning
+#               a TransmissionType=207, not being found using TransmissionType_IC.
+#               When using Garmin HRM, there was not problem.
+#               This is applied to SlaveHRM_ChannelConfig (and SCS, Trainer).
+#               It's not applied to for VTX, GNS, VTU, since cannot be tested,
+#               avoiding to cause side-effects.
+#               Most likely, those devices always match the used TransmissionType.
 # 2021-04-15    flush improved, #286
 # 2021-04-01    DongleReconnected WAS initially True but should be False
 #               (Although the field should only be used when AntDongle.OK = True)
@@ -355,6 +363,9 @@ DeviceTypeID_BHU        = 82            # Tacx Bushido head unit
 DeviceTypeID_VHU        = 0x3e          # Thanks again to TotalReverse
 # https://github.com/WouterJD/FortiusANT/issues/46#issuecomment-616838329
 
+TransmissionType_Pairing=    0          # See ANT+ HRM  Device Profile D00000693 5.1
+                                        # See ANT+ FE-C Device Profile D00001231 7.1
+                                        # See ANT+ FE-C Device Profile D00001163 7.1.1
 TransmissionType_IC     = 0x01          # 5.2.3.1   Transmission Type
 TransmissionType_IC_GDP = 0x05          #           0x01 = Independant Channel
                                         #           0x04 = Global datapages used
@@ -844,7 +855,7 @@ class clsAntDongle():
             if debug.on(debug.Data1): logfile.Write ("SlaveTrainer_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_FE_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
-            msg51_ChannelID             (channel_FE_s, DeviceNumber, DeviceTypeID_FE, TransmissionType_IC_GDP),
+            msg51_ChannelID             (channel_FE_s, DeviceNumber, DeviceTypeID_FE, TransmissionType_Pairing),
             msg45_ChannelRfFrequency    (channel_FE_s, RfFrequency_2457Mhz),
             msg43_ChannelPeriod         (channel_FE_s, ChannelPeriod=8192),         # 4 Hz
             msg60_ChannelTransmitPower  (channel_FE_s, TransmitPower_0dBm),
@@ -875,9 +886,11 @@ class clsAntDongle():
             if self.ConfigMsg:
                 logfile.Console ('FortiusANT receives data from an ANT+ Heart Rate Monitor (HRM display)' + s)
             if debug.on(debug.Data1): logfile.Write ("SlaveHRM_ChannelConfig()")
+
+        # 2021-12-03 Pairing must be done with TransmissionType=TransmissionType_Pairing (0)!! 
         messages=[
             msg42_AssignChannel         (channel_HRM_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
-            msg51_ChannelID             (channel_HRM_s, DeviceNumber, DeviceTypeID_HRM, TransmissionType_IC),
+            msg51_ChannelID             (channel_HRM_s, DeviceNumber, DeviceTypeID_HRM, TransmissionType_Pairing),
             msg45_ChannelRfFrequency    (channel_HRM_s, RfFrequency_2457Mhz),
             msg43_ChannelPeriod         (channel_HRM_s, ChannelPeriod=8070),        # 4,06 Hz
             msg60_ChannelTransmitPower  (channel_HRM_s, TransmitPower_0dBm),
@@ -925,7 +938,7 @@ class clsAntDongle():
             if debug.on(debug.Data1): logfile.Write ("SlaveSCS_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_SCS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
-            msg51_ChannelID             (channel_SCS_s, DeviceNumber, DeviceTypeID_SCS, TransmissionType_IC),
+            msg51_ChannelID             (channel_SCS_s, DeviceNumber, DeviceTypeID_SCS, TransmissionType_Pairing),
             msg45_ChannelRfFrequency    (channel_SCS_s, RfFrequency_2457Mhz),
             msg43_ChannelPeriod         (channel_SCS_s, ChannelPeriod=8086),        # 4,05 Hz
             msg60_ChannelTransmitPower  (channel_SCS_s, TransmitPower_0dBm),

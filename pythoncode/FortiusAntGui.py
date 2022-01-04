@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-04-22"
+__version__ = "2022-01-04"
+# 2022-01-04    text-fields on top of other controls were flickering, because
+#                    the parent was not the on-top control #353
 # 2021-04-22    centre() done when all controls created
 # 2021-04-13    clv.imperial: speed in mph
 # 2021-04-12    Status leds are fixed part of GUI, clv.StatusLeds is for Raspberry only
@@ -168,7 +170,7 @@ class frmFortiusAntGui(wx.Frame):
             self.panel = self           # Controls directly on the frame window
 
         # ----------------------------------------------------------------------
-		# Save Command Line Variables in tge GUI-context
+		# Save Command Line Variables in the GUI-context
         # ----------------------------------------------------------------------
         self.clv = pclv
 
@@ -503,21 +505,21 @@ class frmFortiusAntGui(wx.Frame):
         _TextCtrlW2  = int(SpeedWH/2)
 
         # ----------------------------------------------------------------------
-		# self.Speed label & text; speed in km/h or mph
+		# self.Speed value; speed in km/h or mph (On top of self.Speed)
         # ----------------------------------------------------------------------
         self.txtSpeed = wx.TextCtrl(self.Speed, value="99.9", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtSpeed.SetBackgroundColour(bg)
         self.txtSpeed.SetPosition(((self.Speed.Width - self.txtSpeed.MinWidth) / 2, self.Speed.Height - self.txtSpeed.MinHeight))
 
         # ----------------------------------------------------------------------
-		# self.Revs
+		# self.Revs value;  (On top of self.Revs)
         # ----------------------------------------------------------------------
         self.txtRevs = wx.TextCtrl(self.Revs, value="999/min", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtRevs.SetBackgroundColour(bg)
         self.txtRevs.SetPosition(((self.Revs.Width - self.txtRevs.MinWidth) / 2, self.Revs.Height - self.txtRevs.MinHeight))
 
         # ----------------------------------------------------------------------
-		# self.Power
+		# self.Power values; (On top of self.Power)
         # ----------------------------------------------------------------------
         self.txtPower = wx.TextCtrl(self.Power, value="999 Watt", size=(TextCtrlW,TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtPower.SetBackgroundColour(bg)
