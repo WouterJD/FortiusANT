@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-01-04"
+__version__ = "2022-01-05"
+# 2022-01-05    MinHeigth/MinWidth replaced by Size() for consistency
 # 2022-01-04    text-fields on top of other controls were flickering, because
 #                    the parent was not the on-top control #353
 # 2021-04-22    centre() done when all controls created
@@ -509,29 +510,29 @@ class frmFortiusAntGui(wx.Frame):
         # ----------------------------------------------------------------------
         self.txtSpeed = wx.TextCtrl(self.Speed, value="99.9", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtSpeed.SetBackgroundColour(bg)
-        self.txtSpeed.SetPosition(((self.Speed.Width - self.txtSpeed.MinWidth) / 2, self.Speed.Height - self.txtSpeed.MinHeight))
+        self.txtSpeed.SetPosition((int((self.Speed.Width - self.txtSpeed.Size[0]) / 2), self.Speed.Height - self.txtSpeed.Size[1]))
 
         # ----------------------------------------------------------------------
 		# self.Revs value;  (On top of self.Revs)
         # ----------------------------------------------------------------------
         self.txtRevs = wx.TextCtrl(self.Revs, value="999/min", size=(int(TextCtrlW * 1.2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtRevs.SetBackgroundColour(bg)
-        self.txtRevs.SetPosition(((self.Revs.Width - self.txtRevs.MinWidth) / 2, self.Revs.Height - self.txtRevs.MinHeight))
+        self.txtRevs.SetPosition((int((self.Revs.Width - self.txtRevs.Size[0]) / 2), self.Revs.Height - self.txtRevs.Size[1]))
 
         # ----------------------------------------------------------------------
 		# self.Power values; (On top of self.Power)
         # ----------------------------------------------------------------------
         self.txtPower = wx.TextCtrl(self.Power, value="999 Watt", size=(TextCtrlW,TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtPower.SetBackgroundColour(bg)
-        self.txtPower.SetPosition(((self.Power.Width - self.txtPower.MinWidth) / 2, self.Power.Height - 2 * self.txtPower.MinHeight))
+        self.txtPower.SetPosition((int((self.Power.Width - self.txtPower.Size[0]) / 2), self.Power.Height - 2 * self.txtPower.Size[1]))
 
         self.txtTarget = wx.TextCtrl(self.Power, value="Target=999 Watt", size=(int(TextCtrlW *1.3),TextCtrlH), style=wx.TE_LEFT | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtTarget.SetBackgroundColour(bg)
-        self.txtTarget.SetPosition((0, self.Power.Height - self.txtTarget.MinHeight))
+        self.txtTarget.SetPosition((0, self.Power.Height - self.txtTarget.Size[1]))
 
         self.txtTacx = wx.TextCtrl(self.Power, value="Tacx=9999", size=(int(TextCtrlW * 0.7),TextCtrlH), style=wx.TE_RIGHT | wx.TE_READONLY | wx.BORDER_NONE)
         self.txtTacx.SetBackgroundColour(bg)
-        self.txtTacx.SetPosition((self.Power.Width - self.txtTacx.MinWidth, self.txtTarget.Position[1]))
+        self.txtTacx.SetPosition((self.Power.Width - self.txtTacx.Size[0], self.txtTarget.Position[1]))
 
         # ----------------------------------------------------------------------
 		# USB Trainer
