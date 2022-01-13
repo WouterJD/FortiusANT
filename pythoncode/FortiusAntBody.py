@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-04-29"
+__version__ = "2022-01-13"
+# 2022-01-13    #362 Grade was not adjusted by the -G parameter for BLE
 # 2021-04-29    HRM message if no ANT/TAcx used
 # 2021-04-18    Tacx message displayed (on console) when changed, was suppressed
 #               to avoid messages on console, but needed for ANT-trainers.
@@ -1354,7 +1355,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                                 Grade *= clv.GradeFactor
                                 if Grade < 0: Grade *= clv.GradeFactorDH
 
-                                TacxTrainer.SetGrade(bleCTP.TargetGrade)
+                                TacxTrainer.SetGrade(Grade)
 
                         if bleCTP.WindResistance and bleCTP.WindSpeed and bleCTP.DraftingFactor:
                             TacxTrainer.SetWind(bleCTP.WindResistance, bleCTP.WindSpeed, bleCTP.DraftingFactor)
