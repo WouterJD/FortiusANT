@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-11-15"
+__version__ = "2022-01-13"
+# 2022-01-13    clsSimulatedTrainer.Refresh() must correct data type of variables
+#               otherwise CurrentPower = iPower is not integer.
 # 2021-11-15    "Steering axis = " commented code added for investigation
 # 2021-05-18    TargetResistanceFT used in logfile (instead of TargetResistance)
 # 2021-04-29    Short message warning message comment added for Raspberry
@@ -666,7 +668,7 @@ class clsTacxTrainer():
             self.CurrentPower      /= self.clv.PowerFactor  # Was just received
 
         # ----------------------------------------------------------------------
-        # Round after all these calculations
+        # Round after all these calculations (and correct data type!)
         # ----------------------------------------------------------------------
         self.TargetPower         = int(self.TargetPower)
         self.TargetResistance    = int(self.TargetResistance)
@@ -1047,6 +1049,16 @@ class clsSimulatedTrainer(clsTacxTrainer):
             self.HeartRate    += random.randint(-5,5)                           # Variation of heartrate by 5 beats
 
         self.VirtualSpeedKmh= self.SpeedKmh
+
+        # ----------------------------------------------------------------------
+        # Round after all these calculations (and correct data type!)
+        # ----------------------------------------------------------------------
+        self.TargetPower         = int(self.TargetPower)
+        self.TargetResistance    = int(self.TargetResistance)
+        self.CurrentResistance   = int(self.CurrentResistance)
+        self.CurrentPower        = int(self.CurrentPower)
+        self.SpeedKmh            = round(self.SpeedKmh,1)
+        self.VirtualSpeedKmh     = round(self.VirtualSpeedKmh,1)
 
 #-------------------------------------------------------------------------------
 # c l s T a c x A n t V o r t e x T r a i n e r
