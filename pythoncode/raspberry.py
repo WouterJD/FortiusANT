@@ -497,6 +497,15 @@ class clsRaspberry:
             if clv_OutputDisplay == 'st7789':
                 self.buttonA = digitalio.DigitalInOut(board.D23)
                 self.buttonB = digitalio.DigitalInOut(board.D24)
+
+                # --------------------------------------------------------------
+                # The Waveshare is missing the reset circuit from the Adafruit
+                # display, the reset_pin needs to be defined.
+                # --------------------------------------------------------------
+                cs_pin = digitalio.DigitalInOut(board.CE0)
+                dc_pin = digitalio.DigitalInOut(board.D25)
+                reset_pin = digitalio.DigitalInOut(board.D27)
+
             elif clv_OutputDisplay == 'st7789b':  # Add Waveshare 1.3 LCD 
                 self.buttonA = digitalio.DigitalInOut(board.D20)
                 self.buttonB = digitalio.DigitalInOut(board.D16)
