@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-11-25"
+__version__ = "2022-02-21"
+# 2022-02-21    HexSpace() now also supports bytearray
 # 2020-11-25    Small textual modifications (time->Time)
 #               .utcnow() replaced by .now()
 # 2020-11-19    json PedalEcho added and time-format made JAVA-style
@@ -222,7 +223,7 @@ def Close():
 # returns       string          e.g. "01 02 03 04"
 #-------------------------------------------------------------------------------
 def HexSpace(info):
-    if type(info) is bytes:
+    if type(info) in (bytes, bytearray):
         s = binascii.hexlify(info).decode("utf-8")
         rtn = '"'
         for i in range (0, len(s) ):
