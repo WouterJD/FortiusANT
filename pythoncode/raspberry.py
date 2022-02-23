@@ -1,7 +1,9 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2021-04-13"
+__version__ = "2022-01-14"
+# 2022-01-14  #363 st7789b added; Waveshare 1.3 LCD with different pin layout
+#             Also, button-pins pulled-up explicitly on init.
 # 2021-04-13  clv.imperial: speed in mph
 # 2021-04-12  StatusLeds (-l) flag means that GPIO leds/buttons are used,
 #                   the status of the leds is processed on behalf of the
@@ -245,9 +247,9 @@ class clsRaspberry:
         elif clv.OutputDisplay == 'console':            # Test output on console
             pass
 
-        elif clv.OutputDisplay == 'st7789':             # TFT mini OLED Display
+        elif clv.OutputDisplay in ('st7789', 'st7789b'): # TFT mini OLED Display
             self.rotation = clv.OutputDisplayR
-            if self._SetupDisplaySt7789():
+            if self._SetupDisplaySt7789(clv.OutputDisplay):
                 self.DisplayState = self._DisplayStateSt7789
                 self.SetValues    = self._SetValuesSt7789
                 self.DrawLeds     = self._DrawLedsSt7789
@@ -452,7 +454,7 @@ class clsRaspberry:
     #
     # Returns   True for success
     # --------------------------------------------------------------------------
-    def _SetupDisplaySt7789(self):
+    def _SetupDisplaySt7789(self, clv_OutputDisplay):
         rtn = True
         # ----------------------------------------------------------------------
         # Create the ST7789 display (this is 240x240 version):
@@ -490,10 +492,25 @@ class clsRaspberry:
             self.backlight = digitalio.DigitalInOut(board.D22)
             self.backlight.switch_to_output()
             self.backlight.value = True
-            self.buttonA = digitalio.DigitalInOut(board.D23)
-            self.buttonB = digitalio.DigitalInOut(board.D24)
-            self.buttonA.switch_to_input()
-            self.buttonB.switch_to_input()
+
+            assert(clv_OutputDisplay in ('st7789', 'st7789b'))
+            if clv_OutputDisplay == 'st7789':
+                self.buttonA = digitalio.DigitalInOut(board.D23)
+                self.buttonB = digitalio.DigitalInOut(board.D24)
+
+            elif clv_OutputDisplay == 'st7789b':  # Add Waveshare 1.3 LCD 
+                self.buttonA = digitalio.DigitalInOut(board.D20)
+                self.buttonB = digitalio.DigitalInOut(board.D16)
+                # --------------------------------------------------------------
+                # The Waveshare is missing the reset circuit from the Adafruit
+                # display, the reset_pin needs to be defined.
+                # --------------------------------------------------------------
+                cs_pin = digitalio.DigitalInOut(board.CE0)
+                dc_pin = digitalio.DigitalInOut(board.D25)
+                reset_pin = digitalio.DigitalInOut(board.D27)
+
+            self.buttonA.switch_to_input(digitalio.Pull.UP)
+            self.buttonB.switch_to_input(digitalio.Pull.UP)
 
             self.ButtonDefaultValue = self.buttonA.value
             # ------------------------------------------------------------------

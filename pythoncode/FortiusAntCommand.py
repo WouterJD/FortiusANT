@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-12-02"
+__version__ = "2022-01-14"
+# 2022-01-14    #363 st7789b added
 # 2021-12-02    default command line value for HRM was False, changed to None
 #                   HRM=0 has another meaning than "HRM not specified"
 #                   same applied to all other integer command-line variables
@@ -383,7 +384,7 @@ class CommandLineVariables(object):
                     # As long as no more devices supported, no reason to bother user
                     # Like this we're ready for other devices in future 
 
-                assert (self.OutputDisplay  in ('console', 'st7789'))
+                assert (self.OutputDisplay  in ('console', 'st7789', 'st7789b'))
                 assert (self.OutputDisplayR in (0,90,180,270))
 
                 assert(self.CTRL_SerialL >= 0)
@@ -395,7 +396,7 @@ class CommandLineVariables(object):
             # OutputDisplay uses first 24 pins, so our button moves
             # Refer to pinlayout in raspberry.py
             #---------------------------------------------------------------
-            if self.OutputDisplay == 'st7789':
+            if self.OutputDisplay in ('st7789', 'st7789b'):
                 self.rpiButton = 16
 
         #-----------------------------------------------------------------------
