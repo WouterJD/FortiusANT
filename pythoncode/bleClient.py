@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-02-21"
+__version__ = "2022-02-22"
+# 2022-02-22    bleClient.py works on rpi0W with raspbian v10 buster
 # 2022-02-21    Version rebuilt to be able to validate the FortiusAnt/BLE 
 #               implementation and I expect you could 'look' at an existing
 #               Tacx-trainer as well, but did not try that.

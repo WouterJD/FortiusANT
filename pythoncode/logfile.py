@@ -1,8 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-02-21"
-# 2022-02-21    HexSpace() now also supports bytearray
+__version__ = "2022-02-22"
+# 2022-02-22    HexSpace() now also supports bytearray
 # 2020-11-25    Small textual modifications (time->Time)
 #               .utcnow() replaced by .now()
 # 2020-11-19    json PedalEcho added and time-format made JAVA-style
