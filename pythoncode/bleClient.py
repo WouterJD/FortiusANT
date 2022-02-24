@@ -8,10 +8,6 @@ __version__ = "2022-02-21"
 #
 #               FortiusAnt/BLE using NodeJS does not transmit:
 #               - the trainer speed in the FTMS
-#               - the heartrate in the HRS (in simulation mode)
-#
-#               Todo: implement writing the target speed/target grade to see
-#                     whether those parameters are accepted by FortiusAnt.
 #
 # 2020-12-18    First version, obtained from: " hbldh\bleak"
 #               Service Explorer
@@ -20,6 +16,12 @@ __version__ = "2022-02-21"
 #               characteristics anddescriptors of a connected GATT server.
 #
 #               Created on 2019-03-25 by hbldh <henrik.blidh@nedomkull.com>
+#-------------------------------------------------------------------------------
+# Notes on Windows 10 Pro, version 21H2, build 19044.1526
+#                          Windows Feature Experience Pack 120.2212.4170.0
+# - no BLE device: "await discover()" does not return devices and no error.
+# - standard "Thinkpad bluetooth 4.0" adaptor: indications are not received
+# - Realtek Bluetooth 5.0 adaptor:             same
 #-------------------------------------------------------------------------------
 import asyncio
 import logging
@@ -44,11 +46,14 @@ ADDRESSES = []        # The address appears appear to change continuously
 #-------------------------------------------------------------------------------
 # Status-fields of the Fitness Machine
 #-------------------------------------------------------------------------------
-global cadence, hrm, power, speed
-cadence = 0
-hrm     = 0
-power   = 0
-speed   = 0
+global cadence, hrm, power, speed, status
+cadence, hrm, power, speed, status = (0, 0, 0, 0, 'initial')
+
+#-------------------------------------------------------------------------------
+# FitnessMachineControlPoint indicated response fields
+#-------------------------------------------------------------------------------
+global ResultCode, ResultCodeText
+ResultCode, ResultCodeText = (None, None)
 
 #-------------------------------------------------------------------------------
 # f i n d B L E D e v i c e s
@@ -61,7 +66,9 @@ speed   = 0
 #-------------------------------------------------------------------------------
 async def findBLEdevices():
     global ADDRESSES
-    print('Discover existing BLE devices ----')
+    print('-------------------------------')
+    print(' Discover existing BLE devices ')
+    print('-------------------------------')
     devices = await discover()
     for d in devices:
         print(d)
@@ -70,7 +77,6 @@ async def findBLEdevices():
         # print('d --------------------------end')
         if bc.sFitnessMachineUUID in d.metadata['uuids']:
             ADDRESSES.append (d.address)                    # It's a candidate
-    print('Done -----------------------------')
 
 #-------------------------------------------------------------------------------
 # s e r v e r I n s p e c t i o n
@@ -82,13 +88,14 @@ async def findBLEdevices():
 # Output:   Console
 #-------------------------------------------------------------------------------
 async def serverInspection(address):
-    print('Inspect BLE-device with address %s' % address)
+    print('---------------------------------------------------')
+    print(' Inspect BLE-device with address %s' % address)
+    print('---------------------------------------------------')
     try:
         async with BleakClient(address) as client:          # , timeout=100
             await serverInspectionSub(client)
     except Exception as e:
         print(type(e), e)
-    print('Inspection done --------------------------------------------------------------------------')
             
 async def serverInspectionSub(client):
 
@@ -215,39 +222,61 @@ async def serverInspectionSub(client):
         print("Register indications")
         await client.start_notify(bc.cFitnessMachineControlPointUUID, indicationFitnessMachineControlPoint)
 
-        #-----------------------------------------------------------------------
-        # Now pretend to be a Cycling Training Program, cycling by all modes
-        #-----------------------------------------------------------------------
+        print("------------------------------------------------------")
+        print(" Start simulation of a Cycling Training Program (CTP) ")
+        print("------------------------------------------------------")
+        global ResultCode, ResultCodeText
         mode      = bc.fmcp_RequestControl  # ControlPoint opcodes are used
         PowerMode = 0x0100                  # Additional mode (no opcode)
         GradeMode = 0x0200
+        StopMode  = 0x0300
         waitmode  = 0x1000  # Range outside opcodes, to indicate waiting
         CountDown = 5       # Number of cycles between PowerMode / GradeMode
-        timeout   = 10
-        wait      = 0       # Waiting for comfirmation of response
+        timeout   = 10      # Initial value for wait
+        wait      = timeout # Waiting for confirmation of response
+        ResultCode= None    # No response received
         while True:
-            if mode == bc.fmcp_RequestControl:
+            if mode >= waitmode:
+                #---------------------------------------------------------------
+                # mode contains the next step to be done + waitmode
+                # Check the ResultCode first and act accordingly
+                #---------------------------------------------------------------
+                if ResultCode == None:
+                    print("Waiting for response on FitnessMachineControlPoint request")
+                    wait -= 1                   # Keep waiting
+                    if not wait:
+                        print("Timeout on waiting!!")
+                        mode = StopMode         # Stop the loop
+
+                elif ResultCode == bc.fmcp_Success:
+                    # print('ResultCode = success, proceed')
+                    mode = mode - waitmode      # Proceed with next action
+
+                    #-----------------------------------------------------------
+                    # Prepare for next wait mode
+                    #-----------------------------------------------------------
+                    ResultCode = None
+                    wait       = timeout
+
+                else:
+                    print('Error: FitnessMachineControlPoint request failed with ResultCode = %s (%s)' % (ResultCode, ResultCodeText))
+                    break
+
+            elif mode == StopMode:
+                #---------------------------------------------------------------
+                print("Stop collector loop")
+                #---------------------------------------------------------------
+                break
+
+            elif mode == bc.fmcp_RequestControl:
                 #---------------------------------------------------------------
                 print("Request control, so that commands can be sent")
                 #---------------------------------------------------------------
                 info = struct.pack(sc.little_endian + sc.unsigned_char, bc.fmcp_RequestControl)
                 await client.write_gatt_char(bc.cFitnessMachineControlPointUUID, info)
 
-                # Wait for response
-                wait = timeout
-                mode += waitmode
-
-            elif mode == bc.fmcp_RequestControl + waitmode:
-                # EXPERIMENTAL, SINCE I DO NOT KNOW HOW THE RESPONSE COMES BACK
-                # LET'S START WITH THIS
-                #---------------------------------------------------------------
-                print("Request control; waiting for response")
-                #---------------------------------------------------------------
-                if False:                        # If response received, proceed
-                    mode = bc.fmcp_StartOrResume
-
-                wait -= 1
-                if not wait: break
+                # Wait for response and prepare next mode
+                mode = bc.fmcp_StartOrResume + waitmode
 
             elif mode == bc.fmcp_StartOrResume:
                 #---------------------------------------------------------------
@@ -256,10 +285,15 @@ async def serverInspectionSub(client):
                 info = struct.pack(sc.little_endian + sc.unsigned_char, bc.fmcp_StartOrResume)
                 await client.write_gatt_char(bc.cFitnessMachineControlPointUUID, info)
 
-                mode = PowerMode
+                # Wait for response and next mode
+                mode = PowerMode + waitmode
 
             elif mode == PowerMode:
-                TargetPower = 320 + CountDown   # Watts
+                CountDown -= 1
+                if CountDown:
+                    TargetPower = 320 + CountDown   # Watts
+                else:
+                    TargetPower = 50                # Watts, final power
                 #---------------------------------------------------------------
                 print('Switch to PowerMode, %sW' % TargetPower)
                 #---------------------------------------------------------------
@@ -267,13 +301,15 @@ async def serverInspectionSub(client):
                                                       bc.fmcp_SetTargetPower, TargetPower      )
                 await client.write_gatt_char(bc.cFitnessMachineControlPointUUID, info)
 
-                mode == GradeMode
+                # Wait for response and prepare next mode
+                if CountDown:   mode = GradeMode + waitmode
+                else:           mode = bc.fmcp_StopOrPause + waitmode
 
             elif mode == GradeMode:
-                TargetGrade = 4 + CountDown/10  # % inclination
+                TargetGrade = CountDown  # % inclination
                 windspeed   = 0
-                crr         = 0.004             # rolling resistance coefficient
-                cw          = 0.51              # wind resistance coefficient
+                crr         = 0.004      # rolling resistance coefficient
+                cw          = 0.51       # wind resistance coefficient
                 #---------------------------------------------------------------
                 print('Switch to GradeMode, %s%%' % TargetGrade)
                 #---------------------------------------------------------------
@@ -285,9 +321,8 @@ async def serverInspectionSub(client):
                                     bc.fmcp_SetIndoorBikeSimulation,  windspeed, TargetGrade, crr,               cw)
                 await client.write_gatt_char(bc.cFitnessMachineControlPointUUID, info)
 
-                CountDown -= 1
-                if CountDown:   mode = PowerMode
-                else:           mode = bc.fmcp_StopOrPause
+                # Wait for response and prepare next mode
+                mode = PowerMode + waitmode
 
             elif mode == bc.fmcp_StopOrPause:
                 #---------------------------------------------------------------
@@ -296,7 +331,8 @@ async def serverInspectionSub(client):
                 info = struct.pack(sc.little_endian + sc.unsigned_char, bc.fmcp_StopOrPause)
                 await client.write_gatt_char(bc.cFitnessMachineControlPointUUID, info)
 
-                mode = bc.fmcp_Reset
+                # Wait for response and prepare next mode
+                mode = bc.fmcp_Reset + waitmode
 
             elif mode == bc.fmcp_Reset:
                 #---------------------------------------------------------------
@@ -305,11 +341,22 @@ async def serverInspectionSub(client):
                 info = struct.pack(sc.little_endian + sc.unsigned_char, bc.fmcp_Reset)
                 await client.write_gatt_char(bc.cFitnessMachineControlPointUUID, info)
 
-                break
+                # Wait for response and prepare next mode
+                mode = StopMode + waitmode
+
+            else:
+                #---------------------------------------------------------------
+                print("Unknown mode %s" % mode)
+                #---------------------------------------------------------------
+
             #-------------------------------------------------------------------
-            # Do an action every second
+            # Pause for a second before next action done
+            # (If next action is wait, only 0.1 second)
             #-------------------------------------------------------------------
-            await asyncio.sleep(1)
+            if mode >= waitmode:
+                await asyncio.sleep(0.1)    # When waiting, short timeout
+            else:
+                await asyncio.sleep(1)      # Next action after a second
 
         #-----------------------------------------------------------------------
         # Stop receiving notifications and indications
@@ -323,7 +370,7 @@ async def serverInspectionSub(client):
         await client.stop_notify(bc.cFitnessMachineControlPointUUID)
 
 #-------------------------------------------------------------------------------
-# n o t i f i c a t i o n H a n d l e r
+# n o t i f i c a t i o n   A N D   i n d i c a t i o n   H a n d l e r s
 #-------------------------------------------------------------------------------
 # Input:    handle, data
 #
@@ -334,20 +381,47 @@ async def serverInspectionSub(client):
 #           IndoorBikeData;       cadence, hrm, speed, power
 #-------------------------------------------------------------------------------
 def indicationFitnessMachineControlPoint(handle, data):
-    print('indicationFitnessMachineControlPoint() TO BE IMPLEMENTED <--------')
-    notificationPrint(handle, bc.cFitnessMachineControlName, data)
+    global ResultCode, ResultCodeText
+
+    if len(data) >= 1: ResponseCode      = int(data[0]) # Always 0x80
+    if len(data) >= 2: RequestCode       = int(data[1]) # The requested OpCode
+    if len(data) >= 3: ResultCode        = int(data[2]) # e.g. fmcp_Success 
+    # ResponseParameter not implemented, variable format
+
+    if   ResultCode == bc.fmcp_Success:             ResultCodeText = 'Succes'
+    elif ResultCode == bc.fmcp_OpCodeNotSupported:  ResultCodeText = 'OpCodeNotSupported'
+    elif ResultCode == bc.fmcp_InvalidParameter:    ResultCodeText = 'InvalidParameter'
+    elif ResultCode == bc.fmcp_OperationFailed:     ResultCodeText = 'OperationFailed'
+    elif ResultCode == bc.fmcp_ControlNotPermitted: ResultCodeText = 'ControlNotPermitted'
+    else:                                           ResultCodeText = '?'
+
+    if False:   # For debugging only
+        print("%s %s %s ResponseCode=%s RequestCode=%s ResultCode=%s(%s)" %
+            (handle, bc.cFitnessMachineControlPointName, logfile.HexSpace(data),
+            ResponseCode, RequestCode, ResultCode, ResultCodeText))
 
 def notificationFitnessMachineStatus(handle, data):
-    print('notificationFitnessMachineStatus() TO BE IMPLEMENTED <--------')
+    global status
+    OpCode = int(data[0])
+    # ResponseParameter not implemented, variable format
+
+    if   OpCode == bc.fms_Reset:                                 status = 'Reset'
+    elif OpCode == bc.fms_FitnessMachineStoppedOrPausedByUser:   status = 'Stopped' # or Paused
+    elif OpCode == bc.fms_FitnessMachineStartedOrResumedByUser:  status = 'Started' # or Resumed
+    elif OpCode == bc.fms_TargetPowerChanged:                    status = 'Power mode'
+    elif OpCode == bc.fms_IndoorBikeSimulationParametersChanged: status = 'Grade mode'
+    else:                                                        status = '?'
+
     notificationPrint(handle, bc.cFitnessMachineStatusName, data)
 
 def notificationHeartRateMeasurement(handle, data):
     global cadence, hrm, speed, power
     if len(data) == 2:
-        tuple  = struct.unpack (sc.little_endian + sc.unsigned_short, data)
-        hrm     = tuple[0]
+        tuple  = struct.unpack (sc.little_endian + sc.unsigned_char * 2, data)
+        flags   = tuple[0]
+        hrm     = tuple[1]
     else:
-        print('Error: incorrect length')
+        print('Error in notificationHeartRateMeasurement(): unexpected data length')
 
     notificationPrint(handle, bc.cHeartRateMeasurementName, data)
 
@@ -369,25 +443,43 @@ def notificationIndoorBikeData(handle, data):
             hrm    = tuple[n]
             n += 1
     else:
-        print('Error: incorrect length')
+        print('Error in notificationIndoorBikeData(): unexpected data length')
 
     notificationPrint(handle, bc.cIndoorBikeDataName, data)
 
+#-------------------------------------------------------------------------------
+# n o t i f i c a t i o n P r i n t
+#-------------------------------------------------------------------------------
+# Input:    globals
+#
+# Function  After receiving a notification or indication, print info on FTMS
+#
+# Output:   printed info
+#-------------------------------------------------------------------------------
 def notificationPrint(handle, uuidName, data):
-    global cadence, hrm, speed, power
-    #---------------------------------------------------------------------------
-    # Print what we got untill now
-    #---------------------------------------------------------------------------
-    print("%s %-22s %-25s speed=%s cadence=%3s power=%4s hrm=%3s" % (handle, uuidName, logfile.HexSpace(data), speed, cadence, power, hrm))
+    global cadence, hrm, speed, power, status
+
+    print("%s %-22s %-25s status=%-10s speed=%s cadence=%3s power=%4s hrm=%3s" % 
+        (handle, uuidName, logfile.HexSpace(data), 
+         status, speed, cadence, power, hrm)
+         )
 
 
 if __name__ == "__main__":
     #---------------------------------------------------------------------------
     # Introduction
     #---------------------------------------------------------------------------
-    print('bleCollector; is used to show the characteristics of a running FTMS (Fitness Machine Service).')
-    print('              FortiusAnt (BLE) provides such an FTMS and a Cycling Training Program is a client for that service.')
-    print('              Note that, when a CTP is active, FortiusAnt will not be discovered because it is in use.')
+    print('bleClient.py is used to show the characteristics of a running FTMS (Fitness Machine Service).')
+    print('FortiusAnt (BLE) provides such an FTMS and a Cycling Training Program is a client for that service.')
+    print('Note that, when a CTP is active, FortiusAnt will not be discovered because it is in use.')
+    print('')
+    print('After having displayed the characteristics, a CTP-simulation is done.')
+    print('- Commands are sent to the FTMS: RequestControl, Start, Power/Grade, Stop and Reset')
+    print('- PowerMode/GradeMode is done 5 times, setting the different targets alternatingly')
+    print('While performing above requests, the results from the FTMS are displayed.')
+    print('')
+    print('In this way, the FortiusAnt BLE-interface can be tested')
+    print('Start FortiusAnt with -b -s parameters to activate BLE and simulation-mode ')
 
     #---------------------------------------------------------------------------
     # Initialize logger, currently straight print() used
@@ -395,7 +487,7 @@ if __name__ == "__main__":
     #---------------------------------------------------------------------------
     logger = logging.getLogger(__name__)
     #logging.basicConfig(level=logging.INFO)
-    logging.basicConfig(level=logging.DEBUG)
+    #logging.basicConfig(level=logging.DEBUG)
 
     #---------------------------------------------------------------------------
     # First discover ADDRESSES of all possible fitness machines (1 expected)
@@ -413,47 +505,61 @@ if __name__ == "__main__":
 SAMPLE OUTPUT:
 ==============
 
-bleDongleTest; a client to show the characteristics of a running FTMS (Fitness Machine Service)
-               FortiusAnt (BLE) provides such an FTMS and a Cycling Training Program is a client for that service
-Discover existing BLE devices ----
-D4:46:F5:2C:85:86: Garmin International, Inc. (b'\t\xc7')
-57:71:48:B7:EF:08: Google (b'\x02\x05\xca\x83\xa9\xc0')
-B8:27:EB:28:D4:AA: FortiusANT Trainer
-Done -----------------------------
-
-Inspect BLE-device with address D4:46:F5:2C:85:86
-<class 'bleak.exc.BleakError'> Could not get GATT services: Unreachable
-Inspection done -------------------------------------------------------------------------
-
-Inspect BLE-device with address 57:71:48:B7:EF:08
-<class 'asyncio.exceptions.TimeoutError'>
-Inspection done -------------------------------------------------------------------------
-
-Inspect BLE-device with address B8:27:EB:28:D4:AA
-INFO:bleak.backends.winrt.client:Services resolved for BleakClientWinRT (B8:27:EB:28:D4:AA)
+-------------------------------
+ Discover existing BLE devices 
+-------------------------------
+75:A1:76:76:46:49: 75-A1-76-76-46-49
+5C:F3:70:9F:8C:98: FortiusANT Trainer
+24:B7:A7:30:5A:01: 24-B7-A7-30-5A-01
+---------------------------------------------------
+ Inspect BLE-device with address 5C:F3:70:9F:8C:98
+---------------------------------------------------
 Connected:  True
-FortiusANT Trainer: This is a matching Fitness Machine
-Service:  00001800-0000-1000-8000-00805f9b34fb (Handle: 1): Generic Access Profile
-        Characteristic: 00002a00-... (Handle: 2):                               , props=['read'], value="FortiusANT Trainer"
-        Characteristic: 00002a01-... (Handle: 4):                               , props=['read'], value="80 00"
-Service:  00001801-0000-1000-8000-00805f9b34fb (Handle: 6): Generic Attribute Profile
-        Characteristic: 00002a05-... (Handle: 7):                               , props=['indicate'], value="(N/A; not readable)"
-Service:  00001826-0000-1000-8000-00805f9b34fb (Handle: 10): Fitness Machine
-        Characteristic: 00002acc-... (Handle: 11): Fitness Machine Feature      , props=['read'], value="02 40 00 00 08 20 00 00"
-                Supported: Cadence, PowerMeasurement, PowerTargetSetting, IndoorBikeSimulation.
-        Characteristic: 00002ad2-... (Handle: 14): Indoor Bike Data             , props=['notify'], value="(N/A: Wait for notification)"
-        Characteristic: 00002ada-... (Handle: 18): Fitness Machine Status       , props=['notify'], value="(N/A: Wait for notification)"
-        Characteristic: 00002ad9-... (Handle: 22): Fitness Machine Control Point, props=['write', 'indicate'], value="(N/A; not readable)"
-        Characteristic: 00002ad8-... (Handle: 26): Supported Power Range        , props=['read'], value="00 00 e8 03 01 00"
-Service:  0000180d-0000-1000-8000-00805f9b34fb (Handle: 29): Heart Rate
-        Characteristic: 00002a37-... (Handle: 30): Heart Rate Measurement       , props=['notify'], value="(N/A: Wait for notification)"
-Wait for notifications on : ['00002ad2-0000-1000-8000-00805f9b34fb', '00002ada-0000-1000-8000-00805f9b34fb', '00002a37-0000-1000-8000-00805f9b34fb']
-30 Heart Rate Measurement "00 00"                   speed=0 cadence=0 power=0 hrm=0
-14 Indoor Bike Data       "44 00 00 00 e2 00 f6 00" speed=0 cadence=113.0 power=246 hrm=0
-14 Indoor Bike Data       "44 00 00 00 e2 00 f6 00" speed=0 cadence=113.0 power=246 hrm=0
-30 Heart Rate Measurement "00 00"                   speed=0 cadence=113.0 power=246 hrm=0
-14 Indoor Bike Data       "44 00 00 00 e2 00 f6 00" speed=0 cadence=113.0 power=246 hrm=0
+<Unknown>: This is a matching Fitness Machine
+Service: 0000180d-... (Handle: 29): Heart Rate
+	Characteristic: 00002a37-... (Handle: 30): Heart Rate Measurement       , props=['notify'], value="(N/A: Wait for notification)"
+Service: 00001826-... (Handle: 10): Fitness Machine
+	Characteristic: 00002ad8-... (Handle: 26): Supported Power Range        , props=['read'], value="00 00 e8 03 01 00"
+	Characteristic: 00002ad9-... (Handle: 22): Fitness Machine Control Point, props=['write', 'indicate'], value="(N/A: Wait for indication)"
+	Characteristic: 00002ada-... (Handle: 18): Fitness Machine Status       , props=['notify'], value="(N/A: Wait for notification)"
+	Characteristic: 00002ad2-... (Handle: 14): Indoor Bike Data             , props=['notify'], value="(N/A: Wait for notification)"
+	Characteristic: 00002acc-... (Handle: 11): Fitness Machine Feature      , props=['read'], value="02 40 00 00 08 20 00 00"
+		Supported: Cadence, PowerMeasurement, PowerTargetSetting, IndoorBikeSimulation.
+Service: 00001801-... (Handle: 6): Generic Attribute Profile
+	Characteristic: 00002a05-... (Handle: 7): Service Changed               , props=['indicate'], value="(N/A; not readable)"
+Register notifications
+14 Indoor Bike Data       "44 00 00 00 c4 00 31 00" status=initial    speed=0 cadence= 98 power=  49 hrm=  0
+30 Heart Rate Measurement "00 5f"                   status=initial    speed=0 cadence= 98 power=  49 hrm= 95
+Register indications
+------------------------------------------------------
+ Start simulation of a Cycling Training Program (CTP) 
+------------------------------------------------------
+Request control, so that commands can be sent
+14 Indoor Bike Data       "44 00 00 00 c6 00 31 00" status=initial    speed=0 cadence= 99 power=  49 hrm= 95
+30 Heart Rate Measurement "00 57"                   status=initial    speed=0 cadence= 99 power=  49 hrm= 87
 ...
-Inspection done -------------------------------------------------------------------------
+Start training session
+18 Fitness Machine Status "04"                      status=Started    speed=0 cadence=100 power=  51 hrm= 85
+...
+Switch to PowerMode, 324W
+14 Indoor Bike Data       "44 00 00 00 ca 00 31 00" status=Started    speed=0 cadence=101 power=  49 hrm= 85
+...
+Switch to GradeMode, 4%
+18 Fitness Machine Status "12 00 00 04 00 00 00"    status=Grade mode speed=0 cadence= 97 power= 145 hrm=105
+...
+Switch to PowerMode, 50W
+18 Fitness Machine Status "08 32 00"                status=Power mode speed=0 cadence=101 power= 340 hrm=184
+...
+Stop training session
+...
+18 Fitness Machine Status "02"                      status=Stopped    speed=0 cadence= 99 power=  51 hrm= 90
+...
+Release control / reset
+18 Fitness Machine Status "01"                      status=Reset      speed=0 cadence=102 power=  48 hrm= 90
+...
+Stop collector loop
+Unregister notifications
+Unregister indications
+
 
 """
