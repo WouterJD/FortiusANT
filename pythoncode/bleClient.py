@@ -17,11 +17,18 @@ __version__ = "2022-02-21"
 #
 #               Created on 2019-03-25 by hbldh <henrik.blidh@nedomkull.com>
 #-------------------------------------------------------------------------------
+# Status feb 2022:
+#-------------------------------------------------------------------------------
 # Notes on Windows 10 Pro, version 21H2, build 19044.1526
 #                          Windows Feature Experience Pack 120.2212.4170.0
 # - no BLE device: "await discover()" does not return devices and no error.
 # - standard "Thinkpad bluetooth 4.0" adaptor: indications are not received
 # - Realtek Bluetooth 5.0 adaptor:             same
+#
+# When indications are not received, the simulation loop does not work
+#-------------------------------------------------------------------------------
+# Raspberry rpi0W with Raspbian version (10) buster
+# - bleClient.py works; sample output added to end-of-this-file.
 #-------------------------------------------------------------------------------
 import asyncio
 import logging
