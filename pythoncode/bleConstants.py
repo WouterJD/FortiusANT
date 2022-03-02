@@ -1,8 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-02-22"
-# 2022-02-22    bleClient.py works on rpi0W with raspbian v10 buster
+__version__ = "2022-03-01"
+# 2022-03-01    bleBless.py works on Windows 10
+# 2022-02-22    bleBleak.py works on rpi0W with raspbian v10 buster
 #-------------------------------------------------------------------------------
 
 import struct
@@ -42,16 +43,16 @@ fmf_Info                        = struct.pack(sc.little_endian + sc.unsigned_lon
                                                                                         fmf_PowerTargetSettingSupported             |
                                                                                         fmf_IndoorBikeSimulationParametersSupported )
 
-cIndoorBikeDataUUID             = "00002ad2-0000-1000-8000-00805f9b34fb"
-cIndoorBikeDataName             = "Indoor Bike Data"
-ibd_InstantaneousSpeedPresent   = 1         # Bit 0
-ibd_InstantaneousCadencePresent = 1 << 2    # Bit 2
-ibd_InstantaneousPowerPresent   = 1 << 6    # Bit 6
-ibd_HeartRatePresent            = 1 << 9    # Bit 9
-ibd_Flags                       = 0
-                                # FM Service, section 4.9 p 44: Flags, Cadence, Power, HeartRate
-ibd_Info                        = struct.pack(sc.little_endian + sc.unsigned_short * 4, 
-                                                ibd_InstantaneousCadencePresent | ibd_InstantaneousPowerPresent | ibd_HeartRatePresent,
+cIndoorBikeDataUUID                 = "00002ad2-0000-1000-8000-00805f9b34fb"
+cIndoorBikeDataName                 = "Indoor Bike Data"
+ibd_InstantaneousSpeedIsNotPresent  = 0         # Bit 0     # Present unless flagged that it's not
+ibd_InstantaneousCadencePresent     = 1 << 2    # Bit 2
+ibd_InstantaneousPowerPresent       = 1 << 6    # Bit 6
+ibd_HeartRatePresent                = 1 << 9    # Bit 9
+ibd_Flags                           = 0
+                                    # FM Service, section 4.9 p 44: Flags, Cadence, Power, HeartRate
+ibd_Info                            = struct.pack(sc.little_endian + sc.unsigned_short * 4, 
+                                                ibd_InstantaneousPowerPresent | ibd_HeartRatePresent,
                                                 123, 456, 89
                                                 )
 
