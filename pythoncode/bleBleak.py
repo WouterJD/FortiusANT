@@ -1,8 +1,50 @@
 #-------------------------------------------------------------------------------
+# Description
+#-------------------------------------------------------------------------------
+# The bleak library enables python programs to access Bluetooth Low Energy
+# as a client. In out context, a Cycling Training Program is a client and the
+# Tacx Trainer is the server (FTMS FiTness Machine Server)
+#
+# In the FortiusAnt context, we do not need to create a client, because CTP's
+# (like Trainer Road and Zwift) are the client. The reason to have this program
+# is to be able to debug FortiusAnt (ble-mode). This could be done using standard
+# test-programs. But coding a test-client, exactly to the functionality we need,
+# makes us understand how ble works and allows us to test each individual
+# element of the interface.
+#
+# This program does the following:
+# 1. findBLEdevices() check what ble-FTMS devices are alive
+# 2. serverInspection() prints all data of the FTMS device that is found
+#  2a. Open the server as client
+#  2b. Print the server, service, characteristics and descriptions structure
+#  Then:
+#  2c. Register to receive notifications and indications
+#      Notifications are messages that are sent on server-initiative
+#      Indications   are responses to actions we do
+#  2d. The we simulate a CTP.
+#      We send a request to the server and wait for a response in a sequence:
+#    2dI.   Request Control = ask permission that we are allowed to proceed
+#    2dII.  Start           = start a training session
+#    2dIII. Power/GradeMode = request trainer to provide a resistance, either
+#                             expressed in Watt or Slope%
+#    2dIV.  Stop            = end training session
+#    2dV.   Reset           = release access 
+#  2e. Unregister notifications and indications
+#
+# This program can be used as follows:
+# 1. Start FortiusAnt.py -g -a -s -b (gui, autostart, simulation, bluetooth)
+#       FortiusAnt will now listen for commands, no trainer is required (-s)
+#       and dispplay what is going on on the user-interface
+# 2. Start bleBleak.py
+#       You will see that "a CTP" session is running, requesting:
+#       325 Watt, 5%, 324 Watt, 4%, ..., 320 Watt, 0%, 50Watt
+#
+# And of course, in this way, we can automatically test FortiusAnt in ble-mode
+#-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2022-02-22"
-# 2022-02-22    bleClient.py works on rpi0W with raspbian v10 buster
+# 2022-02-22    bleBleak.py works on rpi0W with raspbian v10 buster
 # 2022-02-21    Version rebuilt to be able to validate the FortiusAnt/BLE 
 #               implementation and I expect you could 'look' at an existing
 #               Tacx-trainer as well, but did not try that.
@@ -18,6 +60,21 @@ __version__ = "2022-02-22"
 #
 #               Created on 2019-03-25 by hbldh <henrik.blidh@nedomkull.com>
 #-------------------------------------------------------------------------------
+import asyncio
+import logging
+import os
+from socket import timeout
+import sys
+
+from bleak import BleakClient
+from bleak import discover
+
+import bleConstants    as bc
+import logfile
+import struct
+import structConstants as sc
+
+#-------------------------------------------------------------------------------
 # Status feb 2022:
 #-------------------------------------------------------------------------------
 # Notes on Windows 10 Pro, version 21H2, build 19044.1526
@@ -29,21 +86,12 @@ __version__ = "2022-02-22"
 # When indications are not received, the simulation loop does not work
 #-------------------------------------------------------------------------------
 # Raspberry rpi0W with Raspbian version (10) buster
-# - bleClient.py works; sample output added to end-of-this-file.
+# - bleBleak.py works; sample output added to end-of-this-file.
 #-------------------------------------------------------------------------------
-import asyncio
-import logging
-import platform
-from socket import timeout
-import sys
-
-from bleak import BleakClient
-from bleak import discover
-
-import bleConstants    as bc
-import logfile
-import struct
-import structConstants as sc
+if os.name == 'nt':
+    print("*****************************************************************************")
+    print("***** bleBleak.py is not released for Windows 10; see comment in source *****")
+    print("*****************************************************************************\n\n")
 
 #-------------------------------------------------------------------------------
 # ADDRESSES: Returned by findBLEdevices()
@@ -223,9 +271,6 @@ async def serverInspectionSub(client):
         await client.start_notify(bc.cFitnessMachineStatusUUID, notificationFitnessMachineStatus)
         await client.start_notify(bc.cHeartRateMeasurementUUID, notificationHeartRateMeasurement)
         await client.start_notify(bc.cIndoorBikeDataUUID,       notificationIndoorBikeData)
-
-        # the server shall indicate...
-        # BUT I have no clue how to receive an indication...
 
         print("Register indications")
         await client.start_notify(bc.cFitnessMachineControlPointUUID, indicationFitnessMachineControlPoint)
@@ -439,7 +484,7 @@ def notificationIndoorBikeData(handle, data):
     if len(data) in (4,6,8,10): # All flags should be implemented; only this set done!!
         tuple  = struct.unpack (sc.little_endian + sc.unsigned_short * int(len(data)/2), data)
         flags   = tuple[0]
-        speed   = tuple[1]               # always present
+        speed   = tuple[1] * 100         # always present, transmitted in 0.01 km/hr
         n = 2
         if flags & bc.ibd_InstantaneousCadencePresent:
             cadence = int(tuple[n] / 2)  # Because transmitted in BLE in half rpm
@@ -477,7 +522,7 @@ if __name__ == "__main__":
     #---------------------------------------------------------------------------
     # Introduction
     #---------------------------------------------------------------------------
-    print('bleClient.py is used to show the characteristics of a running FTMS (Fitness Machine Service).')
+    print('bleBleak.py is used to show the characteristics of a running FTMS (Fitness Machine Service).')
     print('FortiusAnt (BLE) provides such an FTMS and a Cycling Training Program is a client for that service.')
     print('Note that, when a CTP is active, FortiusAnt will not be discovered because it is in use.')
     print('')
@@ -486,8 +531,9 @@ if __name__ == "__main__":
     print('- PowerMode/GradeMode is done 5 times, setting the different targets alternatingly')
     print('While performing above requests, the results from the FTMS are displayed.')
     print('')
-    print('In this way, the FortiusAnt BLE-interface can be tested')
-    print('Start FortiusAnt with -b -s parameters to activate BLE and simulation-mode ')
+    print('In this way, the FortiusAnt BLE-interface can be tested:')
+    print('First start FortiusAnt with -g -a -s -b to activate BLE and simulation-mode')
+    print('Then  start bleBleak to print the characteristics and execute the test')
 
     #---------------------------------------------------------------------------
     # Initialize logger, currently straight print() used
