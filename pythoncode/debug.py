@@ -18,17 +18,26 @@ __version__ = "2021-02-22"
 # Define global constants
 # Modules that include these variables have to prefix: if debug.On(debug.No) ...
 #-------------------------------------------------------------------------------
-No				= 0x00		# 0
-Application    	= 0x01      # 1
-Function       	= 0x02      # 2
-Data1          	= 0x04      # 4			antDongle
-Data2          	= 0x08      # 8			usbTrainer
-MultiProcessing = 0x10      # 16
-LogfileJson     = 0x20      # 32
-Ble             = 0x40      # 64
-Performance     = 0x80      # 128
+# 8421 8421 8421 8421 
+# ---C EWID bpjm uafA   Characters that can be used in -d flag
+#-------------------------------------------------------------------------------
+No				= 0x0000    #    0
+Application    	= 0x0001    #    1
+Function       	= 0x0002    #    2
+Data1          	= 0x0004    #    4			antDongle
+Data2          	= 0x0008    #    8			usbTrainer
+MultiProcessing = 0x0010    #   16
+LogfileJson     = 0x0020    #   32
+Ble             = 0x0040    #   64
+Performance     = 0x0080    #  128
 
-All	        	= 0xff      # 255		When setting, it's All
+logging_DEBUG   = 0x0100    #  256      That's all
+logging_INFO    = 0x0200    #  512
+logging_WARNING = 0x0400    # 1024
+logging_ERROR   = 0x0800    # 2048
+logging_CRITICAL= 0x1000    # 4096      Critical only
+
+All	        	= 0xffff    # 65535		When setting, it's All
 Any				= All		#			When checing, it's Any
 
 #-------------------------------------------------------------------------------

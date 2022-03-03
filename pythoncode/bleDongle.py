@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2021-02-27"
+__version__ = "2022-03-03"
+# 2022-03-03    Initial message specified that node is used.
 # 2021-02-27    Retry added in Write() for raspberry.
 # 2021-01-04    lib_programname used to get correct dirname
 #               ./node was searched relative to current path
@@ -48,7 +49,7 @@ class clsBleInterface():
         self.interface = None
         self.jsondata  = None
         if UseBluetooth and clv.ble:
-            self.Message   = ", Bluetooth interface available"
+            self.Message   = ", Bluetooth interface available (node)"
             #---------------------------------------------------------------
             # register self.Close() to make sure the BLE server is stopped
             #   ON program termination

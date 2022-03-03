@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-01-14"
+__version__ = "2022-03-03"
+# 2022-03-03    #366 -bb added
+#               -d can be defined as characters
 # 2022-01-14    #363 st7789b added
 # 2021-12-02    default command line value for HRM was False, changed to None
 #                   HRM=0 has another meaning than "HRM not specified"
@@ -207,13 +209,14 @@ class CommandLineVariables(object):
            parser.add_argument('-A', dest='A_IgnoredIfDefined',                         help=argparse.SUPPRESS, required=False, action='store_true')
         if UseBluetooth:
            parser.add_argument('-b', dest='ble',                                        help=constants.help_b,  required=False, action='store_true')
+           parser.add_argument('-bb', dest='bless',                                     help=constants.help_bb, required=False, action='store_true')
         else:
            pass # If -b is requested but not available, then an error is appropriate
         parser.add_argument   ('-B', dest='DeviceNumberBase',   metavar='0...65535',    help=constants.help_B,  required=False, default=None,  type=int)
         parser.add_argument   ('-c', dest='CalibrateRR',        metavar='0...100',      help=constants.help_c,  required=False, default=None,  type=int)
 #       parser.add_argument   ('-C', dest='CtrlCommand',        metavar='ANT+DeviceID', help=constants.help_C,  required=False, default=False, type=int)
         parser.add_argument   ('-C', dest='CtrlCommand',        metavar='ANT+DeviceID', help=argparse.SUPPRESS, required=False, default=False, type=int)
-        parser.add_argument   ('-d', dest='debug',              metavar='0...255',      help=constants.help_d,  required=False, default=None,  type=int)
+        parser.add_argument   ('-d', dest='debug',              metavar='0...65535',    help=constants.help_d,  required=False, default=None)               #type=int
         parser.add_argument   ('-D', dest='antDeviceID',        metavar='USB-DeviceID', help=constants.help_D,  required=False, default=None,  type=int)
         parser.add_argument   ('-e', dest='homeTrainer',                                help=constants.help_e,  required=False, action='store_true')
         #                       -h     help!!
@@ -302,7 +305,8 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         self.autostart              = self.args.autostart
         if UseBluetooth:
-            self.ble                = self.args.ble
+            self.ble                = self.args.ble         # BLE using NodeJS
+            self.bless              = self.args.bless       # BLE using bless
         if UseGui:
             self.gui                = self.args.gui
         self.homeTrainer            = self.args.homeTrainer # Exersize Bike
@@ -442,7 +446,23 @@ class CommandLineVariables(object):
             try:
                 self.debug = int(self.args.debug)
             except:
-                logfile.Console('Command line error; -d incorrect debugging flags=%s' % self.args.debug)
+                #logfile.Console('Command line error; -d incorrect debugging flags=%s' % self.args.debug)
+
+                self.debug = 0
+                if 'A' in self.args.debug: self.debug |= debug.Application
+                if 'f' in self.args.debug: self.debug |= debug.Function
+                if 'a' in self.args.debug: self.debug |= debug.Data1
+                if 'u' in self.args.debug: self.debug |= debug.Data2
+                if 'm' in self.args.debug: self.debug |= debug.MultiProcessing
+                if 'j' in self.args.debug: self.debug |= debug.LogfileJson
+                if 'b' in self.args.debug: self.debug |= debug.Ble
+                if 'p' in self.args.debug: self.debug |= debug.Performance
+
+                if 'D' in self.args.debug: self.debug |= debug.logging_DEBUG
+                if 'I' in self.args.debug: self.debug |= debug.logging_INFO
+                if 'W' in self.args.debug: self.debug |= debug.logging_WARNING
+                if 'E' in self.args.debug: self.debug |= debug.logging_ERROR
+                if 'C' in self.args.debug: self.debug |= debug.logging_CRITICAL
 
         #-----------------------------------------------------------------------
         # Get antDeviceID
@@ -660,11 +680,12 @@ class CommandLineVariables(object):
             if      self.autostart:                     logfile.Console("-a")
             if      self.PedalStrokeAnalysis:           logfile.Console("-A")
             if      self.ble:                           logfile.Console("-b")
+            if      self.bless:                         logfile.Console("-bb")
             if v or self.args.DeviceNumberBase != None: logfile.Console("-B %s" % self.DeviceNumberBase )
             if v or self.args.CalibrateRR != None:      logfile.Console("-c %s" % self.CalibrateRR )
             if v or self.CTRL_SerialL or self.CTRL_SerialR:
                 logfile.Console("-C %s/%s" % (self.CTRL_SerialL, self.CTRL_SerialR ) )
-            if v or self.args.debug != None:            logfile.Console("-d %s (%s)" % (self.debug, bin(self.debug) ) )
+            if v or self.args.debug != None:            logfile.Console("-d %s (%s, %s)" % (self.args.debug, self.debug, bin(self.debug) ) )
             if v or self.args.antDeviceID != None:      logfile.Console("-D %s" % self.antDeviceID )
             if v or self.args.GradeAdjust:
                 if self.GradeAdjust == 1:               logfile.Console("-G defines Grade = antGrade * %s" \

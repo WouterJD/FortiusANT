@@ -64,10 +64,10 @@ import asyncio
 import logging
 import os
 from socket import timeout
-import sys
 
 from bleak import BleakClient
 from bleak import discover
+from bleak import __version__ as bleakVersion
 
 import bleConstants    as bc
 import logfile
@@ -88,6 +88,7 @@ import structConstants as sc
 # Raspberry rpi0W with Raspbian version (10) buster
 # - bleBleak.py works; sample output added to end-of-this-file.
 #-------------------------------------------------------------------------------
+print("bleak = %s" % bleakVersion)
 if os.name == 'nt':
     print("*****************************************************************************")
     print("***** bleBleak.py is not released for Windows 10; see comment in source *****")
@@ -127,12 +128,14 @@ async def findBLEdevices():
     print('-------------------------------')
     devices = await discover()
     for d in devices:
-        print(d)
         # print('d -----------------------------')
         # print('\n'.join("%s: %s" % item for item in vars(d).items()))
         # print('d --------------------------end')
-        if bc.sFitnessMachineUUID in d.metadata['uuids']:
-            ADDRESSES.append (d.address)                    # It's a candidate
+        if bc.sFitnessMachineUUID in d.metadata['uuids'] or d.name == 'FortiusANT Trainer' or d.name[:3] == 'LT-':
+            ADDRESSES.append (d.address) # It's a candidate, more checks later
+            print(d, 'FTMS')
+        else:
+            print(d)
 
 #-------------------------------------------------------------------------------
 # s e r v e r I n s p e c t i o n
@@ -166,7 +169,7 @@ async def serverInspectionSub(client):
     #---------------------------------------------------------------------------
     bFitnessMachine    = False
     sFitnessMachine    = 'NOT '
-    sServiceDeviceName = '<Unknown>'
+    sServiceDeviceName = '<Unknown name>'
 
     for service in client.services:
         for char in service.characteristics:
@@ -175,7 +178,7 @@ async def serverInspectionSub(client):
                 value = bytes(await client.read_gatt_char(char.uuid))
 
                 if char.uuid == bc.cDeviceNameUUID:
-                    sServiceDeviceName = value.decode('ascii')
+                    sServiceDeviceName = value.decode('ascii')  # e.g. "FortiusAnt trainer"
 
                 if char.uuid == bc.cFitnessMachineFeatureUUID and len(value) == 8:
                     tuple  = struct.unpack (sc.little_endian + sc.unsigned_long * 2, value)
@@ -484,7 +487,7 @@ def notificationIndoorBikeData(handle, data):
     if len(data) in (4,6,8,10): # All flags should be implemented; only this set done!!
         tuple  = struct.unpack (sc.little_endian + sc.unsigned_short * int(len(data)/2), data)
         flags   = tuple[0]
-        speed   = tuple[1] * 100         # always present, transmitted in 0.01 km/hr
+        speed   = tuple[1] / 100         # always present, transmitted in 0.01 km/hr
         n = 2
         if flags & bc.ibd_InstantaneousCadencePresent:
             cadence = int(tuple[n] / 2)  # Because transmitted in BLE in half rpm
@@ -512,9 +515,9 @@ def notificationIndoorBikeData(handle, data):
 def notificationPrint(handle, uuidName, data):
     global cadence, hrm, speed, power, status
 
-    print("%s %-22s %-25s status=%-10s speed=%s cadence=%3s power=%4s hrm=%3s" % 
+    print("%s %-22s %-25s status=%-10s speed=%4.1f cadence=%3s power=%4s hrm=%3s" % 
         (handle, uuidName, logfile.HexSpace(data), 
-         status, speed, cadence, power, hrm)
+         status, round(speed,1), cadence, power, hrm)
          )
 
 

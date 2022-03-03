@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-02-22"
+__version__ = "2022-03-03"
+# 2022-03-03    python.logging implemented, using PythonLogging=True
+#               The "Old" logging remains present, just in case...
 # 2022-02-22    HexSpace() now also supports bytearray
 # 2020-11-25    Small textual modifications (time->Time)
 #               .utcnow() replaced by .now()
@@ -24,7 +26,13 @@ import sys
 import time
 from   datetime     import datetime
 
+from   constants    import UsePythonLogging
 import debug
+
+global LogfileCreated
+LogfileCreated = False
+
+if UsePythonLogging: import logging
 
 #-------------------------------------------------------------------------------
 # c l s L o g f i l e J s o n
@@ -129,23 +137,57 @@ class clsLogfileJson():
 # O p e n
 #-------------------------------------------------------------------------------
 def Open(prefix='FortiusAnt', suffix=''):
-    global fLogfile, LogfileJson
+    global fLogfile, LogfileJson, LogfileCreated, UsePythonLogging
 
     if debug.on():
+        #-----------------------------------------------------------------------
+        # Create filename for logging
+        #-----------------------------------------------------------------------
         if len(suffix) > 0 and suffix[0] != '.':
             suffix = '.' + suffix
         filename = prefix + '.' + datetime.now().strftime('%Y-%m-%d %H-%M-%S') + suffix + ".log"
-        fLogfile = open(filename,"w+")
 
+        #-----------------------------------------------------------------------
+        # Open the file
+        # - either using the logging module
+        # - or creating the file ourselves (then other modules will not log)
+        #-----------------------------------------------------------------------
+        l = 0
+        if UsePythonLogging:
+            if debug.on(debug.logging_CRITICAL):  l = logging.CRITICAL    # If you want to see CRITICAL, you will not see below
+            if debug.on(debug.logging_ERROR):     l = logging.ERROR
+            if debug.on(debug.logging_WARNING):   l = logging.WARNING
+            if debug.on(debug.logging_INFO):      l = logging.INFO
+            if debug.on(debug.logging_DEBUG):     l = logging.DEBUG       # If you want lo log DEBUG, you will see all previous
+
+        #-----------------------------------------------------------------------
+        # logging_CRITICAL... is for the OTHER modules, since we have our own 
+        # flags. If no such logging is requested, use our own method.
+        # Alternative would be to define another logging_level...
+        #-----------------------------------------------------------------------
+        if UsePythonLogging and l:
+            #-------------------------------------------------------------------
+            # Basic format, since our own logfile is already formatted
+            # Logging from othger modules is now not formatted, which is for future improvement
+            # logging.basicConfig(filename=filename, level=l, format='%(asctime)s:%(levelname)s:%(message)s', datefmt='%H:%M:%S')
+            #-------------------------------------------------------------------
+            logging.basicConfig(filename=filename, level=l, format='%(message)s') # encoding='utf-8', 
+            # fLogfile remains undefined
+
+        else:
+            UsePythonLogging = False     # No python logging, use our own format
+            fLogfile = open(filename,"w+")
+
+        LogfileCreated = True
+
+        #-----------------------------------------------------------------------
+        # If requested, create the json log
+        #-----------------------------------------------------------------------
         if debug.on(debug.LogfileJson) and prefix == 'FortiusAnt':
             LogfileJson = clsLogfileJson(filename.replace('.log', '.json'))
 
 def IsOpen():
-    try:
-        _test = fLogfile
-        return True
-    except:
-        return False
+    return LogfileCreated
 
 #-------------------------------------------------------------------------------
 # P r i n t   t o   l o g f i l e
@@ -155,13 +197,16 @@ def IsOpen():
 def Print(*objects, sep=' ', end='\n'):
     global fLogfile
 
-    if IsOpen():
-        enc = fLogfile.encoding
-        if enc == 'UTF-8':
-            print(*objects, sep=sep, end=end, file=fLogfile)
-        else:
-            f = lambda obj: str(obj).encode(enc, errors='backslashreplace').decode(enc)
-            print(*map(f, objects), sep=sep, end=end, file=fLogfile)
+    if UsePythonLogging:
+        logging.error('Print not implemented')
+    else:
+        if IsOpen():
+            enc = fLogfile.encoding
+            if enc == 'UTF-8':
+                print(*objects, sep=sep, end=end, file=fLogfile)
+            else:
+                f = lambda obj: str(obj).encode(enc, errors='backslashreplace').decode(enc)
+                print(*map(f, objects), sep=sep, end=end, file=fLogfile)
 
 #-------------------------------------------------------------------------------
 # W r i t e   and   C o n s o le
@@ -180,20 +225,21 @@ def Console (logText):
     Write(logText, True)
 
 def Write (logText, console=False):
-    logText = datetime.now().strftime('%H:%M:%S,%f')[0:12] + ": " + logText
-    if console: print (logText)
+    logTextDT = datetime.now().strftime('%H:%M:%S,%f')[0:12] + ": " + logText
+    if console: print (logTextDT)
     sys.stdout.flush()
 
     if debug.on():
-        try:
-            _test = fLogfile
-        except:
+        if not LogfileCreated:
             Open()                  # if module not initiated, open implicitly
 
     try:
         if debug.on():
-            fLogfile.write(logText + "\n")         # \r\n
-            fLogfile.flush()
+            if UsePythonLogging:
+                logging.info(logTextDT)
+            else:
+                fLogfile.write(logTextDT + "\n")         # \r\n
+                fLogfile.flush()
     except:
 #       print ("logfile.Write (" + logText + ") called, but logfile is not opened.")
         pass
@@ -206,7 +252,11 @@ def WriteJson(QuarterSecond, TacxTrainer, tcx, HeartRate):
 def Close():
     try:
         if debug.on():
-            fLogfile.close
+            if UsePythonLogging:
+                pass
+            else:
+                fLogfile.close
+
             if debug.on(debug.LogfileJson):
                 LogfileJson.Close()
 

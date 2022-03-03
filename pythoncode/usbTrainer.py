@@ -1,8 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-01-13"
-# 2022-01-13    #361 clsSimulatedTrainer.Refresh() must correct data type of
+__version__ = "2022-03-01"
+# 2022-03-01    #361 clsSimulatedTrainer.Refresh() must correct data type of
 #               variables otherwise CurrentPower = iPower is not integer.
 # 2021-11-15    "Steering axis = " commented code added for investigation
 # 2021-05-18    TargetResistanceFT used in logfile (instead of TargetResistance)
@@ -1055,6 +1055,7 @@ class clsSimulatedTrainer(clsTacxTrainer):
         # Round after all these calculations (and correct data type!) #361 
         # ----------------------------------------------------------------------
         self.Cadence             = int(self.Cadence)
+        self.HeartRate           = int(self.HeartRate)
         self.TargetPower         = int(self.TargetPower)
         self.TargetResistance    = int(self.TargetResistance)
         self.CurrentResistance   = int(self.CurrentResistance)
