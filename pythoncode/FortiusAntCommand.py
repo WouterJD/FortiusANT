@@ -336,6 +336,10 @@ class CommandLineVariables(object):
         if (self.homeTrainer or self.manual or self.manualGrade) and self.SimulateTrainer:
             logfile.Console("-e/-m/-M and -s both specified, most likely for program test purpose")
 
+        if self.ble and self.bless:
+            logfile.Console("-b and -bb both specified, -bb is selected")
+            self.ble = False
+
         #-----------------------------------------------------------------------
         # Get DeviceNumberBase
         #-----------------------------------------------------------------------

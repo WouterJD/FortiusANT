@@ -1,8 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-03"
-# 2022-03-03    python.logging implemented, using PythonLogging=True
+__version__ = "2022-03-16"
+# 2022-03-16    python.logging implemented, using PythonLogging=True
 #               The "Old" logging remains present, just in case...
 # 2022-02-22    HexSpace() now also supports bytearray
 # 2020-11-25    Small textual modifications (time->Time)
@@ -137,7 +137,7 @@ class clsLogfileJson():
 # O p e n
 #-------------------------------------------------------------------------------
 def Open(prefix='FortiusAnt', suffix=''):
-    global fLogfile, LogfileJson, LogfileCreated, UsePythonLogging
+    global fLogfile, LogfileJson, LogfileCreated, UsePythonLogging, PythonLogger
 
     if debug.on():
         #-----------------------------------------------------------------------
@@ -154,11 +154,20 @@ def Open(prefix='FortiusAnt', suffix=''):
         #-----------------------------------------------------------------------
         l = 0
         if UsePythonLogging:
-            if debug.on(debug.logging_CRITICAL):  l = logging.CRITICAL    # If you want to see CRITICAL, you will not see below
+            # If BLE-logging is requested, then logging is set to DEBUG
+            # because bless and bleak use logging.
+            if debug.on(debug.Ble):               l = logging.DEBUG       # If BLE logging, DEBUG is default
+
+            # If multiple values are defined, the one that generates most output takes precedence
+            if debug.on(debug.logging_CRITICAL):  l = logging.CRITICAL
             if debug.on(debug.logging_ERROR):     l = logging.ERROR
             if debug.on(debug.logging_WARNING):   l = logging.WARNING
             if debug.on(debug.logging_INFO):      l = logging.INFO
-            if debug.on(debug.logging_DEBUG):     l = logging.DEBUG       # If you want lo log DEBUG, you will see all previous
+            if debug.on(debug.logging_DEBUG):     l = logging.DEBUG
+
+            # So  -dB       implies DEBUG
+            # and -dBC      logs CRITICAL only
+            # and -dBCW     logs WARNING, ERROR and CRITICAL
 
         #-----------------------------------------------------------------------
         # logging_CRITICAL... is for the OTHER modules, since we have our own 
@@ -167,12 +176,36 @@ def Open(prefix='FortiusAnt', suffix=''):
         #-----------------------------------------------------------------------
         if UsePythonLogging and l:
             #-------------------------------------------------------------------
-            # Basic format, since our own logfile is already formatted
-            # Logging from othger modules is now not formatted, which is for future improvement
-            # logging.basicConfig(filename=filename, level=l, format='%(asctime)s:%(levelname)s:%(message)s', datefmt='%H:%M:%S')
+            # Open logging file
+            # Create PythonLogger for FortiusAnt logging
             #-------------------------------------------------------------------
-            logging.basicConfig(filename=filename, level=l, format='%(message)s') # encoding='utf-8', 
-            # fLogfile remains undefined
+            logging.basicConfig(filename=filename, level=l, 
+                format='%(asctime)s: [%(name)s, %(levelname)s] %(message)s')
+                # Note that   datefmt='%Y-%m-%d %H:%M:%S'   has no milliseconds!
+            PythonLogger = logging.getLogger('FortiusAnt')  # Tag as our message
+            PythonLogger.setLevel(logging.DEBUG)            # No filtering
+            if False:
+                #---------------------------------------------------------------
+                # The idea is that the fortiusant-logging is different from
+                # the 'standard' logging, but it's not (yet) succesful...
+                #
+                # Standard:   format='%(asctime)s: [%(name)s %(levelname)s] %(message)s'
+                # FortiusAnt: format='%(message)s' (since the time is already there)
+                #---------------------------------------------------------------
+
+                # create NULL handler to format our messages
+                h = logging.NullHandler()
+                h.setLevel(l)
+
+                # create formatter
+                #f = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                f = logging.Formatter('===> %(message)s')       ##  Dit lukt nog niet erg
+
+                # add formatter to handler
+                h.setFormatter(f)
+
+                # add handler to logger
+                PythonLogger.addHandler(h)
 
         else:
             UsePythonLogging = False     # No python logging, use our own format
@@ -195,10 +228,10 @@ def IsOpen():
 # https://stackoverflow.com/questions/14630288/unicodeencodeerror-charmap-codec-cant-encode-character-maps-to-undefined
 #-------------------------------------------------------------------------------
 def Print(*objects, sep=' ', end='\n'):
-    global fLogfile
+    global fLogfile, PythonLogger
 
     if UsePythonLogging:
-        logging.error('Print not implemented')
+        PythonLogger.error('logfile.Print() not implemented for Python logging')
     else:
         if IsOpen():
             enc = fLogfile.encoding
@@ -225,6 +258,8 @@ def Console (logText):
     Write(logText, True)
 
 def Write (logText, console=False):
+    global fLogfile, PythonLogger
+
     logTextDT = datetime.now().strftime('%H:%M:%S,%f')[0:12] + ": " + logText
     if console: print (logTextDT)
     sys.stdout.flush()
@@ -236,9 +271,9 @@ def Write (logText, console=False):
     try:
         if debug.on():
             if UsePythonLogging:
-                logging.info(logTextDT)
+                PythonLogger.info(logText)       # Format is defined in PythonLogger
             else:
-                fLogfile.write(logTextDT + "\n")         # \r\n
+                fLogfile.write(logTextDT + "\n") # \r\n
                 fLogfile.flush()
     except:
 #       print ("logfile.Write (" + logText + ") called, but logfile is not opened.")

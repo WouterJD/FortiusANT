@@ -1,8 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-03"
-# 2022-03-03    bleBless added
+__version__ = "2022-03-08"
+# 2022-03-08    bleBless, bleBlessClass added
 # 2021-04-29    If no hrm used (-H-1) thgen do not show on console.
 #               Leds shown on console
 # 2021-03-22    Added; SetLeds
@@ -50,6 +50,7 @@ import antFE                as fe
 import antPWR               as pwr
 import antSCS               as scs
 import bleBless
+import bleBlessClass
 import bleDongle
 import debug
 import logfile
@@ -610,6 +611,7 @@ def mainProgram():
         logfile.Write(s % ('antPWR',                    pwr.__version__ ))
         logfile.Write(s % ('antSCS',                    scs.__version__ ))
         logfile.Write(s % ('bleBless',             bleBless.__version__ ))
+        logfile.Write(s % ('bleBlessClass',   bleBlessClass.__version__ ))
         logfile.Write(s % ('bleDongle',           bleDongle.__version__ ))
         logfile.Write(s % ('constants',           constants.__version__ ))
         logfile.Write(s % ('debug',                   debug.__version__ ))

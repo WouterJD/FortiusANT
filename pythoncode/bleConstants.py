@@ -1,9 +1,12 @@
 #-------------------------------------------------------------------------------
+# Author        https://github.com/WouterJD
+#               wouter.dubbeldam@xs4all.nl
+#-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-01"
-# 2022-03-01    bleBless.py works on Windows 10
-# 2022-02-22    bleBleak.py works on rpi0W with raspbian v10 buster
+__version__ = "2022-03-08"
+# 2022-03-08    Constants for bleBleak.py and bleBless.py
+# 2022-02-22    First version
 #-------------------------------------------------------------------------------
 
 import struct
@@ -19,12 +22,14 @@ import structConstants      as sc
 # Constants to create the BLE service/characteristics structure
 #-------------------------------------------------------------------------------
 BluetoothBaseUUID               = 'xxxxxxxx-0000-1000-8000-00805f9b34fb'
-BluetoothBaseUUIDsuffix         = '-0000-1000-8000-00805f9b34fb'
+BluetoothBaseUUIDsuffix         =         '-0000-1000-8000-00805f9b34fb'
 CharacteristicUserDescriptionUUID='00002901-0000-1000-8000-00805f9b34fb'
 
 sGenericAccessUUID              = '00001800-0000-1000-8000-00805f9b34fb'
 cDeviceNameUUID                 = '00002a00-0000-1000-8000-00805f9b34fb'
+cDeviceNameName                 = 'Device Name'
 cAppearanceUUID                 = '00002a01-0000-1000-8000-00805f9b34fb'
+cAppearanceName                 = 'Appearance'
 # Service
 sFitnessMachineUUID             = "00001826-0000-1000-8000-00805f9b34fb"
 sFitnessMachineName             = "Fitness Machine"
@@ -96,3 +101,9 @@ cHeartRateMeasurementUUID       = "00002a37-0000-1000-8000-00805f9b34fb"
 cHeartRateMeasurementName       = "Heart Rate Measurement"
                                 # HRS_SPEC_V10, section 3.1 p 9:                       Flags, Heartrate
 hrm_Info                        = struct.pack(sc.little_endian + sc.unsigned_char * 2, 0,     123)
+
+# ==============================================================================
+# Main program
+# ==============================================================================
+if __name__ == "__main__":
+    print("bleConstants.py cannot be executed on it's own.")

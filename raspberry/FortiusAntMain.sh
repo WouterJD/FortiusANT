@@ -15,7 +15,7 @@ find ./ -name '*.json' -type f -mtime +2 -delete
 find ./ -name '*.tcx'  -type f -mtime +2 -delete
 
 #-------------------------------------------------------------------------------
-# Check whether bluetooth required
+# Check whether bluetooth required (-b = NodeJs, -bb = bless)
 #-------------------------------------------------------------------------------
 bluetooth=0
 for arg in "$@"
@@ -25,7 +25,7 @@ do
     fi
 done
 #-------------------------------------------------------------------------------
-# if bluetooth required, stop service and enable for FortiusAnt
+# If bluetooth required, stop service and enable for FortiusAnt
 #-------------------------------------------------------------------------------
 if [ $bluetooth == 1 ]; then
     echo Stop standard Bluetooth Service

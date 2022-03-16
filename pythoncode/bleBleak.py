@@ -40,10 +40,26 @@
 #       325 Watt, 5%, 324 Watt, 4%, ..., 320 Watt, 0%, 50Watt
 #
 # And of course, in this way, we can automatically test FortiusAnt in ble-mode
+#
+# NOTES:
+# - The code is quite lineair and not in classes; the code is not intended to 
+#   provide a basis for usages in larger environments but serves as a demo/test
+#   only
+#-------------------------------------------------------------------------------
+# Author        https://github.com/WouterJD
+#               wouter.dubbeldam@xs4all.nl
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-02-22"
+__version__ = "2022-03-14"
+# 2022-03-16    bleBleak.py works on Windows 10
+#               - sometimes the BLE dongle must be reset (remove/insert)
+#               - sometimes indications are not received
+#                   This SEEMS to have gone since Try/Except is used (?)
+# 2022-03-16    retries in discovery and finding client introduced.
+# 2022-03-14    read_gatt_char() accepts UUID or HANDLE,
+#               Tests with Tacx NEO show that duplicate UUID's exist, so
+#                   handle is used as input.
 # 2022-02-22    bleBleak.py works on rpi0W with raspbian v10 buster
 # 2022-02-21    Version rebuilt to be able to validate the FortiusAnt/BLE 
 #               implementation and I expect you could 'look' at an existing
@@ -90,9 +106,9 @@ import structConstants as sc
 #-------------------------------------------------------------------------------
 print("bleak = %s" % bleakVersion)
 if os.name == 'nt':
-    print("*****************************************************************************")
-    print("***** bleBleak.py is not released for Windows 10; see comment in source *****")
-    print("*****************************************************************************\n\n")
+    print("************************************************************************")
+    print("***** bleBleak.py works under Windows 10; but is not always stable *****")
+    print("************************************************************************\n\n")
 
 #-------------------------------------------------------------------------------
 # ADDRESSES: Returned by findBLEdevices()
@@ -126,14 +142,30 @@ async def findBLEdevices():
     print('-------------------------------')
     print(' Discover existing BLE devices ')
     print('-------------------------------')
-    devices = await discover()
+    retry = 5
+    while retry:
+        devices = await discover()
+        if len(devices):
+            break
+        else:
+            retry -= 1
+            print('No devices found, retry')
+
     for d in devices:
         # print('d -----------------------------')
         # print('\n'.join("%s: %s" % item for item in vars(d).items()))
         # print('d --------------------------end')
-        if bc.sFitnessMachineUUID in d.metadata['uuids'] or d.name == 'FortiusANT Trainer' or d.name[:3] == 'LT-':
+        ftms = True         
+        try:
+            ftms |= bc.sFitnessMachineUUID in d.metadata['uuids']
+            ftms |= 'FortiusANT' in d.name
+            ftms |= d.name == 'Unknown'
+            ftms |= d.name[:3] == 'LT-'
+        except Exception as e:
+            pass
+        if ftms:
             ADDRESSES.append (d.address) # It's a candidate, more checks later
-            print(d, 'FTMS')
+            print(d, 'will be inspected')
         else:
             print(d)
 
@@ -150,11 +182,19 @@ async def serverInspection(address):
     print('---------------------------------------------------')
     print(' Inspect BLE-device with address %s' % address)
     print('---------------------------------------------------')
-    try:
-        async with BleakClient(address) as client:          # , timeout=100
-            await serverInspectionSub(client)
-    except Exception as e:
-        print(type(e), e)
+    retry = 5
+    while retry:
+        try:
+            async with BleakClient(address) as client: # , timeout=100
+                await serverInspectionSub(client)
+            break
+        except Exception as e:
+            if 'TimeoutError' in str(type(e)):
+                print('Timeout, retry')
+                retry -= 1
+            else:
+                print(type(e), e)
+                break
             
 async def serverInspectionSub(client):
 
@@ -164,34 +204,54 @@ async def serverInspectionSub(client):
     # print('client --------------------------end')
 
     #---------------------------------------------------------------------------
+    # Get Generic Access Profile
+    # This service is not always available in client.services, but the 
+    # characteristics can always be retrieved.
+    # See issue https://github.com/hbldh/bleak/issues/782
+    #---------------------------------------------------------------------------
+    try:
+        sServiceDeviceName = await client.read_gatt_char(bc.cDeviceNameUUID)
+        sServiceDeviceName = sServiceDeviceName.decode('ascii')
+        print("%s=%s" % (bc.cDeviceNameName, sServiceDeviceName))
+    except Exception as e:
+        sServiceDeviceName = '<Unknown name>'
+        print("Characteristic %s error=%s" % (bc.cDeviceNameName, e))
+
+    try:
+        Appearance = await client.read_gatt_char(bc.cAppearanceUUID)
+        print("%s=%s" % (bc.cAppearanceName, Appearance))
+    except Exception as e:
+        Appearance = None
+        print("Characteristic %s error=%s" % (bc.cAppearanceName, e))
+
+    #---------------------------------------------------------------------------
     # Check whether this service is a Fitness Machine
-    # For detailed comment, see loop below (same loop, more explanation)
+    # by inspecting the FitnessMachineFeeature characteristic.
     #---------------------------------------------------------------------------
     bFitnessMachine    = False
     sFitnessMachine    = 'NOT '
-    sServiceDeviceName = '<Unknown name>'
 
-    for service in client.services:
-        for char in service.characteristics:
-            value = "n/a"
-            if "read" in char.properties:
-                value = bytes(await client.read_gatt_char(char.uuid))
+    try:
+        value = bytes(await client.read_gatt_char(bc.cFitnessMachineFeatureUUID))
+    except Exception as e:
+        value = None
+    else:
+        #-----------------------------------------------------------------------
+        # If present with expected length (otherwise unpack crashes)
+        # check if the expected flagsd are present.
+        #-----------------------------------------------------------------------
+        if len(value) == 8:
+            tuple  = struct.unpack (sc.little_endian + sc.unsigned_long * 2, value)
+            cFitnessMachineFeatureFlags1 = tuple[0]
+            cFitnessMachineFeatureFlags2 = tuple[1]
 
-                if char.uuid == bc.cDeviceNameUUID:
-                    sServiceDeviceName = value.decode('ascii')  # e.g. "FortiusAnt trainer"
-
-                if char.uuid == bc.cFitnessMachineFeatureUUID and len(value) == 8:
-                    tuple  = struct.unpack (sc.little_endian + sc.unsigned_long * 2, value)
-                    cFitnessMachineFeatureFlags1 = tuple[0]
-                    cFitnessMachineFeatureFlags2 = tuple[1]
-
-                    if (    cFitnessMachineFeatureFlags1 & bc.fmf_CadenceSupported
-                        and cFitnessMachineFeatureFlags1 & bc.fmf_PowerMeasurementSupported
-                        and cFitnessMachineFeatureFlags2 & bc.fmf_PowerTargetSettingSupported
-                        and cFitnessMachineFeatureFlags2 & bc.fmf_IndoorBikeSimulationParametersSupported
-                        ):
-                        bFitnessMachine = True
-                        sFitnessMachine = ''
+            if (    cFitnessMachineFeatureFlags1 & bc.fmf_CadenceSupported
+                and cFitnessMachineFeatureFlags1 & bc.fmf_PowerMeasurementSupported
+                and cFitnessMachineFeatureFlags2 & bc.fmf_PowerTargetSettingSupported
+                and cFitnessMachineFeatureFlags2 & bc.fmf_IndoorBikeSimulationParametersSupported
+                ):
+                bFitnessMachine = True
+                sFitnessMachine = ''
 
     print ('%s: This is %sa matching Fitness Machine' % (sServiceDeviceName, sFitnessMachine) )
 
@@ -215,7 +275,7 @@ async def serverInspectionSub(client):
                 #---------------------------------------------------------------
                 if "read" in char.properties:
                     try:
-                        value = bytes(await client.read_gatt_char(char.uuid))
+                        value = bytes(await client.read_gatt_char(char.handle))
                     except Exception as e:
                         value = e
                 elif "notify" in char.properties:
@@ -230,7 +290,7 @@ async def serverInspectionSub(client):
                 else:
                     s = logfile.HexSpace(value)
 
-                s = '\tCharacteristic: %-80s, props=%s, value=%s' % (char, char.properties, s)
+                s = '\tCharacteristic: handle=%4s, uuid=%12s, props=%s, value=%s' % (char.handle, char.uuid, char.properties, s)
                 s = s.replace(bc.BluetoothBaseUUIDsuffix, '-...') # Always the same
                 print(s)
 
@@ -271,12 +331,26 @@ async def serverInspectionSub(client):
         # Now receive notifications and indications
         #-----------------------------------------------------------------------
         print("Register notifications")
-        await client.start_notify(bc.cFitnessMachineStatusUUID, notificationFitnessMachineStatus)
-        await client.start_notify(bc.cHeartRateMeasurementUUID, notificationHeartRateMeasurement)
-        await client.start_notify(bc.cIndoorBikeDataUUID,       notificationIndoorBikeData)
+        try:
+            await client.start_notify(bc.cFitnessMachineStatusUUID, notificationFitnessMachineStatus)
+        except Exception as e:
+            print ('Registration failed', e)
+
+        try:
+            await client.start_notify(bc.cHeartRateMeasurementUUID, notificationHeartRateMeasurement)
+        except Exception as e:
+            print ('Registration failed', e)
+
+        try:
+            await client.start_notify(bc.cIndoorBikeDataUUID,       notificationIndoorBikeData)
+        except Exception as e:
+            print ('Registration failed', e)
 
         print("Register indications")
-        await client.start_notify(bc.cFitnessMachineControlPointUUID, indicationFitnessMachineControlPoint)
+        try:
+            await client.start_notify(bc.cFitnessMachineControlPointUUID, indicationFitnessMachineControlPoint)
+        except Exception as e:
+            print ('Registration failed', e)
 
         print("------------------------------------------------------")
         print(" Start simulation of a Cycling Training Program (CTP) ")
@@ -418,12 +492,24 @@ async def serverInspectionSub(client):
         # Stop receiving notifications and indications
         #-----------------------------------------------------------------------
         print("Unregister notifications")
-        await client.stop_notify(bc.cFitnessMachineStatusUUID)
-        await client.stop_notify(bc.cHeartRateMeasurementUUID)
-        await client.stop_notify(bc.cIndoorBikeDataUUID)
+        try:
+            await client.stop_notify(bc.cFitnessMachineStatusUUID)
+        except Exception as e:
+            pass
+        try:
+            await client.stop_notify(bc.cHeartRateMeasurementUUID)
+        except Exception as e:
+            pass
+        try:
+            await client.stop_notify(bc.cIndoorBikeDataUUID)
+        except Exception as e:
+            pass
 
         print("Unregister indications")
-        await client.stop_notify(bc.cFitnessMachineControlPointUUID)
+        try:
+            await client.stop_notify(bc.cFitnessMachineControlPointUUID)
+        except Exception as e:
+            pass
 
 #-------------------------------------------------------------------------------
 # n o t i f i c a t i o n   A N D   i n d i c a t i o n   H a n d l e r s
@@ -451,7 +537,7 @@ def indicationFitnessMachineControlPoint(handle, data):
     elif ResultCode == bc.fmcp_ControlNotPermitted: ResultCodeText = 'ControlNotPermitted'
     else:                                           ResultCodeText = '?'
 
-    if False:   # For debugging only
+    if True:   # For debugging only
         print("%s %s %s ResponseCode=%s RequestCode=%s ResultCode=%s(%s)" %
             (handle, bc.cFitnessMachineControlPointName, logfile.HexSpace(data),
             ResponseCode, RequestCode, ResultCode, ResultCodeText))

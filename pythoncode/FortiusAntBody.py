@@ -271,13 +271,13 @@ def Initialize(pclv):
     if clv.bless:
         clv.ble = True                          # Since this is the only place
                                                 # where .bless is used!!
-        bleCTP  = bleBless.clsFTMS_bless(clv)   # bless implementation
+        bleCTP  = bleBless.clsFTMS_bless(True)  # bless implementation
 
     elif clv.ble:
         bleCTP = bleDongle.clsBleCTP(clv)       # nodejs implementation
 
     else:
-        bleCTP =  bleBless.clsFTMS_bless(clv)   # Create data structure,
+        bleCTP =  bleBless.clsFTMS_bless(False) # Create data structure,
                                                 # e.g. so that .Message exists
                                                 # No methods may be called
 
