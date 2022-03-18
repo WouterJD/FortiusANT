@@ -88,12 +88,68 @@ if BlessExample:
     Is not allowed to be added in the GATT definition: failed to create entry in database
     This 'may be' because it's a standard service, but then: how to set the two characteristics?
 
+    Definition as discovered from NodeJs:
+
     bc.sGenericAccessUUID: {
         bc.cDeviceNameUUID: {
             "Properties":   (GATTCharacteristicProperties.read),
             "Permissions":  (GATTAttributePermissions.readable | GATTAttributePermissions.writeable),
-            "ValueX":        b'FortiusAntTrainer',
-            "valueX":        b'FortiusAntTrainer',
+            "Value":        b'FortiusAntTrainer',
+            "value":        b'FortiusAntTrainer',
+            "Description":  bc.cDeviceNameName
+        },
+        bc.cAppearanceUUID: {
+            "Properties":   (GATTCharacteristicProperties.read),
+            "Permissions":  (GATTAttributePermissions.readable | GATTAttributePermissions.writeable),
+            "Value":        b'\x80\x00',
+            "value":        b'\x80\x00',
+            "Description":  bc.cAppearanceName
+        },
+    },
+
+    Definition as suggested by Kevin: https://github.com/kevincar/bless/discussions/76#discussioncomment-2380163
+
+    "<YOUR SERVICE UUID>": {
+       bc.cDeviceNameUUID: {
+           "Properties":   (GATTCharacteristicProperties.read | GATTCharacteristicProperties.indicate),
+           "Permissions":  (GATTAttributePermissions.readable),
+           "Value":        "My Device Name",
+           "Description":  bc.cDeviceNameName
+       },
+       bc.cAppearanceUUID: {
+           "Properties":   (GATTCharacteristicProperties.read | GATTCharacteristicProperties.indicate),
+           "Permissions":  (GATTAttributePermissions.readable),
+           "Value":        "My Appearance",
+           "Description":  bc.cAppearanceName
+       }
+    },
+
+    # On Windows 10:
+    #     bc.sGenericAccessUUID: { ... containing the two characteristics ... }
+    #       results in:
+    #           clsBleServer._Server(); add_gatt() exception 'NoneType' object has no attribute 'add_advertisement_status_changed'
+    #
+    #     bc.sFitnessMachineUUID: { ... containing the two characteristics ... }
+    #       results in that characteristic can be read by client, but Trainer Road does still provide TP-T430 as service name.
+    #
+    #     bc.sGenericAccessUUID_private: { ... containing the two characteristics ... }
+    #       has the same effect.
+    #       bleBleak considers the service to be "vendor specific"
+    #
+    # On Raspberry:
+    #     bc.sGenericAccessUUID: { ... containing the two characteristics ... }
+    #       results in:
+    #            clsBleServer._Server(); start() exception org.bluez.Error.Failed: Failed to create entry in database
+    #
+    #     bc.sGenericAccessUUID_private: { ... containing the two characteristics ... }
+    #       This confuses bleak at the Windows 10 side (duplicate keys, FTMS not found)
+
+    "<YOUR SERVICE UUID>": {            # This line is modified as explained above
+        bc.cDeviceNameUUID: {
+            "Properties":   (GATTCharacteristicProperties.read),
+            "Permissions":  (GATTAttributePermissions.readable | GATTAttributePermissions.writeable),
+            "Value":        b'FortiusAntTrainer',
+            "value":        b'FortiusAntTrainer',
             "Description":  bc.cDeviceNameName
         },
         bc.cAppearanceUUID: {

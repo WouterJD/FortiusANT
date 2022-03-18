@@ -26,6 +26,7 @@ BluetoothBaseUUIDsuffix         =         '-0000-1000-8000-00805f9b34fb'
 CharacteristicUserDescriptionUUID='00002901-0000-1000-8000-00805f9b34fb'
 
 sGenericAccessUUID              = '00001800-0000-1000-8000-00805f9b34fb'
+sGenericAccessUUID_private      = '19590705-0000-1000-8000-00805f9b34fb'
 cDeviceNameUUID                 = '00002a00-0000-1000-8000-00805f9b34fb'
 cDeviceNameName                 = 'Device Name'
 cAppearanceUUID                 = '00002a01-0000-1000-8000-00805f9b34fb'

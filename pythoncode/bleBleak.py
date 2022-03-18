@@ -155,12 +155,20 @@ async def findBLEdevices():
         # print('d -----------------------------')
         # print('\n'.join("%s: %s" % item for item in vars(d).items()))
         # print('d --------------------------end')
-        ftms = True         
+        ftms = True         # Defines what to do with unknown devices
         try:
-            ftms |= bc.sFitnessMachineUUID in d.metadata['uuids']
-            ftms |= 'FortiusANT' in d.name
-            ftms |= d.name == 'Unknown'
-            ftms |= d.name[:3] == 'LT-'
+            # The following are NOT fitness machines (saves inspection time)
+            if (    'Forerunner' in d.name
+                or  'Garmin' in d.name):
+                ftms = False
+
+            # The following ARE fitness machines
+            if (    bc.sFitnessMachineUUID in d.metadata['uuids']
+                or  'FortiusANT' in d.name
+                or  d.name == 'Unknown'
+                or  d.name[:3] == 'LT-'):
+                ftms = True
+
         except Exception as e:
             pass
         if ftms:
@@ -212,6 +220,7 @@ async def serverInspectionSub(client):
     try:
         sServiceDeviceName = await client.read_gatt_char(bc.cDeviceNameUUID)
         sServiceDeviceName = sServiceDeviceName.decode('ascii')
+        if sServiceDeviceName == '': sServiceDeviceName = '<Empty>'
         print("%s=%s" % (bc.cDeviceNameName, sServiceDeviceName))
     except Exception as e:
         sServiceDeviceName = '<Unknown name>'
@@ -226,7 +235,7 @@ async def serverInspectionSub(client):
 
     #---------------------------------------------------------------------------
     # Check whether this service is a Fitness Machine
-    # by inspecting the FitnessMachineFeeature characteristic.
+    # by inspecting the FitnessMachineFeature characteristic.
     #---------------------------------------------------------------------------
     bFitnessMachine    = False
     sFitnessMachine    = 'NOT '
@@ -234,6 +243,7 @@ async def serverInspectionSub(client):
     try:
         value = bytes(await client.read_gatt_char(bc.cFitnessMachineFeatureUUID))
     except Exception as e:
+        print("Characteristic %s error=%s" % (bc.cFitnessMachineFeatureName, e))
         value = None
     else:
         #-----------------------------------------------------------------------
@@ -274,6 +284,10 @@ async def serverInspectionSub(client):
                 # Print characteristic, properties and value
                 #---------------------------------------------------------------
                 if "read" in char.properties:
+                    #-----------------------------------------------------------
+                    # Use handle, which is unique by definition.
+                    # (Tacx Neo caused duplicate uuid)
+                    #-----------------------------------------------------------
                     try:
                         value = bytes(await client.read_gatt_char(char.handle))
                     except Exception as e:
@@ -290,7 +304,7 @@ async def serverInspectionSub(client):
                 else:
                     s = logfile.HexSpace(value)
 
-                s = '\tCharacteristic: handle=%4s, uuid=%12s, props=%s, value=%s' % (char.handle, char.uuid, char.properties, s)
+                s = '\tCharacteristic: %-80s, props=%s, value=%s' % (char, char.properties, s)
                 s = s.replace(bc.BluetoothBaseUUIDsuffix, '-...') # Always the same
                 print(s)
 
