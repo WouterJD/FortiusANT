@@ -51,7 +51,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-14"
+__version__ = "2022-03-21"
+# 2022-03-21    Made available to kevincar/bless as example; small modifications
 # 2022-03-16    bleBleak.py works on Windows 10
 #               - sometimes the BLE dongle must be reset (remove/insert)
 #               - sometimes indications are not received
@@ -85,10 +86,34 @@ from bleak import BleakClient
 from bleak import discover
 from bleak import __version__ as bleakVersion
 
-import bleConstants    as bc
-import logfile
 import struct
-import structConstants as sc
+
+#-------------------------------------------------------------------------------
+# To distribute to bless/examples, proceed as follows:
+# - Copy bleBless.py, bleBlessClass and bleConstants   bleBleak.py to hbldh\bless\examples
+#        FTMSserver   FTMSserverClass   FTMSconstants  FTMSclient
+# - Change BlessExample to True
+# - Check code for BlessExample
+#-------------------------------------------------------------------------------
+BlessExample = False
+if not BlessExample:
+    #---------------------------------------------------------------------------
+    # Import in the FortiusAnt context
+    #---------------------------------------------------------------------------
+    from   constants            import mode_Power, mode_Grade, UseBluetooth
+    from   logfile              import HexSpace
+    from   bleBlessClass        import clsBleServer
+    import bleConstants         as bc
+
+if BlessExample:
+    #---------------------------------------------------------------------------
+    # Import and Constants for bless example context
+    #---------------------------------------------------------------------------
+    import FTMSconstants        as bc
+
+    def HexSpace(info):
+        return (info)
+
 
 #-------------------------------------------------------------------------------
 # Status feb 2022:
@@ -251,7 +276,7 @@ async def serverInspectionSub(client):
         # check if the expected flagsd are present.
         #-----------------------------------------------------------------------
         if len(value) == 8:
-            tuple  = struct.unpack (sc.little_endian + sc.unsigned_long * 2, value)
+            tuple  = struct.unpack (bc.little_endian + bc.unsigned_long * 2, value)
             cFitnessMachineFeatureFlags1 = tuple[0]
             cFitnessMachineFeatureFlags2 = tuple[1]
 
@@ -302,7 +327,7 @@ async def serverInspectionSub(client):
                 if char.uuid == bc.cDeviceNameUUID:
                     s = '"' + value.decode('ascii') + '"'       # Device name should be printable
                 else:
-                    s = logfile.HexSpace(value)
+                    s = HexSpace(value)
 
                 s = '\tCharacteristic: %-80s, props=%s, value=%s' % (char, char.properties, s)
                 s = s.replace(bc.BluetoothBaseUUIDsuffix, '-...') # Always the same
@@ -313,7 +338,7 @@ async def serverInspectionSub(client):
                 # (not used, but could be when implementing a real collector)
                 #---------------------------------------------------------------
                 if char.uuid == bc.cFitnessMachineFeatureUUID and len(value) == 8:
-                    tuple  = struct.unpack (sc.little_endian + sc.unsigned_long * 2, value)
+                    tuple  = struct.unpack (bc.little_endian + bc.unsigned_long * 2, value)
                     cFitnessMachineFeatureFlags1 = tuple[0]
                     cFitnessMachineFeatureFlags2 = tuple[1]
 
@@ -339,7 +364,7 @@ async def serverInspectionSub(client):
 
                         # Does not seem to provide much additional information,
                         # So commented, perhaps for later use
-                        # print("\t\tDescriptor: ", descriptor.uuid, 'value=', logfile.HexSpace(value))
+                        # print("\t\tDescriptor: ", descriptor.uuid, 'value=', HexSpace(value))
 
         #-----------------------------------------------------------------------
         # Now receive notifications and indications
@@ -416,7 +441,7 @@ async def serverInspectionSub(client):
                 #---------------------------------------------------------------
                 print("Request control, so that commands can be sent")
                 #---------------------------------------------------------------
-                info = struct.pack(sc.little_endian + sc.unsigned_char, bc.fmcp_RequestControl)
+                info = struct.pack(bc.little_endian + bc.unsigned_char, bc.fmcp_RequestControl)
                 await client.write_gatt_char(bc.cFitnessMachineControlPointUUID, info)
 
                 # Wait for response and prepare next mode
@@ -426,7 +451,7 @@ async def serverInspectionSub(client):
                 #---------------------------------------------------------------
                 print("Start training session")
                 #---------------------------------------------------------------
-                info = struct.pack(sc.little_endian + sc.unsigned_char, bc.fmcp_StartOrResume)
+                info = struct.pack(bc.little_endian + bc.unsigned_char, bc.fmcp_StartOrResume)
                 await client.write_gatt_char(bc.cFitnessMachineControlPointUUID, info)
 
                 # Wait for response and next mode
@@ -441,8 +466,8 @@ async def serverInspectionSub(client):
                 #---------------------------------------------------------------
                 print('Switch to PowerMode, %sW' % TargetPower)
                 #---------------------------------------------------------------
-                info = struct.pack(sc.little_endian + sc.unsigned_char +      sc.unsigned_short, 
-                                                      bc.fmcp_SetTargetPower, TargetPower      )
+                info = struct.pack(bc.little_endian + bc.unsigned_char + bc.unsigned_short, 
+                                                bc.fmcp_SetTargetPower,  TargetPower      )
                 await client.write_gatt_char(bc.cFitnessMachineControlPointUUID, info)
 
                 # Wait for response and prepare next mode
@@ -461,8 +486,8 @@ async def serverInspectionSub(client):
                 windspeed   = int(windspeed * 1000)     # Resolution 0.001
                 crr         = int(crr * 10000)          # Resolution 0.0001
                 cw          = int(cw  *   100)          # Resolution 0.01
-                info = struct.pack(sc.little_endian + sc.unsigned_char + sc.short + sc.short   + sc.unsigned_char + sc.unsigned_char,
-                                    bc.fmcp_SetIndoorBikeSimulation,  windspeed, TargetGrade, crr,               cw)
+                info = struct.pack(bc.little_endian + bc.unsigned_char + bc.short + bc.short   + bc.unsigned_char + bc.unsigned_char,
+                                   bc.fmcp_SetIndoorBikeSimulation,      windspeed, TargetGrade, crr,               cw)
                 await client.write_gatt_char(bc.cFitnessMachineControlPointUUID, info)
 
                 # Wait for response and prepare next mode
@@ -472,7 +497,7 @@ async def serverInspectionSub(client):
                 #---------------------------------------------------------------
                 print("Stop training session")
                 #---------------------------------------------------------------
-                info = struct.pack(sc.little_endian + sc.unsigned_char, bc.fmcp_StopOrPause)
+                info = struct.pack(bc.little_endian + bc.unsigned_char, bc.fmcp_StopOrPause)
                 await client.write_gatt_char(bc.cFitnessMachineControlPointUUID, info)
 
                 # Wait for response and prepare next mode
@@ -482,7 +507,7 @@ async def serverInspectionSub(client):
                 #---------------------------------------------------------------
                 print("Release control / reset")
                 #---------------------------------------------------------------
-                info = struct.pack(sc.little_endian + sc.unsigned_char, bc.fmcp_Reset)
+                info = struct.pack(bc.little_endian + bc.unsigned_char, bc.fmcp_Reset)
                 await client.write_gatt_char(bc.cFitnessMachineControlPointUUID, info)
 
                 # Wait for response and prepare next mode
@@ -553,7 +578,7 @@ def indicationFitnessMachineControlPoint(handle, data):
 
     if True:   # For debugging only
         print("%s %s %s ResponseCode=%s RequestCode=%s ResultCode=%s(%s)" %
-            (handle, bc.cFitnessMachineControlPointName, logfile.HexSpace(data),
+            (handle, bc.cFitnessMachineControlPointName, HexSpace(data),
             ResponseCode, RequestCode, ResultCode, ResultCodeText))
 
 def notificationFitnessMachineStatus(handle, data):
@@ -573,7 +598,7 @@ def notificationFitnessMachineStatus(handle, data):
 def notificationHeartRateMeasurement(handle, data):
     global cadence, hrm, speed, power
     if len(data) == 2:
-        tuple  = struct.unpack (sc.little_endian + sc.unsigned_char * 2, data)
+        tuple  = struct.unpack (bc.little_endian + bc.unsigned_char * 2, data)
         flags   = tuple[0]
         hrm     = tuple[1]
     else:
@@ -585,7 +610,7 @@ def notificationIndoorBikeData(handle, data):
     global cadence, hrm, speed, power
 
     if len(data) in (4,6,8,10): # All flags should be implemented; only this set done!!
-        tuple  = struct.unpack (sc.little_endian + sc.unsigned_short * int(len(data)/2), data)
+        tuple  = struct.unpack (bc.little_endian + bc.unsigned_short * int(len(data)/2), data)
         flags   = tuple[0]
         speed   = tuple[1] / 100         # always present, transmitted in 0.01 km/hr
         n = 2
@@ -616,7 +641,7 @@ def notificationPrint(handle, uuidName, data):
     global cadence, hrm, speed, power, status
 
     print("%s %-22s %-25s status=%-10s speed=%4.1f cadence=%3s power=%4s hrm=%3s" % 
-        (handle, uuidName, logfile.HexSpace(data), 
+        (handle, uuidName, HexSpace(data), 
          status, round(speed,1), cadence, power, hrm)
          )
 

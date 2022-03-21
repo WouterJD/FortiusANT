@@ -14,7 +14,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-08"
+__version__ = "2022-03-21"
+# 2022-03-21    Made available to kevincar/bless as example; small modifications
 # 2022-03-08    Class to create a bless server split into bleBlessClass.py
 # 2022-03-08    Tested:
 #               - Windows 10 with Trainer Road and Rouvy
@@ -39,12 +40,10 @@ from bless import (
         GATTAttributePermissions
         )
 
-from   bleBlessClass        import clsBleServer
-import bleConstants         as bc
-
 #-------------------------------------------------------------------------------
 # To distribute to bless/examples, proceed as follows:
-# - Copy bleBless.py, bleBlessClass and bleConstants to hbldh\bless\examples
+# - Copy bleBless.py, bleBlessClass and bleConstants   bleBleak.py to hbldh\bless\examples
+#        FTMSserver   FTMSserverClass   FTMSconstants  FTMSclient
 # - Change BlessExample to True
 # - Check code for BlessExample
 #-------------------------------------------------------------------------------
@@ -57,22 +56,20 @@ if not BlessExample:
     import logfile
     from   constants            import mode_Power, mode_Grade, UseBluetooth
     from   logfile              import HexSpace
-    from   structConstants      import little_endian, unsigned_char, short, unsigned_short
+    from   bleBlessClass        import clsBleServer
+    import bleConstants         as bc
 
 if BlessExample:
     #---------------------------------------------------------------------------
     # Import and Constants for bless example context
     #---------------------------------------------------------------------------
+    from   FTMSserverClass      import clsBleServer
+    import FTMSconstants        as bc
+
     import logging
     mode_Power          = 1     # Target Power
     mode_Grade          = 2     # Target Resistance
     UseBluetooth        = True
-
-    little_endian       ='<'    #  little-endian          standard    none
-    unsigned_char       ='B'    #  unsigned char          integer             1               (3)
-
-    short               ='h'    #  short                  integer             2               (3)
-    unsigned_short      ='H'    #  unsigned short         integer             2               (3)
 
     def HexSpace(info):
         return (info)
@@ -304,7 +301,7 @@ class clsFTMS_bless(clsBleServer):
         if self.OK:
             flags = 0
             h     = int(self.HeartRate) & 0xff      # Avoid value anomalities
-            info = struct.pack (little_endian + unsigned_char * 2, flags, h)
+            info = struct.pack (bc.little_endian + bc.unsigned_char * 2, flags, h)
             self.BlessServer.get_characteristic(bc.cHeartRateMeasurementUUID).value = info
             self.BlessServer.update_value(bc.sHeartRateUUID, bc.cHeartRateMeasurementUUID)
         else:
@@ -333,7 +330,7 @@ class clsFTMS_bless(clsBleServer):
             s     = int(self.CurrentSpeed * 100) & 0xffff      # Avoid value anomalities
             c     = int(self.Cadence * 2)        & 0xffff      # Avoid value anomalities
             p     = int(self.CurrentPower)       & 0xffff      # Avoid value anomalities
-            info  = struct.pack (little_endian + unsigned_short * 4, flags, s, c, p)
+            info  = struct.pack (bc.little_endian + bc.unsigned_short * 4, flags, s, c, p)
 
             self.BlessServer.get_characteristic(bc.cIndoorBikeDataUUID).value = info
             self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cIndoorBikeDataUUID)
@@ -505,7 +502,7 @@ class clsFTMS_bless(clsBleServer):
 
                 elif OpCode == bc.fmcp_SetTargetPower:
                     try:
-                        tuple  = struct.unpack (little_endian + unsigned_char + unsigned_short, value)
+                        tuple  = struct.unpack (bc.little_endian + bc.unsigned_char + bc.unsigned_short, value)
                     except Exception as e:
                         self.logfileConsole("bleBless error: unpack SetTargetPower %e" % e)
                     #opcode          = tuple[0]
@@ -518,9 +515,9 @@ class clsFTMS_bless(clsBleServer):
 
                 elif OpCode == bc.fmcp_SetIndoorBikeSimulation:
                     try:
-                        tuple  = struct.unpack (little_endian + unsigned_char + short + short + unsigned_char + unsigned_char, value)
+                        tuple  = struct.unpack (bc.little_endian + bc.unsigned_char + bc.short + bc.short + bc.unsigned_char + bc.unsigned_char, value)
                     except Exception as e:
-                        self.logfileConsole("bleBless error: unpack SetIndoorBikeSimulation %e" % e)
+                        self.logfileConsole("bleBless error: unpack SetIndoorBikeSimulation %s" % e)
                     #opcode                = tuple[0]
                     self.WindSpeed         = round(tuple[1] * 0.001,  3)
                     self.TargetGrade       = round(tuple[2] * 0.01,   2)
@@ -555,7 +552,7 @@ class clsFTMS_bless(clsBleServer):
             # Response:
             #-----------------------------------------------------------------------
             ResponseCode = 0x80
-            info = struct.pack(little_endian + unsigned_char * 3, ResponseCode, OpCode, ResultCode)
+            info = struct.pack(bc.little_endian + bc.unsigned_char * 3, ResponseCode, OpCode, ResultCode)
             characteristic.value = info
             self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cFitnessMachineControlPointUUID)
 
@@ -568,13 +565,13 @@ class clsFTMS_bless(clsBleServer):
     # --------------------------------------------------------------------------
     def notifyStartOrResume(self):
         self.logfileWrite("bleBless.notifyStartOrResume()")
-        info = struct.pack(little_endian + unsigned_char, bc.fms_FitnessMachineStartedOrResumedByUser)
+        info = struct.pack(bc.little_endian + bc.unsigned_char, bc.fms_FitnessMachineStartedOrResumedByUser)
         self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID).value = info
         self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID)
 
     def notifySetTargetPower(self):
         self.logfileWrite("bleBless.notifySetTargetPower()")
-        info = struct.pack(little_endian + unsigned_char + unsigned_short, bc.fms_TargetPowerChanged, self.TargetPower)
+        info = struct.pack(bc.little_endian + bc.unsigned_char + bc.unsigned_short, bc.fms_TargetPowerChanged, self.TargetPower)
         self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID).value = info
         self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID)
 
@@ -586,20 +583,20 @@ class clsFTMS_bless(clsBleServer):
         crr       = int(self.RollingResistance / 0.0001)
         cw        = int(self.WindResistance    / 0.01  )
 
-        info = struct.pack(little_endian + unsigned_char + short * 2 + unsigned_char * 2,
+        info = struct.pack(bc.little_endian + bc.unsigned_char + bc.short * 2 + bc.unsigned_char * 2,
                             bc.fms_IndoorBikeSimulationParametersChanged, windSpeed, grade, crr, cw)
         self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID).value = info
         self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID)
 
     def notifyStopOrPause(self):
         self.logfileWrite("bleBless.notifyStopOrPause()")
-        info = struct.pack(little_endian + unsigned_char, bc.fms_FitnessMachineStoppedOrPausedByUser)
+        info = struct.pack(bc.little_endian + bc.unsigned_char, bc.fms_FitnessMachineStoppedOrPausedByUser)
         self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID).value = info
         self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID)
 
     def notifyReset(self):
         self.logfileWrite("bleBless.notifyReset()")
-        info = struct.pack(little_endian + unsigned_char, bc.fms_Reset)
+        info = struct.pack(bc.little_endian + bc.unsigned_char, bc.fms_Reset)
         self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID).value = info
         self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID)
 

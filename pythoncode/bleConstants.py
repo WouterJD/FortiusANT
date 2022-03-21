@@ -4,13 +4,36 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-08"
+__version__ = "2022-03-21"
+# 2022-03-21    Made available to kevincar/bless as example; small modifications
 # 2022-03-08    Constants for bleBleak.py and bleBless.py
 # 2022-02-22    First version
 #-------------------------------------------------------------------------------
-
 import struct
-import structConstants      as sc
+
+#-------------------------------------------------------------------------------
+# To distribute to bless/examples, proceed as follows:
+# - Copy bleBless.py, bleBlessClass and bleConstants   bleBleak.py to hbldh\bless\examples
+#        FTMSserver   FTMSserverClass   FTMSconstants  FTMSclient
+# - Change BlessExample to True
+# - Check code for BlessExample
+#-------------------------------------------------------------------------------
+BlessExample = False
+if not BlessExample:
+    #---------------------------------------------------------------------------
+    # Import in the FortiusAnt context
+    #---------------------------------------------------------------------------
+    from   structConstants      import little_endian, unsigned_char, short, unsigned_short, unsigned_long  # pylint: disable=import-error
+
+if BlessExample:
+    #---------------------------------------------------------------------------
+    # Import and Constants for bless example context
+    #---------------------------------------------------------------------------
+    little_endian       ='<'    #  little-endian          standard    none
+    unsigned_char       ='B'    #  unsigned char          integer             1               (3)
+    short               ='h'    #  short                  integer             2               (3)
+    unsigned_short      ='H'    #  unsigned short         integer             2               (3)
+    unsigned_long       ='L'    #  unsigned long          integer             4               (3)
 
 #-------------------------------------------------------------------------------
 # Bluetooth standard-defined UUIDs receive special treatment as they are
@@ -43,11 +66,11 @@ fmf_PowerMeasurementSupported               = 1 << 14
 fmf_PowerTargetSettingSupported             = 1 <<  3
 fmf_IndoorBikeSimulationParametersSupported = 1 << 13
                                 # FM Service, section 4.3 p 19:                         features (32 bits), Target settings features (32 bits)
-fmf_Info                        = struct.pack(sc.little_endian + sc.unsigned_long * 2,  fmf_CadenceSupported                        |
-                                                                                        fmf_HeartRateMeasurementSupported           |
-                                                                                        fmf_PowerMeasurementSupported,
-                                                                                        fmf_PowerTargetSettingSupported             |
-                                                                                        fmf_IndoorBikeSimulationParametersSupported )
+fmf_Info                        = struct.pack(little_endian + unsigned_long * 2,  fmf_CadenceSupported                        |
+                                                                                  fmf_HeartRateMeasurementSupported           |
+                                                                                  fmf_PowerMeasurementSupported,
+                                                                                  fmf_PowerTargetSettingSupported             |
+                                                                                  fmf_IndoorBikeSimulationParametersSupported )
 
 cIndoorBikeDataUUID                 = "00002ad2-0000-1000-8000-00805f9b34fb"
 cIndoorBikeDataName                 = "Indoor Bike Data"
@@ -57,7 +80,7 @@ ibd_InstantaneousPowerPresent       = 1 << 6    # Bit 6
 ibd_HeartRatePresent                = 1 << 9    # Bit 9
 ibd_Flags                           = 0
                                     # FM Service, section 4.9 p 44: Flags, Cadence, Power, HeartRate
-ibd_Info                            = struct.pack(sc.little_endian + sc.unsigned_short * 4, 
+ibd_Info                            = struct.pack(little_endian + unsigned_short * 4, 
                                                 ibd_InstantaneousPowerPresent | ibd_HeartRatePresent,
                                                 123, 456, 89
                                                 )
@@ -91,8 +114,8 @@ fmcp_ControlNotPermitted        = 0x05
 
 cSupportedPowerRangeUUID        = "00002ad8-0000-1000-8000-00805f9b34fb"
 cSupportedPowerRangeName        = "Supported Power Range"
-                                # FM Service, section 4.14 p 49:                        Min, Max,  Increment
-spr_Info                        = struct.pack(sc.little_endian + sc.unsigned_short * 3, 0,   1000, 1)
+                                # FM Service, section 4.14 p 49:                  Min, Max,  Increment
+spr_Info                        = struct.pack(little_endian + unsigned_short * 3, 0,   1000, 1)
 
 # Service
 sHeartRateUUID                  = "0000180d-0000-1000-8000-00805f9b34fb"
@@ -100,8 +123,8 @@ sHeartRateName                  = "Heart Rate"
 # Service characteristics
 cHeartRateMeasurementUUID       = "00002a37-0000-1000-8000-00805f9b34fb"
 cHeartRateMeasurementName       = "Heart Rate Measurement"
-                                # HRS_SPEC_V10, section 3.1 p 9:                       Flags, Heartrate
-hrm_Info                        = struct.pack(sc.little_endian + sc.unsigned_char * 2, 0,     123)
+                                # HRS_SPEC_V10, section 3.1 p 9:                 Flags, Heartrate
+hrm_Info                        = struct.pack(little_endian + unsigned_char * 2, 0,     123)
 
 # ==============================================================================
 # Main program
