@@ -15,17 +15,20 @@ import struct
 # To distribute to bless/examples, proceed as follows:
 # - Copy bleBless.py, bleBlessClass and bleConstants   bleBleak.py to hbldh\bless\examples
 #        FTMSserver   FTMSserverClass   FTMSconstants  FTMSclient
-# - Change BlessExample to True
-# - Check code for BlessExample
+# - Change below "If True:" into "If False:" (and similar in bleBleak/bleBless)
+#       like this, precompiler "knows" that code is unused.
+# - Check bleBleak/bleBless for BlessExample
 #-------------------------------------------------------------------------------
-BlessExample = False
-if not BlessExample:
+if True:
+    BlessExample = False
     #---------------------------------------------------------------------------
     # Import in the FortiusAnt context
     #---------------------------------------------------------------------------
     from   structConstants      import little_endian, unsigned_char, short, unsigned_short, unsigned_long  # pylint: disable=import-error
+    from   logfile              import HexSpace
 
-if BlessExample:
+else:
+    BlessExample = True
     #---------------------------------------------------------------------------
     # Import and Constants for bless example context
     #---------------------------------------------------------------------------
@@ -34,6 +37,9 @@ if BlessExample:
     short               ='h'    #  short                  integer             2               (3)
     unsigned_short      ='H'    #  unsigned short         integer             2               (3)
     unsigned_long       ='L'    #  unsigned long          integer             4               (3)
+
+    def HexSpace(info):
+        return (info)
 
 #-------------------------------------------------------------------------------
 # Bluetooth standard-defined UUIDs receive special treatment as they are
