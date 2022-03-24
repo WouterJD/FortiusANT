@@ -1,7 +1,10 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2022-03-03"
+__version__ = "2022-03-24"
+# 2022-03-24    logfile.fLogfile must be checked before usage
+#                   -b -dB causes logging to be written to PythonLogging
+#                   which is not accessible for this module.
 # 2022-03-03    Initial message specified that node is used.
 # 2021-02-27    Retry added in Write() for raspberry.
 # 2021-01-04    lib_programname used to get correct dirname
@@ -105,7 +108,7 @@ class clsBleInterface():
                 directory = dirname + "/node"
                 if debug.on(debug.Ble): logfile.Write("... Popen(%s,%s)" % (directory, command) )
                 try:
-                    if debug.on(debug.Any):
+                    if debug.on(debug.Any and logfile.fLogfile != None):
                         self.interface = subprocess.Popen(command, cwd=directory, stdout=logfile.fLogfile, stderr=logfile.fLogfile)
                     else:
                         self.interface = subprocess.Popen(command, cwd=directory)

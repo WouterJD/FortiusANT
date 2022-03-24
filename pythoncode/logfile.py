@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-16"
+__version__ = "2022-03-24"
+# 2022-03-24    fLogfile is set to None, so that modules can check it
+#               Print() given a new implementation (since PythonLogging)
 # 2022-03-16    python.logging implemented, using PythonLogging=True
 #               The "Old" logging remains present, just in case...
 # 2022-02-22    HexSpace() now also supports bytearray
@@ -139,6 +141,7 @@ class clsLogfileJson():
 def Open(prefix='FortiusAnt', suffix=''):
     global fLogfile, LogfileJson, LogfileCreated, UsePythonLogging, PythonLogger
 
+    fLogfile = None
     if debug.on():
         #-----------------------------------------------------------------------
         # Create filename for logging
@@ -230,8 +233,13 @@ def IsOpen():
 def Print(*objects, sep=' ', end='\n'):
     global fLogfile, PythonLogger
 
-    if UsePythonLogging:
-        PythonLogger.error('logfile.Print() not implemented for Python logging')
+    if True:                                # When introducing UsePythonLogging
+        s = ''
+        for obj in objects:
+            if s != '': s += ' '            # Add space between each object
+            s += str(obj)                   # Add object as string
+        Write (s)                           # Write all objects on one line
+
     else:
         if IsOpen():
             enc = fLogfile.encoding
@@ -242,7 +250,7 @@ def Print(*objects, sep=' ', end='\n'):
                 print(*map(f, objects), sep=sep, end=end, file=fLogfile)
 
 #-------------------------------------------------------------------------------
-# W r i t e   and   C o n s o le
+# W r i t e   and   C o n s o l e
 #
 # Refer https://strftime.org/ for format codes
 # hh:mm:ss,ddd is 12 characters (%f for microseconds provides 6 digits)
@@ -339,6 +347,9 @@ if __name__ == "__main__":
     debug.activate()
     Open()                                                    # This is normal
     Write("This is a logrecord")                              # ..
+
+    Print("This is a logrecord by Print()")                   # ..
+    Print('functions:', Console, Write, Print)                              # ..
 
     print ('json tests')
     LogfileJson.Close()
