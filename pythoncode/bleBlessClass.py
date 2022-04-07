@@ -4,7 +4,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-15"
+__version__ = "2022-04-07"
+# 2022-04-07    Improved messages on exception on BLE interface
+# 2022-03-28    When an exception occurs in bless, a stacktrace is created
+#               on BlessServer creation and start, all data in trace
 # 2022-03-15    This implementation works, Windows10 and Raspberry
 #               One open issue: How to set the Generic Access Profile
 #                   characteristics, such as DeviceName and Appearance.
@@ -21,6 +24,7 @@ import logging
 from   socket               import timeout
 import time
 import threading
+import traceback
 
 from typing import Any, Dict
 
@@ -157,9 +161,10 @@ class clsBleServer:
         #-----------------------------------------------------------------------
         # Create the server
         #-----------------------------------------------------------------------
-        self.logfileWrite("clsBleServer._Server(%s)" % self.myServiceName)
+        self.logfileWrite("clsBleServer._Server()")
 
         if self.OK:
+            self.logfileWrite("clsBleServer._Server(): BlessServer(name='%s')" % self.myServiceName)
             self.BlessServer = BlessServer(name=self.myServiceName, loop=self.loop)
             
             self.BlessServer.read_request_func  = self.ReadRequest
@@ -171,12 +176,19 @@ class clsBleServer:
         # Windows 10: BLE crashes on add_gatt() if there is no BLE-5 dongle
         #             BLE crashes on start()    if interface is not compatible
         #-----------------------------------------------------------------------
-        self.logfileWrite("clsBleServer._Server(): self.BlessServer.add_gatt()")
+        s = str(self.myGattDefinition)
+        s = s.replace(": {", ": \n{")
+        s = s.replace(" '", "\n '")
+        self.logfileWrite("clsBleServer._Server(): self.BlessServer.add_gatt(\n%s\n)" % s)
+
+        exceptionMsg = ""
         if self.OK:
             try:
                 await self.BlessServer.add_gatt(self.myGattDefinition)
             except Exception as e:
                 self.OK = False
+                self.logfileTraceback(e)
+                exceptionMsg = str(e)
                 self.logfileConsole("clsBleServer._Server(); add_gatt() exception %s" % e)
 
         self.logfileWrite("clsBleServer._Server(): self.BlessServer.start()")
@@ -185,10 +197,15 @@ class clsBleServer:
                 await self.BlessServer.start()
             except Exception as e:
                 self.OK = False
+                self.logfileTraceback(e)
+                exceptionMsg = str(e)
                 self.logfileConsole("clsBleServer._Server(); start() exception %s" % e)
 
         if not self.OK:
-            self.Message = ", Bluetooth interface n/a; BLE-5 required!"
+            self.Message = ", Bluetooth interface n/a; "
+            if   "security policies"       in exceptionMsg: self.Message += "No access."        # Linux / raspberry
+            elif "object has no attribute" in exceptionMsg: self.Message += "BLE-5 required."   # Windows
+            else:                                           self.Message += "Check exception."
             self.logfileConsole(self.Message)
 
         #-----------------------------------------------------------------------
@@ -269,7 +286,7 @@ class clsBleServer:
         time.sleep(2)
 
     #---------------------------------------------------------------------------
-    # L o g f i l e W r i t e / C o n s o l e
+    # L o g f i l e W r i t e / C o n s o l e / T r a c e b a c k
     #---------------------------------------------------------------------------
     # Input:    message to be written to logfile
     #
@@ -282,6 +299,10 @@ class clsBleServer:
 
     def logfileConsole(self, message):
         logging.error(message)
+
+    def logfileTraceback(self, exception):
+        for line in traceback.format_exception(exception.__class__, exception, exception.__traceback__):
+            logging.error(line)
 
     #---------------------------------------------------------------------------
     # R e a d R e q u e s t

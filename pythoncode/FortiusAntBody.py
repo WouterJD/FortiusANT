@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-01"
+__version__ = "2022-04-07"
+# 2022-04-07    BLE disabled on error to avoid repeated error-messages
 # 2022-03-01    #366 Implement BLE using bless
 # 2022-01-13    #362 Grade was not adjusted by the -G parameter for BLE
 # 2021-04-29    HRM message if no ANT/TAcx used
@@ -988,6 +989,10 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
         if clv.ble:
             bleCTP.Open()                   # Open connection with Bluetooth CTP
             FortiusAntGui.SetMessages(Dongle=AntDongle.Message + bleCTP.Message + manualMsg)
+            if not bleCTP.OK:
+                logfile.Console('* * Bluetooth interface disabled * * ')
+                clv.ble = False
+
         if clv.manualGrade:
             TacxTrainer.SetGrade(0)
         else:
@@ -1033,6 +1038,11 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     ActivationMsg = '---------- %sdevices are activated ----------' % s
     if not Restart:
         logfile.Console (ActivationMsg)
+
+    #---------------------------------------------------------------------------
+    # NOTE: If MAY BE that there is not an ANT nor BLE interface active and we 
+    #      still continue. This exception is not handled and we continue "idle".
+    #---------------------------------------------------------------------------
 
     #---------------------------------------------------------------------------
     # Our main loop!

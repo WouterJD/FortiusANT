@@ -14,7 +14,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-21"
+__version__ = "2022-03-28"
+# 2022-03-28    logfileTraceback() added
 # 2022-03-21    Made available to kevincar/bless as example; small modifications
 # 2022-03-08    Class to create a bless server split into bleBlessClass.py
 # 2022-03-08    Tested:
@@ -360,7 +361,7 @@ class clsFTMS_bless(clsBleServer):
         return self.OK
 
     #---------------------------------------------------------------------------
-    # l o g f i l e W r i t e / C o n s o l e
+    # l o g f i l e W r i t e / C o n s o l e / T r a c e b a c k
     #---------------------------------------------------------------------------
     # Input:    text to be written to logfile
     #
@@ -374,6 +375,9 @@ class clsFTMS_bless(clsBleServer):
 
         def logfileConsole(self, message):
             logfile.Console(message)
+
+        def logfileTraceback(self, exception):
+            if debug.on(debug.Ble): logfile.Traceback(exception)
 
     #---------------------------------------------------------------------------
     # R e a d R e q u e s t
@@ -691,7 +695,7 @@ if __name__ == "__main__":
         logfile.Open()
         print('FTMS server in FortiusAnt context')
     else:
-        logging.basicConfig(level=logging.ERROR)            # pylint:disable=invalid-name,used-before-assignment,undefined-variable
+        logging.basicConfig(level=logging.DEBUG)            # pylint:disable=invalid-name,used-before-assignment,undefined-variable
         logger = logging.getLogger(name=__name__)
         print('FTMS server in bless/example context')
 

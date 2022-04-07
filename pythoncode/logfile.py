@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-24"
+__version__ = "2022-03-28"
+# 2022-03-28    Traceback() added
 # 2022-03-24    fLogfile is set to None, so that modules can check it
 #               Print() given a new implementation (since PythonLogging)
 # 2022-03-16    python.logging implemented, using PythonLogging=True
@@ -27,6 +28,7 @@ import os
 import sys
 import time
 from   datetime     import datetime
+import traceback
 
 from   constants    import UsePythonLogging
 import debug
@@ -289,6 +291,31 @@ def Write (logText, console=False):
 
 def WriteJson(QuarterSecond, TacxTrainer, tcx, HeartRate):
     if debug.on(debug.LogfileJson): LogfileJson.Write(QuarterSecond, TacxTrainer, tcx, HeartRate)
+
+#-------------------------------------------------------------------------------
+# T r a c e b a c k
+#-------------------------------------------------------------------------------
+# input         exception
+#
+# description   Print stack trace to logfile with provided exception
+# 
+#               Example:
+#                   try:
+#                       ....
+#                   except Exception as e:
+#                       Traceback(e)
+#
+#               Note: line could be processed to remove \n so that one logrecord
+#                   is written instead of multiples; but this is more readable
+#                   I do not assume there will be automated interpretation of
+#                   the logfile and then we can still change...
+#
+# output        stacktrace added to logfile through Write()
+#-------------------------------------------------------------------------------
+def Traceback (exception):
+    for line in traceback.format_exception(exception.__class__, exception, exception.__traceback__):
+        Write(line)
+
 #-------------------------------------------------------------------------------
 # C l o s e
 #-------------------------------------------------------------------------------
