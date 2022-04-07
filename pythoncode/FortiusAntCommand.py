@@ -453,6 +453,8 @@ class CommandLineVariables(object):
                 #logfile.Console('Command line error; -d incorrect debugging flags=%s' % self.args.debug)
 
                 self.debug = 0
+                if 'all' in self.args.debug.lower(): self.debug |= debug.All        # Not case-sensitive
+
                 if 'A' in self.args.debug: self.debug |= debug.Application
                 if 'f' in self.args.debug: self.debug |= debug.Function
                 if 'a' in self.args.debug: self.debug |= debug.Data1

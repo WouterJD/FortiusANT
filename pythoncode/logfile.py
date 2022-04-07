@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-28"
+__version__ = "2022-04-07"
+# 2022-04-07    Comment typo corrected
 # 2022-03-28    Traceback() added
 # 2022-03-24    fLogfile is set to None, so that modules can check it
 #               Print() given a new implementation (since PythonLogging)
@@ -170,9 +171,9 @@ def Open(prefix='FortiusAnt', suffix=''):
             if debug.on(debug.logging_INFO):      l = logging.INFO
             if debug.on(debug.logging_DEBUG):     l = logging.DEBUG
 
-            # So  -dB       implies DEBUG
-            # and -dBC      logs CRITICAL only
-            # and -dBCW     logs WARNING, ERROR and CRITICAL
+            # So  -db       implies DEBUG
+            # and -dbC      logs CRITICAL only
+            # and -dbCW     logs WARNING, ERROR and CRITICAL
 
         #-----------------------------------------------------------------------
         # logging_CRITICAL... is for the OTHER modules, since we have our own 
