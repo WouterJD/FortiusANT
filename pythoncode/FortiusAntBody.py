@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-04-07"
+__version__ = "2022-05-12"
+# 2022-05-12    Message added on failing calibration
 # 2022-04-07    BLE disabled on error to avoid repeated error-messages
 # 2022-03-01    #366 Implement BLE using bless
 # 2022-01-13    #362 Grade was not adjusted by the -G parameter for BLE
@@ -899,11 +900,12 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             # First reading on 'my' Fortius shows a positive number, then goes negative
             # so ignore the first x readings before deciding it will not work.
             #-------------------------------------------------------------------
-            # print(StartPedaling, SpeedKmh, CurrentResistance)
+            # print("StartPedaling=%s SpeedKmh=%s CurrentResistance=%s (negative expected)" % (StartPedaling, TacxTrainer.SpeedKmh, TacxTrainer.CurrentResistance))
             if TacxTrainer.CurrentResistance > 0:
                 Counter += 1
                 if Counter == 10:
                     logfile.Console('Calibration stopped because of unexpected resistance value')
+                    logfile.Console('A reason may be that the tyre pressure is incorrect')
                     break
 
             if TacxTrainer.CurrentResistance < 0 and TacxTrainer.SpeedKmh > 0:

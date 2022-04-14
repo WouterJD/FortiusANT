@@ -14,7 +14,11 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-28"
+__version__ = "2022-04-12"
+# 2022-04-12    TargetMode is initially None, so that FortiusAnt knowns that no
+#               command is yet received.
+#               Issue was that, when ANT and BLE both active and a CTP is active
+#               on ANT then the BLE-interface should not overwrite the values!
 # 2022-03-28    logfileTraceback() added
 # 2022-03-21    Made available to kevincar/bless as example; small modifications
 # 2022-03-08    Class to create a bless server split into bleBlessClass.py
@@ -225,7 +229,8 @@ class clsFTMS_bless(clsBleServer):
     #---------------------------------------------------------------------------
     # CTP data, received through WriteRequest() and sent by client
     #---------------------------------------------------------------------------
-    TargetMode          = mode_Power    # Either mode_Power or mode_Grade
+    TargetMode          = None          # No target received; and then:
+                                        # either mode_Power or mode_Grade
     TargetGrade         = 0             # %
     TargetPower         = 100           # Watt
 

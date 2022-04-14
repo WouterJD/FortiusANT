@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v6.3" # Double quotes, see below!
+WindowTitle = "Fortius Antifier v6.4" # Double quotes, see below!
+# 2022-04-14    Version 6.4     #366 BLE-bless; #360 #361 #362 #363 #373 #379
 # 2022-01-04    Version 6.3     Issues 340, 342, 353 implemented
 # 2021-03-23    Version 6.2     Leds also for GUI, Raspberry TFT display
 # 2021-03-17    Version 6.1     Vortex Quality Improvement
