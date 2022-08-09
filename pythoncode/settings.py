@@ -1,7 +1,14 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2021-04-13"
+__version__ = "2022-04-15"
+# 2022-04-15    The new flags for debugging (performance, logging) are not
+#               translated to the user-interface.
+#               - maximum value for debug=127
+#               - no checkboxes for performance and logging_
+#               Left for future improvement, most likely nobody will miss it.
+# 2022-04-11    issue #373 solved; value = '' must be changed to None
+#               issue #366 bless flag added
 # 2021-04-13    added: -i, leds renamed into StatusLeds
 # 2021-03-02    added: -l Raspberry status Leds
 # 2021-02-11    added: -e homeTrainer
@@ -58,7 +65,9 @@ json_Resistance         = 'resistance'
 json_simulate           = 'simulate'
 
 json_Bluetooth          = 'bluetooth'
-json_ble                = 'enable'
+json_ble                = 'enable'            # initial implementation with node.js only, for compatibility
+json_nodejs             = 'nodejs'
+json_bless              = 'bless'
 
 json_Ant                = 'ant'
 json_antDeviceID        = 'device ID'
@@ -144,14 +153,29 @@ def ReadJsonFile (args):
         else:
             # ------------------------------------------------------------------
             # Handle content AND check for unknown/incorrectly spelled params.
+            #
+            # p = group of parameters (general, ant, ...)
+            # q = the parameters in the group
+            # r = sub-parameters, if applicable
+            #
+            # w = data[p] = all parameters and their values in the group
+            # w[q]        = the value of parameter q in group p
+            #               and could have been written as data[p][q]
             # ------------------------------------------------------------------
             ActualVersion   = -1
             G               = 0
             R               = 0
+
             for p in data:
-                w = data[p]
-                if   p == json_Ant:
+                w = data[p]                         # shorthand for data[p]                       
+
+                if type(w) == type({}):             # Issue #373
                     for q in w:
+                        if w[q] == '':              # If no value defined in json
+                            w[q] = None             # then None is expected by FortiusAndCommand.py
+
+                if   p == json_Ant:
+                    for q in data[json_Ant]:
                         if   q == json_antDeviceID:         args.antDeviceID          = w[q]
                         #'CtrlCommand':                   args.CtrlCommand
                         #'scs':                           args.scs                  = p[q]
@@ -159,7 +183,9 @@ def ReadJsonFile (args):
 
                 elif p == json_Bluetooth:
                     for q in data[json_Bluetooth]:
-                        if   q == json_ble:                 args.ble                  = w[q]
+                        if   q == json_ble:                 args.ble                  = w[q]    # For compatibility
+                        elif q == json_nodejs:              args.ble                  = w[q]
+                        elif q == json_bless:               args.bless                = w[q]
                         else: logfile.Console ('Json file contains unknown parameter %s %s' % (p, q))
 
                 elif p == json_General:
@@ -356,7 +382,9 @@ if constants.UseGui:
         }
 
         data[json_Bluetooth] = {
-            json_ble:                   DialogWindow.cb_b   .GetValue(),
+            #json_ble is not written anymore since #366
+            json_nodejs:                DialogWindow.cb_b   .GetValue(),
+            json_bless:                 DialogWindow.cb_bb  .GetValue(),
         }
 
         data[json_Ant] = {
@@ -559,9 +587,15 @@ if constants.UseGui:
             self.cb_b = wx.CheckBox(panel, id=wx.ID_ANY, label=l, pos=p, size=s, style=0, validator=wx.DefaultValidator, name=wx.CheckBoxNameStr)
             self.cb_b.Bind(wx.EVT_CHECKBOX, self.EVT_CHECKBOX_cb_b)
             
-            l = constants.help_g + " (-g *)"
+            l = constants.help_bb + " (-bb *)"
             s = (-1, -1)
             p = Under(self.cb_b)
+            self.cb_bb = wx.CheckBox(panel, id=wx.ID_ANY, label=l, pos=p, size=s, style=0, validator=wx.DefaultValidator, name=wx.CheckBoxNameStr)
+            self.cb_bb.Bind(wx.EVT_CHECKBOX, self.EVT_CHECKBOX_cb_bb)
+            
+            l = constants.help_g + " (-g *)"
+            s = (-1, -1)
+            p = Under(self.cb_bb)
             self.cb_g = wx.CheckBox(panel, id=wx.ID_ANY, label=l, pos=p, size=s, style=0, validator=wx.DefaultValidator, name=wx.CheckBoxNameStr)
             self.cb_g.Bind(wx.EVT_CHECKBOX, self.EVT_CHECKBOX_cb_g)
             
@@ -901,6 +935,7 @@ if constants.UseGui:
                 self.cb_a   .SetValue(clv.autostart)
                 self.cb_A   .SetValue(clv.PedalStrokeAnalysis)
                 self.cb_b   .SetValue(clv.ble)
+                self.cb_bb  .SetValue(clv.bless)
                 self.txt_d  .SetValue(str(clv.debug))
                 self.EVT_KILL_FOCUS_txt_d()
                 self.cb_g   .SetValue(clv.gui)
@@ -949,6 +984,14 @@ if constants.UseGui:
         # --------------------------------------------------------------------------
         def EVT_CHECKBOX_cb_b (self, event):
             self.cb_restart.SetValue(True)
+            if self.cb_b.GetValue(): self.cb_bb.SetValue(False)
+            
+        # --------------------------------------------------------------------------
+        # Checkbox -bb
+        # --------------------------------------------------------------------------
+        def EVT_CHECKBOX_cb_bb (self, event):
+            self.cb_restart.SetValue(True)
+            if self.cb_bb.GetValue(): self.cb_b.SetValue(False)
             
         # --------------------------------------------------------------------------
         # Checkbox -d
@@ -1136,6 +1179,7 @@ if constants.UseGui:
                 clv.autostart           = self.cb_a.GetValue()
                 clv.PedalStrokeAnalysis = self.cb_A.GetValue()
                 clv.ble                 = self.cb_b.GetValue()
+                clv.bless               = self.cb_bb.GetValue()
                 clv.gui                 = self.cb_g.GetValue()
 
                 if self.txt_d.GetValue() == '':

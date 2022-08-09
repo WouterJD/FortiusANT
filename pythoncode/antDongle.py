@@ -145,7 +145,7 @@ channel_VHU_s       = 5           # ANT+ Channel for Tacx Vortex Headunit
                                   # slave=Cycle Training Program
 channel_GNS_s       = channel_VHU_s # ANT+ Channel for Tacx Genius
 
-channel_BHU_s       = channel_VHU_s # ANT+ Channel for Tacx Buhsido Headunit
+channel_BHU_s       = channel_VHU_s # ANT+ Channel for Tacx Bushido Headunit
 
 channel_CTRL        = 6           # ANT+ Channel for Remote Control
 #---------------------------------------------------------------------------

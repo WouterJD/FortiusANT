@@ -13,8 +13,15 @@ pip3 install --upgrade --force-reinstall spidev
 # Raspberry Pi usually comes with the DejaVu font already
 # installed.
 # But in case it didn't, you can run the following to install it:
+#
+# Refer to #379 where @Meanhat writes: "It appears that 
+#       ttf-dejavu have been updated and
+#       can be replaced with fonts-dejavu"
+# Let's keep both, assuming installing both will not hurt.
+# We can remove in future if confirmed obsolete
 # ----------------------------------------------------------
 sudo apt-get install ttf-dejavu
+sudo apt-get install fonts-dejavu
 
 # ----------------------------------------------------------
 # Pillow Library

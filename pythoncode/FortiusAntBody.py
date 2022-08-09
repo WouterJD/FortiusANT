@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-01-13"
+__version__ = "2022-05-12"
+# 2022-05-12    Message added on failing calibration
+# 2022-04-07    BLE disabled on error to avoid repeated error-messages
+# 2022-03-01    #366 Implement BLE using bless
 # 2022-01-13    #362 Grade was not adjusted by the -G parameter for BLE
 # 2021-04-29    HRM message if no ANT/TAcx used
 # 2021-04-18    Tacx message displayed (on console) when changed, was suppressed
@@ -245,6 +248,7 @@ import raspberry
 import TCXexport
 import usbTrainer
 
+import bleBless
 import bleDongle
 
 PrintWarnings = False   # Print warnings even when logging = off
@@ -262,7 +266,22 @@ def Initialize(pclv):
     rpi         = raspberry.clsRaspberry(clv)
     rpi.DisplayState(constants.faStarted)
     if clv.exportTCX: tcx = TCXexport.clsTcxExport()
-    bleCTP = bleDongle.clsBleCTP(clv)
+
+    # --------------------------------------------------------------------------
+    # Create Bluetooth Low Energy interface
+    # --------------------------------------------------------------------------
+    if clv.bless:
+        clv.ble = True                          # Since this is the only place
+                                                # where .bless is used!!
+        bleCTP  = bleBless.clsFTMS_bless(True)  # bless implementation
+
+    elif clv.ble:
+        bleCTP = bleDongle.clsBleCTP(clv)       # nodejs implementation
+
+    else:
+        bleCTP =  bleBless.clsFTMS_bless(False) # Create data structure,
+                                                # e.g. so that .Message exists
+                                                # No methods may be called
 
 # ------------------------------------------------------------------------------
 # The opposite, hoping that this will properly release USB device, see #203
@@ -881,11 +900,12 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             # First reading on 'my' Fortius shows a positive number, then goes negative
             # so ignore the first x readings before deciding it will not work.
             #-------------------------------------------------------------------
-            # print(StartPedaling, SpeedKmh, CurrentResistance)
+            # print("StartPedaling=%s SpeedKmh=%s CurrentResistance=%s (negative expected)" % (StartPedaling, TacxTrainer.SpeedKmh, TacxTrainer.CurrentResistance))
             if TacxTrainer.CurrentResistance > 0:
                 Counter += 1
                 if Counter == 10:
                     logfile.Console('Calibration stopped because of unexpected resistance value')
+                    logfile.Console('A reason may be that the tyre pressure is incorrect')
                     break
 
             if TacxTrainer.CurrentResistance < 0 and TacxTrainer.SpeedKmh > 0:
@@ -971,6 +991,10 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
         if clv.ble:
             bleCTP.Open()                   # Open connection with Bluetooth CTP
             FortiusAntGui.SetMessages(Dongle=AntDongle.Message + bleCTP.Message + manualMsg)
+            if not bleCTP.OK:
+                logfile.Console('* * Bluetooth interface disabled * * ')
+                clv.ble = False
+
         if clv.manualGrade:
             TacxTrainer.SetGrade(0)
         else:
@@ -1016,6 +1040,11 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     ActivationMsg = '---------- %sdevices are activated ----------' % s
     if not Restart:
         logfile.Console (ActivationMsg)
+
+    #---------------------------------------------------------------------------
+    # NOTE: If MAY BE that there is not an ANT nor BLE interface active and we 
+    #      still continue. This exception is not handled and we continue "idle".
+    #---------------------------------------------------------------------------
 
     #---------------------------------------------------------------------------
     # Our main loop!

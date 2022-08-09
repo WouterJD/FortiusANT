@@ -1,7 +1,11 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2021-02-27"
+__version__ = "2022-03-24"
+# 2022-03-24    logfile.fLogfile must be checked before usage
+#                   -b -dB causes logging to be written to PythonLogging
+#                   which is not accessible for this module.
+# 2022-03-03    Initial message specified that node is used.
 # 2021-02-27    Retry added in Write() for raspberry.
 # 2021-01-04    lib_programname used to get correct dirname
 #               ./node was searched relative to current path
@@ -48,7 +52,7 @@ class clsBleInterface():
         self.interface = None
         self.jsondata  = None
         if UseBluetooth and clv.ble:
-            self.Message   = ", Bluetooth interface available"
+            self.Message   = ", Bluetooth interface available (node)"
             #---------------------------------------------------------------
             # register self.Close() to make sure the BLE server is stopped
             #   ON program termination
@@ -104,7 +108,7 @@ class clsBleInterface():
                 directory = dirname + "/node"
                 if debug.on(debug.Ble): logfile.Write("... Popen(%s,%s)" % (directory, command) )
                 try:
-                    if debug.on(debug.Any):
+                    if debug.on(debug.Any and logfile.fLogfile != None):
                         self.interface = subprocess.Popen(command, cwd=directory, stdout=logfile.fLogfile, stderr=logfile.fLogfile)
                     else:
                         self.interface = subprocess.Popen(command, cwd=directory)

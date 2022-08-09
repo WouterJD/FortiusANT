@@ -1,5 +1,5 @@
-usage: FortiusAnt.py [-h] [-a] [-A] [-b] [-B 0...65535] [-c 0...100]
-                     [-d 0...255] [-D USB-DeviceID] [-e] [-g] [-G % / % / %]
+usage: FortiusAnt.py [-h] [-a] [-A] [-b] [-bb] [-B 0...65535] [-c 0...100]
+                     [-d 0...65535] [-D USB-DeviceID] [-e] [-g] [-G % / % / %]
                      [-H ANT+DeviceID] [-i] [-l] [-m] [-M] [-n] [-p %] [-P]
                      [-r] [-R see text] [-s] [-T see text]
                      [-t {Bushido,Genius,Vortex,Magneticbrake,Motorbrake,i-Vortex}]
@@ -14,11 +14,13 @@ optional arguments:
                         required devices were found.
   -A                    Pedal Stroke Analysis.
   -b                    Advertise FortiusAnt as “FortiusAnt Trainer” on a
-                        Bluetooth Low Energy dongle.
+                        Bluetooth Low Energy dongle, using nodejs.
+  -bb                   Advertise FortiusAnt as “FortiusAnt Trainer” on a
+                        Bluetooth Low Energy dongle, using bless.
   -B 0...65535          ANT DeviceNumber range Base, making multiple
                         FortiusAnt sessions unique.
   -c 0...100            Calibrate the rolling resistance for magnetic brake.
-  -d 0...255            Create logfile with debugging data.
+  -d 0...65535          Create logfile with debugging data.
   -D USB-DeviceID       Select one specific antDongle (perhaps with a non-
                         standard deviceID).
   -e                    Operate as homeTrainer (excersize bike); up/down

@@ -1,7 +1,9 @@
+bless
 lib_programname
 numpy != 1.19.4
 pyinstaller
 pyusb
 requests
+service_identity
 wxPython
 wheel
