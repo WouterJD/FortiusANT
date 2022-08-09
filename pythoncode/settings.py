@@ -1,7 +1,12 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-04-11"
+__version__ = "2022-04-15"
+# 2022-04-15    The new flags for debugging (performance, logging) are not
+#               translated to the user-interface.
+#               - maximum value for debug=127
+#               - no checkboxes for performance and logging_
+#               Left for future improvement, most likely nobody will miss it.
 # 2022-04-11    issue #373 solved; value = '' must be changed to None
 #               issue #366 bless flag added
 # 2021-04-13    added: -i, leds renamed into StatusLeds

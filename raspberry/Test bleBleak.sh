@@ -7,8 +7,6 @@
 echo FortiusAnt module bleBleak
 python3 ../pythoncode/bleBleak.py
 
-
-
 #sudo service bluetooth start
 
 # ----------------------------------------------------- Done
