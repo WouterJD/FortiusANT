@@ -1,7 +1,8 @@
 usage: FortiusAnt.py [-h] [-a] [-A] [-b] [-bb] [-B 0...65535] [-c 0...100]
                      [-d 0...65535] [-D USB-DeviceID] [-e] [-g] [-G % / % / %]
                      [-H ANT+DeviceID] [-i] [-l] [-m] [-M] [-n] [-p %] [-P]
-                     [-r] [-R see text] [-s] [-T see text]
+                     [-r] [-R see text] [-s] [-S {wired,Blacktrack}]
+                     [-T see text]
                      [-t {Bushido,Genius,Vortex,Magneticbrake,Motorbrake,i-Vortex}]
                      [-x]
 
@@ -44,6 +45,8 @@ optional arguments:
   -R see text           The runoff procedure can be customized:
                         maxSpeed/dip/minSpeed/targetTime/power.
   -s                    Simulate trainer to test ANT+ connectivity.
+  -S {wired,Blacktrack}
+                        Use Tacx Steering interface over BLE
   -T see text           Transmission, default value =
                         34-50*x34-30-27-25-23-21-19*-17-15-13-11
   -t {Bushido,Genius,Vortex,Magneticbrake,Motorbrake,i-Vortex}
