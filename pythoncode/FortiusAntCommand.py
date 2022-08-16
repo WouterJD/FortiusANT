@@ -631,7 +631,7 @@ class CommandLineVariables(object):
                 self.Steering = None
 
             if self.Steering is not None and not (self.ble or self.bless):
-                logfile.Console("Steering enabled without Bluetooth (-b), ignored")
+                logfile.Console("Steering enabled without Bluetooth, ignored")
                 self.Steering = None
 
             if self.Steering == 'Blacktrack' and self.antDeviceID == -1:
