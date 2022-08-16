@@ -4,9 +4,10 @@ const debug = require('debug')('fortiusant:vt');
 
 const FitnessMachineService = require('./fitness-machine-service/fitness-machine-service');
 const HeartRateService = require('./heart-rate-service/heart-rate-service');
+const SteeringService = require('./steering-service/steering-service');
 
 class VirtualTrainer extends events {
-  constructor() {
+  constructor(steeringEnabled) {
     debug('[VirtualTrainer] constructor');
     super();
 
@@ -16,16 +17,24 @@ class VirtualTrainer extends events {
     this.messages = [];
     this.ftms = new FitnessMachineService(this.messages);
     this.hrs = new HeartRateService();
+    this.ss = new SteeringService();
     this.stopTimer = null;
+    this.steeringEnabled = steeringEnabled;
     
     bleno.on('stateChange', (state) => {
       debug(`[${this.name}] stateChange: ${state}`);
       
       if (state === 'poweredOn') {
-        bleno.startAdvertising(this.name, [
+        let uuids = [
           this.ftms.uuid,
           this.hrs.uuid
-        ]);
+        ]
+
+        if (this.steeringEnabled) {
+          uuids.push(this.ss.uuid)
+        }
+
+        bleno.startAdvertising(this.name, uuids);
       }
       else {
         debug(`[${this.name}] Stopping...`);
@@ -37,10 +46,16 @@ class VirtualTrainer extends events {
       debug(`[${this.name}] advertisingStart: ${(error ? 'error ' + error : 'success')}`);
 
       if (!error) {
-        bleno.setServices([
+        let services = [
           this.ftms,
           this.hrs
-        ],
+        ]
+
+        if (this.steeringEnabled) {
+          services.push(this.ss)
+        }
+
+        bleno.setServices(services,
         (error) => {
           debug(`[${this.name}] setServices: ${(error ? 'error ' + error : 'success')}`);
         });
@@ -88,6 +103,9 @@ class VirtualTrainer extends events {
 
     this.ftms.notify(event);
     this.hrs.notify(event);
+    if (this.steeringEnabled) {
+      this.ss.notify(event);
+    }
 
     if (!('stop' in event)) {
       this.stopTimer = setTimeout(() => {

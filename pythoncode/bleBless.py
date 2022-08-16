@@ -14,7 +14,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-04-12"
+__version__ = "2022-08-10"
+# 2022-08-10    Steering implemented according marcoveeneman and switchable's code
 # 2022-04-12    TargetMode is initially None, so that FortiusAnt knowns that no
 #               command is yet received.
 #               Issue was that, when ANT and BLE both active and a CTP is active
@@ -205,6 +206,57 @@ FitnessMachineGatt: Dict = {
             "value":        bc.hrm_Info,
             "Description":  bc.cHeartRateMeasurementName
         }
+    },
+    bc.sSteeringUUID: {
+        bc.cSteeringUnknown1UUID: {
+            "Properties":   (GATTCharacteristicProperties.write),
+            "Permissions":  (GATTAttributePermissions.readable | GATTAttributePermissions.writeable),
+            "Value":        b'\x00\x00',
+            "value":        b'\x00\x00',
+            "Description":  bc.cSteeringUnknown1Name
+        },
+        bc.cSteeringUnknown2UUID: {
+            "Properties":   (GATTCharacteristicProperties.read),
+            "Permissions":  (GATTAttributePermissions.readable | GATTAttributePermissions.writeable),
+            "Value":        b'\xff',
+            "value":        b'\xff',
+            "Description":  bc.cSteeringUnknown2Name
+        },
+        bc.cSteeringUnknown3UUID: {
+            "Properties":   (GATTCharacteristicProperties.notify),
+            "Permissions":  (GATTAttributePermissions.readable | GATTAttributePermissions.writeable),
+            "Value":        b'\x00',
+            "value":        b'\x00',
+            "Description":  bc.cSteeringUnknown3Name
+        },
+        bc.cSteeringUnknown4UUID: {
+            "Properties":   (GATTCharacteristicProperties.read),
+            "Permissions":  (GATTAttributePermissions.readable | GATTAttributePermissions.writeable),
+            "Value":        b'\xff',
+            "value":        b'\xff',
+            "Description":  bc.cSteeringUnknown4Name
+        },
+        bc.cSteeringAngleUUID: {
+            "Properties":   (GATTCharacteristicProperties.notify),
+            "Permissions":  (GATTAttributePermissions.readable | GATTAttributePermissions.writeable),
+            "Value":        bc.angle_Info,
+            "value":        bc.angle_Info,
+            "Description":  bc.cSteeringAngleName
+        },
+        bc.cSteeringTxUUID: {
+            "Properties":   (GATTCharacteristicProperties.indicate),
+            "Permissions":  (GATTAttributePermissions.readable | GATTAttributePermissions.writeable),
+            "Value":        b'\x00',
+            "value":        b'\x00',
+            "Description":  bc.cSteeringTxName
+        },
+        bc.cSteeringRxUUID: {
+            "Properties":   (GATTCharacteristicProperties.write),
+            "Permissions":  (GATTAttributePermissions.readable | GATTAttributePermissions.writeable),
+            "Value":        b'\x00',
+            "value":        b'\x00',
+            "Description":  bc.cSteeringRxName
+        }
     }
 }
 
@@ -250,6 +302,9 @@ class clsFTMS_bless(clsBleServer):
     CurrentSpeed        = 0             # km/hour
     Cadence             = 0             # /minute
     CurrentPower        = 0             # Watt
+    SteeringAngle       = 0             # Steering is always present,
+                                        # regardless the -S command-line setting
+                                        # If no steering, value is zero.
 
     #---------------------------------------------------------------------------
     # Internal workflow control data
@@ -274,7 +329,7 @@ class clsFTMS_bless(clsBleServer):
             pass                        # Data structure is created, no actions
 
     # --------------------------------------------------------------------------
-    # SetAthleteData, SetTrainerData
+    # SetAthleteData, SetTrainerData, SetSteeringAngle
     # --------------------------------------------------------------------------
     # Input     function parameters
     #
@@ -335,6 +390,28 @@ class clsFTMS_bless(clsBleServer):
         else:
             self.logfileConsole("clsFTMS_bless.SetTrainerData() error, interface not open")
             
+    def SetSteeringAngle(self, SteeringAngle):
+        #-----------------------------------------------------------------------
+        # Logging
+        #-----------------------------------------------------------------------
+        self.logfileWrite("clsFTMS_bless.SetSteeringAngle(%s)" % SteeringAngle)
+
+        #-----------------------------------------------------------------------
+        # Remember provided data
+        #-----------------------------------------------------------------------
+        self.SteeringAngle  = SteeringAngle
+
+        #-----------------------------------------------------------------------
+        # Update angle in steering
+        #-----------------------------------------------------------------------
+        if self.OK:
+            a    = SteeringAngle      # Avoid value anomalities here (if needed)
+            info = struct.pack (bc.little_endian + bc.float, a)
+            self.BlessServer.get_characteristic(bc.cSteeringAngleUUID).value = info
+            self.BlessServer.update_value(bc.sSteeringUUID, bc.cSteeringAngleUUID)
+        else:
+            self.logfileConsole("clsFTMS_bless.SetSteeringAngle() error, interface not open")
+
     # --------------------------------------------------------------------------
     # C l i e n t D i s c o n n e c t e d
     # --------------------------------------------------------------------------
@@ -405,7 +482,8 @@ class clsFTMS_bless(clsBleServer):
         elif uuid == bc.cFitnessMachineStatusUUID:       char = bc.cFitnessMachineStatusName
         elif uuid == bc.cFitnessMachineControlPointUUID: char = bc.cFitnessMachineControlPointName
         elif uuid == bc.cSupportedPowerRangeUUID:        char = bc.cSupportedPowerRangeName
-        elif uuid == bc.cHeartRateMeasurementUUID:       char = bc.cHeartRateMeasurementUUID
+        elif uuid == bc.cHeartRateMeasurementUUID:       char = bc.cHeartRateMeasurementName
+        elif uuid == bc.cSteeringAngleUUID:              char = bc.cSteeringAngleName
         else:                                            char = "?"
 
         #---------------------------------------------------------------------------
@@ -441,6 +519,7 @@ class clsFTMS_bless(clsBleServer):
         elif uuid == bc.cFitnessMachineControlPointUUID: char = bc.cFitnessMachineControlPointName
         elif uuid == bc.cSupportedPowerRangeUUID:        char = bc.cSupportedPowerRangeName
         elif uuid == bc.cHeartRateMeasurementUUID:       char = bc.cHeartRateMeasurementUUID
+        elif uuid == bc.cSteeringAngleUUID:              char = bc.cSteeringAngleName
         else:                                            char = "?"
         
         #---------------------------------------------------------------------------
@@ -650,16 +729,18 @@ class clsFTMS_bless(clsBleServer):
             # Create some fancy data
             #-----------------------------------------------------------------------
             s = int(time.time() % 60)           # Seconds
-            HeartRate   =   int(000 + s)
-            Cadence     =   int(100 + s )
-            CurrentSpeed= round(200 + s,1)
-            CurrentPower=   int(300 + s)
+            HeartRate    =   int(000 + s)
+            Cadence      =   int(100 + s )
+            CurrentSpeed = round(200 + s,1)
+            CurrentPower =   int(300 + s)
+            SteeringAngle=   s - 30             # -30 ... 30
 
             #-----------------------------------------------------------------------
-            # Update actual values of Athlete and Trainer
+            # Update actual values of Athlete and Trainer and Steering
             #-----------------------------------------------------------------------
-            self.SetAthleteData(HeartRate)
-            self.SetTrainerData(CurrentSpeed, Cadence, CurrentPower)
+            self.SetAthleteData  (HeartRate)
+            self.SetTrainerData  (CurrentSpeed, Cadence, CurrentPower)
+            self.SetSteeringAngle(SteeringAngle)
 
             #-----------------------------------------------------------------------
             # Allow class to take care that attributes are accurate
@@ -682,8 +763,8 @@ class clsFTMS_bless(clsBleServer):
             #       Trining Program (CTP), the client to this fitness machine.
             #-----------------------------------------------------------------------
             print(
-                "Client=%-5s HasControl=%-5s Started=%-5s TargetPower=%4s TargetGrade=%-6s Speed=%3s Cadence=%3s, Power=%3s, HeartRate=%3s" %
-                (self.ClientConnected, self.HasControl, self.Started, self.TargetPower, self.TargetGrade, self.CurrentSpeed, self.Cadence, self.CurrentPower, self.HeartRate))
+                "Client=%-5s HasControl=%-5s Started=%-5s TargetPower=%4s TargetGrade=%-6s Speed=%3s Cadence=%3s, Power=%3s, HeartRate=%3s Angle=%5s" %
+                (self.ClientConnected, self.HasControl, self.Started, self.TargetPower, self.TargetGrade, self.CurrentSpeed, self.Cadence, self.CurrentPower, self.HeartRate, self.SteeringAngle))
 
         self.logfileConsole("FortiusAnt simulated trainer is stopped")
         self.logfileConsole("---------------------------------------")
@@ -730,53 +811,161 @@ if __name__ == "__main__":
 SAMPLE OUTPUT:
 ==============
 
+FTMS server in FortiusAnt context
 bleBless started
 ----------------
 Message=, Bluetooth interface available (bless)
 Message=, Bluetooth interface open
-20:03:56,328: ---------------------------------------------------------------------------------------
-20:03:56,329: FortiusAnt simulated trainer is active
-20:03:56,329: Start a training in a CTP; 5 seconds after completing the training, simulation will end
-20:03:56,330: ---------------------------------------------------------------------------------------
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=257 Cadence=157, Power=357, HeartRate= 57
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=258 Cadence=158, Power=358, HeartRate= 58
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=259 Cadence=159, Power=359, HeartRate= 59
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=200 Cadence=100, Power=300, HeartRate=  0
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=201 Cadence=101, Power=301, HeartRate=  1
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=202 Cadence=102, Power=302, HeartRate=  2
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=203 Cadence=103, Power=303, HeartRate=  3
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=204 Cadence=104, Power=304, HeartRate=  4
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=205 Cadence=105, Power=305, HeartRate=  5
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=206 Cadence=106, Power=306, HeartRate=  6
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=207 Cadence=107, Power=307, HeartRate=  7
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=208 Cadence=108, Power=308, HeartRate=  8
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=209 Cadence=109, Power=309, HeartRate=  9
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=210 Cadence=110, Power=310, HeartRate= 10
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=211 Cadence=111, Power=311, HeartRate= 11
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=212 Cadence=112, Power=312, HeartRate= 12
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=213 Cadence=113, Power=313, HeartRate= 13
-Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=214 Cadence=114, Power=314, HeartRate= 14
-Client=True  HasControl=True  Started=False TargetPower= 100 TargetGrade=0      Speed=215 Cadence=115, Power=315, HeartRate= 15
-Client=True  HasControl=True  Started=True  TargetPower= 100 TargetGrade=0      Speed=216 Cadence=116, Power=316, HeartRate= 16
-Client=True  HasControl=True  Started=True  TargetPower= 324 TargetGrade=0      Speed=217 Cadence=117, Power=317, HeartRate= 17
-Client=True  HasControl=True  Started=True  TargetPower=   0 TargetGrade=4.0    Speed=218 Cadence=118, Power=318, HeartRate= 18
-Client=True  HasControl=True  Started=True  TargetPower= 323 TargetGrade=0      Speed=219 Cadence=119, Power=319, HeartRate= 19
-Client=True  HasControl=True  Started=True  TargetPower=   0 TargetGrade=3.0    Speed=220 Cadence=120, Power=320, HeartRate= 20
-Client=True  HasControl=True  Started=True  TargetPower= 322 TargetGrade=0      Speed=221 Cadence=121, Power=321, HeartRate= 21
-Client=True  HasControl=True  Started=True  TargetPower=   0 TargetGrade=2.0    Speed=222 Cadence=122, Power=322, HeartRate= 22
-Client=True  HasControl=True  Started=True  TargetPower=   0 TargetGrade=2.0    Speed=223 Cadence=123, Power=323, HeartRate= 23
-Client=True  HasControl=True  Started=True  TargetPower= 321 TargetGrade=0      Speed=224 Cadence=124, Power=324, HeartRate= 24
-Client=True  HasControl=True  Started=True  TargetPower=   0 TargetGrade=1.0    Speed=225 Cadence=125, Power=325, HeartRate= 25
-Client=True  HasControl=True  Started=True  TargetPower=  50 TargetGrade=0      Speed=226 Cadence=126, Power=326, HeartRate= 26
-Client=True  HasControl=True  Started=False TargetPower=  50 TargetGrade=0      Speed=227 Cadence=127, Power=327, HeartRate= 27
-Client=True  HasControl=False Started=False TargetPower=  50 TargetGrade=0      Speed=228 Cadence=128, Power=328, HeartRate= 28
-Client=True  HasControl=False Started=False TargetPower=  50 TargetGrade=0      Speed=229 Cadence=129, Power=329, HeartRate= 29
-Client=False HasControl=False Started=False TargetPower=  50 TargetGrade=0      Speed=230 Cadence=130, Power=330, HeartRate= 30
-Client=False HasControl=False Started=False TargetPower=  50 TargetGrade=0      Speed=231 Cadence=131, Power=331, HeartRate= 31
-Client=False HasControl=False Started=False TargetPower=  50 TargetGrade=0      Speed=232 Cadence=132, Power=332, HeartRate= 32
-Client=False HasControl=False Started=False TargetPower=  50 TargetGrade=0      Speed=233 Cadence=133, Power=333, HeartRate= 33
-Client=False HasControl=False Started=False TargetPower=  50 TargetGrade=0      Speed=234 Cadence=134, Power=334, HeartRate= 34
-Client=False HasControl=False Started=False TargetPower=  50 TargetGrade=0      Speed=235 Cadence=135, Power=335, HeartRate= 35
-20:04:35,810: FortiusAnt simulated trainer is stopped
-20:04:35,812: ---------------------------------------
+15:17:00,381: ---------------------------------------------------------------------------------------
+15:17:00,382: FortiusAnt simulated trainer is active
+15:17:00,383: Start a training in a CTP; 5 seconds after completing the training, simulation will end
+15:17:00,383: ---------------------------------------------------------------------------------------
+Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=201 Cadence=101, Power=301, HeartRate=  1 Angle=  -29
+Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=202 Cadence=102, Power=302, HeartRate=  2 Angle=  -28
+Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=203 Cadence=103, Power=303, HeartRate=  3 Angle=  -27
+...
+Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=258 Cadence=158, Power=358, HeartRate= 58 Angle=   28
+Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=259 Cadence=159, Power=359, HeartRate= 59 Angle=   29
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=200 Cadence=100, Power=300, HeartRate=  0 Angle=  -30
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=201 Cadence=101, Power=301, HeartRate=  1 Angle=  -29
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=202 Cadence=102, Power=302, HeartRate=  2 Angle=  -28
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=203 Cadence=103, Power=303, HeartRate=  3 Angle=  -27
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=204 Cadence=104, Power=304, HeartRate=  4 Angle=  -26
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=205 Cadence=105, Power=305, HeartRate=  5 Angle=  -25
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=206 Cadence=106, Power=306, HeartRate=  6 Angle=  -24
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=207 Cadence=107, Power=307, HeartRate=  7 Angle=  -23
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=208 Cadence=108, Power=308, HeartRate=  8 Angle=  -22
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=209 Cadence=109, Power=309, HeartRate=  9 Angle=  -21
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=210 Cadence=110, Power=310, HeartRate= 10 Angle=  -20
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=211 Cadence=111, Power=311, HeartRate= 11 Angle=  -19
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=212 Cadence=112, Power=312, HeartRate= 12 Angle=  -18
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=213 Cadence=113, Power=313, HeartRate= 13 Angle=  -17
+Client=True  HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=214 Cadence=114, Power=314, HeartRate= 14 Angle=  -16
+Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=215 Cadence=115, Power=315, HeartRate= 15 Angle=  -15
+Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=216 Cadence=116, Power=316, HeartRate= 16 Angle=  -14
+Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=217 Cadence=117, Power=317, HeartRate= 17 Angle=  -13
+Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=218 Cadence=118, Power=318, HeartRate= 18 Angle=  -12
+Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=219 Cadence=119, Power=319, HeartRate= 19 Angle=  -11
+Client=False HasControl=False Started=False TargetPower= 100 TargetGrade=0      Speed=220 Cadence=120, Power=320, HeartRate= 20 Angle=  -10
+15:18:20,624: FortiusAnt simulated trainer is stopped
+15:18:20,627: ---------------------------------------
+Message=, Bluetooth interface closed
+bleBless ended
+
+
+Information from LightBlue as BLE-sniffer
+==========================================
+LightBlue® app launched
+App foregrounded
+Connecting to 4F:69:66:13:7A:2A (LT-ENTERTAIN)
+Connected to 4F:69:66:13:7A:2A (LT-ENTERTAIN)
+Discovering services for 4F:69:66:13:7A:2A (LT-ENTERTAIN)
+Discovered 6 services for 4F:69:66:13:7A:2A.
+
+Service 00001800-0000-1000-8000-00805f9b34fb
+Characteristics:
+|--00002a00-0000-1000-8000-00805f9b34fb: Readable
+|--00002a01-0000-1000-8000-00805f9b34fb: Readable
+|--00002a04-0000-1000-8000-00805f9b34fb: Readable
+|--00002aa6-0000-1000-8000-00805f9b34fb: Readable
+
+Service 00001801-0000-1000-8000-00805f9b34fb
+Characteristics:
+|--00002a05-0000-1000-8000-00805f9b34fb: Indicate
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--00002b29-0000-1000-8000-00805f9b34fb: Readable, Writable
+|--00002b2a-0000-1000-8000-00805f9b34fb: Readable
+
+Service 0000180a-0000-1000-8000-00805f9b34fb
+Characteristics:
+|--00002a50-0000-1000-8000-00805f9b34fb: Readable
+
+Service 00001826-0000-1000-8000-00805f9b34fb                    == sFitnessMachineUUID
+Characteristics:
+|--00002acc-0000-1000-8000-00805f9b34fb: Readable
+|--00002ad2-0000-1000-8000-00805f9b34fb: Notify
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--00002ada-0000-1000-8000-00805f9b34fb: Notify
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--00002ad9-0000-1000-8000-00805f9b34fb: Writable, Indicate
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--00002ad8-0000-1000-8000-00805f9b34fb: Readable
+
+Service 0000180d-0000-1000-8000-00805f9b34fb                    == sHeartRateUUID
+Characteristics:
+|--00002a37-0000-1000-8000-00805f9b34fb: Notify
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+
+Service 347b0001-7635-408b-8918-8ff3949ce592                    == sSteeringUUID
+Characteristics:
+|--347b0012-7635-408b-8918-8ff3949ce592: Writable               == cSteeringUnknown1UUID
+|--347b0013-7635-408b-8918-8ff3949ce592: Readable               == cSteeringUnknown2UUID
+|--347b0014-7635-408b-8918-8ff3949ce592: Notify                 == cSteeringUnknown3UUID
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--347b0019-7635-408b-8918-8ff3949ce592: Readable               == cSteeringUnknown4UUID
+|--347b0030-7635-408b-8918-8ff3949ce592: Notify                 == cSteeringAngleUUID
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--347b0032-7635-408b-8918-8ff3949ce592: Indicate               == cSteeringTxUUID
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--347b0031-7635-408b-8918-8ff3949ce592: Writable               == cSteeringRxName
+
+Enabling notifications/indications on 347b0030-7635-408b-8918-8ff3949ce592
+Notifications or indications ENABLED on 347b0030-7635-408b-8918-8ff3949ce592
+Wrote to descriptor 00002902-0000-1000-8000-00805f9b34fb | value: 01 00
+Characteristic 347b0030-7635-408b-8918-8ff3949ce592 changed | value: 00 00 E8 41
+Characteristic 347b0030-7635-408b-8918-8ff3949ce592 changed | value: 00 00 F0 C1
+Characteristic 347b0030-7635-408b-8918-8ff3949ce592 changed | value: 00 00 E8 C1
+...
+Disconnecting from 4F:69:66:13:7A:2A (LT-ENTERTAIN)
+Disconnected from 4F:69:66:13:7A:2A (LT-ENTERTAIN)
+
+===================================================================================
+When the service is published through NodeJs, the services and characteristics are:
+===================================================================================
+
+Service 00001800-0000-1000-8000-00805f9b34fb
+Characteristics:
+|--00002a00-0000-1000-8000-00805f9b34fb: Readable
+|--00002a01-0000-1000-8000-00805f9b34fb: Readable
+
+Service 00001801-0000-1000-8000-00805f9b34fb
+Characteristics:
+|--00002a05-0000-1000-8000-00805f9b34fb: Indicate
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+
+Service 00001826-0000-1000-8000-00805f9b34fb                    == sFitnessMachineUUID
+Characteristics:
+|--00002acc-0000-1000-8000-00805f9b34fb: Readable
+|------00002901-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--00002ad2-0000-1000-8000-00805f9b34fb: Notify
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|------00002901-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--00002ada-0000-1000-8000-00805f9b34fb: Notify
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|------00002901-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--00002ad9-0000-1000-8000-00805f9b34fb: Writable, Indicate
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|------00002901-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--00002ad8-0000-1000-8000-00805f9b34fb: Readable
+|------00002901-0000-1000-8000-00805f9b34fb: <EMPTY>
+
+Service 0000180d-0000-1000-8000-00805f9b34fb                    == sHeartRateUUID
+Characteristics:
+|--00002a37-0000-1000-8000-00805f9b34fb: Notify
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|------00002901-0000-1000-8000-00805f9b34fb: <EMPTY>
+
+Service 347b0001-7635-408b-8918-8ff3949ce592                    == sSteeringUUID
+Characteristics:
+|--347b0012-7635-408b-8918-8ff3949ce592: Writable               == cSteeringUnknown1UUID
+|--347b0013-7635-408b-8918-8ff3949ce592: Readable               == cSteeringUnknown2UUID
+|--347b0014-7635-408b-8918-8ff3949ce592: Notify                 == cSteeringUnknown3UUID
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--347b0019-7635-408b-8918-8ff3949ce592: Readable               == cSteeringUnknown4UUID
+|--347b0030-7635-408b-8918-8ff3949ce592: Notify                 == cSteeringAngleUUID
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+|--347b0031-7635-408b-8918-8ff3949ce592: Writable               == cSteeringRxName
+|--347b0032-7635-408b-8918-8ff3949ce592: Indicate               == cSteeringTxUUID
+|------00002902-0000-1000-8000-00805f9b34fb: <EMPTY>
+
 """

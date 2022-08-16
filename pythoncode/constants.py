@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-03"
+__version__ = "2022-08-10"
+# 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-03-03    added: UsePythonLogging
 #               added: help_bb, modified help_b
 # 2021-04-13    added: help_i
@@ -75,7 +76,8 @@ help_L = "Raspberry GPIO pin Layout button/Tacx/Shutdown/Cadence/BLE/ANT."
 help_M = "Run manual grade (ignore target from ANT+ Dongle)."
 help_O = "Output to Raspberry mini display: console or display / rotation."
 help_P = "Power mode has preference over Resistance mode (for 30 seconds)."
-help_S = "Pair this Speed Cadence Sensor (0: default device)"
+#elp_S = "Pair this Speed Cadence Sensor (0: default device)"
+help_S = "Use Tacx Steering interface over BLE"
 help_R = "The runoff procedure can be customized: maxSpeed/dip/minSpeed/targetTime/power."
 help_a = "Automatically start; “Locate HW” and “Start” if the required devices were found."
 help_b = "Advertise FortiusAnt as “FortiusAnt Trainer” on a Bluetooth Low Energy dongle, using nodejs."

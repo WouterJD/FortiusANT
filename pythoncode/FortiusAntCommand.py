@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-03-03"
+__version__ = "2022-08-10"
+# 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-03-03    #366 -bb added
 #               -d can be defined as characters
 # 2022-01-14    #363 st7789b added
@@ -117,6 +118,7 @@ class CommandLineVariables(object):
     PowerMode       = False      # introduced 2020-04-10; When specified Grade-commands are ignored xx seconds after Power-commands
     Resistance      = False      # introduced 2020-11-23; When specified, Target Resistance equals Target Power
     StatusLeds      = False      # modified   2020-03-22; When specified, Status Led displayed (GUI / raspberry)
+    Steering        = None       # introduced 2021-11-21; None=no steering, 'wired' or 'Blacktrack'
     CalibrateRR     = False      # introduced 2020-12-07; To calibrate Magnetic Brake power RollingResistance
     scs             = None       # introduced 2020-02-10; None=not specified, numeric=SCS device
     OutputDisplay   = False      # introduced 2021-03-24; Raspberry small display
@@ -248,6 +250,9 @@ class CommandLineVariables(object):
         parser.add_argument   ('-R', dest='Runoff',             metavar='see text',     help=constants.help_R,  required=False, default=False)
         parser.add_argument   ('-s', dest='simulate',                                   help=constants.help_s,  required=False, action='store_true')
 #scs    parser.add_argument   ('-S', dest='scs',                metavar='ANT+ DeviceID',help=constants.help_S,  required=False, default=None,  type=int)
+        if UseBluetooth:
+           parser.add_argument('-S', dest='Steering',                                   help=constants.help_S, required=False, \
+                               choices=['wired', 'Blacktrack'])
         parser.add_argument   ('-T', dest='Transmission',       metavar='see text',     help=constants.help_T,  required=False, default=False)
         self.ant_tacx_models = ['Bushido', 'Genius', 'Vortex', 'Magneticbrake', 'Motorbrake']
         parser.add_argument   ('-t', dest='TacxType',                                   help=constants.help_t, required=False, default=False, \
@@ -613,6 +618,28 @@ class CommandLineVariables(object):
             self.antDeviceID = None
 
         #-----------------------------------------------------------------------
+        # Get Steering
+        # Steering depends on USB-trainer (wired) or ANT (blacktrack) and BLE.
+        # If conflicting, Steering will be set to none.
+        # [As opposed to modifying the other options, Steering depends on them]
+        #-----------------------------------------------------------------------
+        if UseBluetooth:
+            self.Steering = self.args.Steering
+
+            if self.Steering == 'wired' and (self.Tacx_Genius or self.Tacx_Bushido or self.Tacx_Vortex):
+                logfile.Console("Wired steering (-S wired) not available on with ANT-trainer (-t %s); -S wired ignored." % self.TacxType)
+                self.Steering = None
+
+            if self.Steering is not None and not self.ble:
+                logfile.Console("Steering (-S %s enabled without Bluetooth (-b), ignored")
+                self.Steering = None
+
+            if self.Steering == 'Blacktrack' and self.antDeviceID == -1:
+                logfile.Console(
+                    'BlackTrack steering (-S Blacktrack) enabled, but de-selected ANT-dongle (-D-1), ignored.')
+                self.Steering = None
+
+        #-----------------------------------------------------------------------
         # Get Transmission
         # Default    = "34-50    x 34-30-27-25-23-21-19-17-15-13-11"
         # MTB single = "32       x 50-42-36-32-28-24-21-18-16-14-12-10"
@@ -722,6 +749,7 @@ class CommandLineVariables(object):
                         (self.RunoffMaxSpeed, self.RunoffDip, self.RunoffMinSpeed, self.RunoffTime, self.RunoffPower) )
             if      self.args.simulate:                 logfile.Console("-s")
 #scs        if v or self.args.scs != None:              logfile.Console("-S %s" % self.scs )
+            if      self.args.Steering is not None:     logfile.Console("-S %s" % self.args.Steering)
             if v or self.args.TacxType:                 logfile.Console("-t %s" % self.TacxType)
             if v or self.args.Transmission:
                                                         logfile.Console('-T %s x %s (start=%sx%s)' % \

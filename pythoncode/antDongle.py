@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2021-12-03"
+__version__ = "2022-08-10"
+# 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2021-12-03    When pairing, TransmissionType must be zero (TransmissionType_Pairing)
 #               this became apparent when using another make of HRM, returning
 #               a TransmissionType=207, not being found using TransmissionType_IC.
@@ -148,6 +149,9 @@ channel_GNS_s       = channel_VHU_s # ANT+ Channel for Tacx Genius
 channel_BHU_s       = channel_VHU_s # ANT+ Channel for Tacx Bushido Headunit
 
 channel_CTRL        = 6           # ANT+ Channel for Remote Control
+
+channel_BLTR_s      = 7           # ANT Channel for Tacx BlackTrack
+
 #---------------------------------------------------------------------------
 # Vortex Headunit modes
 #---------------------------------------------------------------------------
@@ -362,6 +366,7 @@ DeviceTypeID_BHU        = 82            # Tacx Bushido head unit
 # 0x3d  according TotalReverse
 DeviceTypeID_VHU        = 0x3e          # Thanks again to TotalReverse
 # https://github.com/WouterJD/FortiusANT/issues/46#issuecomment-616838329
+DeviceTypeID_BLTR       = 84            # Tacx BlackTrack steering unit
 
 TransmissionType_Pairing=    0          # See ANT+ HRM  Device Profile D00000693 5.1
                                         # See ANT+ FE-C Device Profile D00001231 7.1
@@ -1056,6 +1061,25 @@ class clsAntDongle():
             msg60_ChannelTransmitPower  (channel_VHU_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_VHU_s),
             msg4D_RequestMessage        (channel_VHU_s, msgID_ChannelID)
+        ]
+        self.Write(messages)
+
+    def SlaveBLTR_ChannelConfig(self, DeviceNumber):  # Listen to a Tacx Blacktrack steering unit
+
+        if DeviceNumber > 0: s = ", id=%s only" % DeviceNumber
+        else:                s = ", any device"
+        if self.OK:
+            if self.ConfigMsg:
+                logfile.Console('FortiusANT receives data from an ANT Tacx BlackTrack steering unit (BLTR)' + s)
+            if debug.on(debug.Data1): logfile.Write("SlaveBLTR_ChannelConfig()")
+        messages = [
+            msg42_AssignChannel(channel_BLTR_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
+            msg51_ChannelID(channel_BLTR_s, DeviceNumber, DeviceTypeID_BLTR, TransmissionType_IC),
+            msg45_ChannelRfFrequency(channel_BLTR_s, RfFrequency_2460Mhz),
+            msg43_ChannelPeriod(channel_BLTR_s, ChannelPeriod=0x2000),
+            msg60_ChannelTransmitPower(channel_BLTR_s, TransmitPower_0dBm),
+            msg4B_OpenChannel(channel_BLTR_s),
+            msg4D_RequestMessage(channel_BLTR_s, msgID_ChannelID)
         ]
         self.Write(messages)
 
@@ -2745,5 +2769,44 @@ def msgPage2_CTRL (Channel, CurrentNotifcations, Reserved1, Reserved2, Reserved3
                   fReserved3 + fReserved4 + fReserved5 + fDeviceCapabilities
     info        = struct.pack (format, Channel, DataPageNumber, CurrentNotifcations, Reserved1, Reserved2, Reserved3,
                                Reserved4, Reserved5, DeviceCapabilities)
+
+    return info
+
+# ------------------------------------------------------------------------------
+# T a c x  B l a c k T r a c k  p a g e s
+# ------------------------------------------------------------------------------
+# Refer:    https://gist.github.com/switchabl/75b2619e2e3381f49425479d59523ead
+# ------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------------
+# P a g e 0 0  T a c x B l a c k T r a c k A n g l e
+# -------------------------------------------------------------------------------------
+def msgUnpage00_TacxBlackTrackAngle (info):
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+
+    fAngle              = sc.short # raw angle
+    nAngle              = 2
+    fReserved           = sc.unsigned_char # always 0xff (?)
+    nReserved           = 3
+    fPadding            = 4 * sc.pad
+
+    format = sc.big_endian + fChannel + fDataPageNumber + fAngle + fReserved + fPadding
+    tuple = struct.unpack(format, info)
+
+    return tuple[nAngle], tuple[nReserved]
+
+# ------------------------------------------------------------------------------
+# P a g e 0 1  T a c x B l a c k T r a c k K e e p A l i v e
+# ------------------------------------------------------------------------------
+def msgPage01_TacxBlackTrackKeepAlive (Channel):
+    DataPageNumber      = 0x01
+
+    fChannel            = sc.unsigned_char  # First byte of the ANT+ message content
+    fDataPageNumber     = sc.unsigned_char  # First byte of the ANT+ datapage (payload)
+    fPadding            = sc.pad * 7
+
+    format = sc.big_endian +     fChannel + fDataPageNumber + fPadding
+    info   = struct.pack (format, Channel,   DataPageNumber)
 
     return info

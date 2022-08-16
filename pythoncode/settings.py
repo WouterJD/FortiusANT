@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-04-15"
+__version__ = "2022-08-10"
+# 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-04-15    The new flags for debugging (performance, logging) are not
 #               translated to the user-interface.
 #               - maximum value for debug=127
@@ -54,6 +55,7 @@ json_gui                = 'gui'
 json_leds               = 'leds'
 json_homeTrainer        = 'home trainer'      # User function, although technically like simulation
 json_hrm                = 'hrm'
+json_steering           = 'steering'
 json_imperial           = 'imperial'
 #json_scs               = 'scs'
 json_exportTCX          = 'export TCX-file'
@@ -196,6 +198,7 @@ def ReadJsonFile (args):
                         elif q == json_gui:                 args.gui                  = w[q]
                         elif q == json_homeTrainer:         args.homeTrainer          = w[q]
                         elif q == json_hrm:                 args.hrm                  = w[q]
+                        elif q == json_steering:            args.Steering             = w[q]
                         elif q == json_imperial:            args.imperial             = w[q]
                         elif q == json_leds:                args.StatusLeds           = w[q]
                         else: logfile.Console ('Json file contains unknown parameter %s %s' % (p, q))
@@ -243,6 +246,7 @@ def ReadJsonFile (args):
             if args.antDeviceID == '':    args.antDeviceID  = False
             if args.factor      == '100': args.factor       = False
             if args.TacxType    == '':    args.TacxType     = False
+            if args.Steering    == '':    args.Steering     = None
 
             # ------------------------------------------------------------------
             # Warn for (possibly) incompatible json-file
@@ -369,6 +373,7 @@ if constants.UseGui:
             json_gui:                   DialogWindow.cb_g   .GetValue(),
             json_homeTrainer:           DialogWindow.cb_e   .GetValue(),
             json_hrm:                   DialogWindow.txt_H  .GetValue(),
+            json_steering:              DialogWindow.combo_S.GetValue(),
             json_imperial:              DialogWindow.cb_i   .GetValue(),
             #'scs':                     DialogWindow.txt_S  .GetValue(),
             json_exportTCX:             DialogWindow.cb_x   .GetValue(),
@@ -627,12 +632,24 @@ if constants.UseGui:
             p = RightOf(self.combo_t)
             self.lbl_t = wx.StaticText(panel, id=wx.ID_ANY, label=l, pos=p, size=s, style=0, name=wx.StaticTextNameStr)
             
+            v = ""
+            s = (-1, -1)
+            p = Under(self.combo_t)
+            c = ['wired', 'Blacktrack']
+            self.combo_S = wx.ComboBox(panel, id=wx.ID_ANY, value=v, pos=p, size=s, choices=c, style=0, validator=wx.DefaultValidator, name=wx.ComboBoxNameStr)
+            self.combo_S.Bind(wx.EVT_COMBOBOX, self.EVT_COMBOBOX_combo_S)
+
+            l = constants.help_S + " (-S *)"
+            s = (-1, -1)
+            p = RightOf(self.combo_S)
+            self.lbl_S = wx.StaticText(panel, id=wx.ID_ANY, label=l, pos=p, size=s, style=0, name=wx.StaticTextNameStr)
+
             # ----------------------------------------------------------------------
             # POWER CURVE
             # ----------------------------------------------------------------------
             l = "Power curve adjustment:"
             s = (-1, -1)
-            p = Under(self.combo_t, 15)
+            p = Under(self.combo_S, 15)
             self.lblPower = wx.StaticText(panel, id=wx.ID_ANY, label=l, pos=p, size=s, style=wx.BOLD, name=wx.StaticTextNameStr)
             self.lblPower.SetFont(GroupLabelFont)
 
@@ -958,12 +975,13 @@ if constants.UseGui:
             #self.txt_S  .SetValue(clv.scs)
                 self.cb_x   .SetValue(clv.exportTCX)
 
-                if clv.antDeviceID:     self.txt_D  .SetValue(str(clv.antDeviceID))
-                if clv.hrm:             self.txt_H  .SetValue(str(clv.hrm))
-                if clv.CalibrateRR:     self.txt_c  .SetValue(str(float(clv.CalibrateRR)))
-                if clv.TacxType:        self.combo_t.SetValue(str(clv.TacxType))
+                if clv.antDeviceID:          self.txt_D  .SetValue(str(clv.antDeviceID))
+                if clv.hrm:                  self.txt_H  .SetValue(str(clv.hrm))
+                if clv.CalibrateRR:          self.txt_c  .SetValue(str(float(clv.CalibrateRR)))
+                if clv.TacxType:             self.combo_t.SetValue(str(clv.TacxType))
+                if clv.Steering is not None: self.combo_S.SetValue(str(clv.Steering))
 
-                if not clv.args.debug:  self.txt_d  .SetValue('')   # make difference between 0 and not-specified
+                if not clv.args.debug:       self.txt_d  .SetValue('')   # make difference between 0 and not-specified
 
         # --------------------------------------------------------------------------
         # E V E N T   H A N D L E R S
@@ -1125,6 +1143,12 @@ if constants.UseGui:
             self.cb_restart.SetValue(True)
 
         # --------------------------------------------------------------------------
+        # Combobox -S
+        # --------------------------------------------------------------------------
+        def EVT_COMBOBOX_combo_S (self, event):
+            self.cb_restart.SetValue(True)
+
+        # --------------------------------------------------------------------------
         # Checkbox -restart
         # --------------------------------------------------------------------------
         def EVT_CHECKBOX_cb_restart (self, event):
@@ -1201,6 +1225,11 @@ if constants.UseGui:
                     clv.TacxType        = False
                 else:
                     clv.TacxType        = self.combo_t.GetValue()
+
+                if self.combo_S.GetValue() == '':
+                    clv.Steering        = None
+                else:
+                    clv.Steering        = self.combo_S.GetValue()
 
             # ----------------------------------------------------------------------
             # Store values in json file
