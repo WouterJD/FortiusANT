@@ -630,8 +630,8 @@ class CommandLineVariables(object):
                 logfile.Console("Wired steering (-S wired) not available on with ANT-trainer (-t %s); -S wired ignored." % self.TacxType)
                 self.Steering = None
 
-            if self.Steering is not None and not self.ble:
-                logfile.Console("Steering (-S %s enabled without Bluetooth (-b), ignored")
+            if self.Steering is not None and not (self.ble or self.bless):
+                logfile.Console("Steering enabled without Bluetooth (-b), ignored")
                 self.Steering = None
 
             if self.Steering == 'Blacktrack' and self.antDeviceID == -1:
