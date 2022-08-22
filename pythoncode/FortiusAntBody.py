@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-08-10"
+__version__ = "2022-08-22"
+# 2022-08-22    AntDongle stores received messages in a queue.
 # 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-05-12    Message added on failing calibration
 # 2022-04-07    BLE disabled on error to avoid repeated error-messages
@@ -1415,7 +1416,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             # Broadcast and receive ANT+ responses
             #-------------------------------------------------------------------
             if len(messages) > 0:
-                data = AntDongle.Write(messages, True, False, flush)
+                AntDongle.Write(messages, True, False, flush)
                 flush = False
                 # antEvent is not set here; only for data on FE-C channel
 
@@ -1431,7 +1432,9 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             # practical impact; grouping by Channel would enable to handle all
             # ANT in a channel (device) module. No advantage today.
             #-------------------------------------------------------------------
-            for d in data:
+            while AntDongle.MessageQueueSize() > 0:
+                d = AntDongle.MessageQueueGet()
+
                 synch, length, id, info, checksum, _rest, Channel, DataPageNumber = ant.DecomposeMessage(d)
                 error = False
 
@@ -1790,9 +1793,11 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                         AntHRMpaired = True
                         FortiusAntGui.SetMessages(HRM='Heart Rate Monitor paired: %s' % DeviceNumber)
 
+                    elif Channel == ant.channel_CTRL:
+                        pass # Ignore since 2022-08-22; to be investigated
+
                     else:
                         logfile.Console('Unexpected device %s on channel %s' % (DeviceNumber, Channel))
-                        
 
                 #---------------------------------------------------------------
                 # Message ChannelResponse, acknowledges a message
