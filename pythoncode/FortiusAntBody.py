@@ -1795,6 +1795,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
 
                     elif Channel == ant.channel_CTRL:
                         pass # Ignore since 2022-08-22; to be investigated
+                             # Obviously message was dropped before
 
                     else:
                         logfile.Console('Unexpected device %s on channel %s' % (DeviceNumber, Channel))

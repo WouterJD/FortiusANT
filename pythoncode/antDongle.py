@@ -407,7 +407,12 @@ class clsAntDongle():
     # Messages are store in a queue since 22-8-2022
     MessageQueue        = None
     MessageLock         = None
-    
+
+    # Read messages in a separate thread
+    UseThread           = True     # "Compile time" flag to use threading
+    ThreadActive        = False     # "Run time" flag that threading active
+    MessageThread       = None      # The thread handle
+
     #-----------------------------------------------------------------------
     # _ _ i n i t _ _
     #-----------------------------------------------------------------------
@@ -440,6 +445,8 @@ class clsAntDongle():
         self.Message            = ''
         self.Cycplus            = False
         self.DongleReconnected  = False
+
+        self.StopReadThread()           # Stop reading in a thread
 
         if self.DeviceID == None:
             dongles = { (4104, "Suunto"), (4105, "Garmin"), (4100, "Older") }
@@ -584,20 +591,20 @@ class clsAntDongle():
     #           Get: the next message from the queue (or None)
     #-----------------------------------------------------------------------
     def MessageQueuePut(self, message):
+        if debug.on(debug.Function): logfile.Write ("MessageQueuePut(%s)" % logfile.HexSpace(message))
         self._MessageLock.acquire()
         self._MessageQueue.put(message)
         self._MessageLock.release()
 
     def MessageQueueGet(self):
-        message = None
         self._MessageLock.acquire()
-        try:
+        if self.MessageQueueSize():
             message = self._MessageQueue.get(block=False, timeout=1)	# No timeout in the lock!!
-        except:
-            pass
-        else:
             self._MessageQueue.task_done()
+        else:
+            message = None
         self._MessageLock.release()
+        if debug.on(debug.Function): logfile.Write ("MessageQueueGet() returns %s" % logfile.HexSpace(message))
         return message
 
     def MessageQueueSize(self):
@@ -755,7 +762,7 @@ class clsAntDongle():
         if debug.on(debug.Performance): logfile.Write('... done')
         return trv
 
-    def Read(self, _drop, timeout = 20):
+    def _Read(self, _drop, timeout = 20):
         #-------------------------------------------------------------------
         # Read from antDongle untill no more data (timeout), or error
         # Usually, dongle gives one buffer at the time, starting with 0xa4
@@ -768,9 +775,9 @@ class clsAntDongle():
             if len(trv) == 0:
                 break
             # --------------------------------------------------------------------------
-            # Handle content returned by .read()
+            # Handle content returned by .__ReadAndRetry()
             # --------------------------------------------------------------------------
-            if debug.on(debug.Data1): logfile.Write('devAntDongle.read() returns %s ' \
+            if debug.on(debug.Data1): logfile.Write('devAntDongle.__ReadAndRetry() returns %s ' \
                                                     % (logfile.HexSpaceL(trv)))
 
             if len(trv) > 900: logfile.Console("Dongle.Read() too much data from .read()" )
@@ -824,6 +831,43 @@ class clsAntDongle():
         if self.OK and debug.on(debug.Function):
             logfile.Write ("AntDongle.Read: Queue contains %s messages" % self.MessageQueueSize())
 
+    #--------------------------------------------------------------------------
+    # R e a d   /   R e a d T h r e a d
+    #--------------------------------------------------------------------------
+    # Read the ANT dongle directly
+    #   - as is done in GetDongle()
+    #   - or when no thread is created.
+    # ... or just using the queue as is filled in the thread
+    #--------------------------------------------------------------------------
+    def StartReadThread(self):
+        if self.UseThread and self.OK:
+            if debug.on(debug.Function): logfile.Write ("StartReadThread(): Create thread to read messages from ANT dongle")
+            self.MessageThread = threading.Thread(target=self.ReadThread, daemon=True)    # No args=(), 
+            self.ThreadActive  = True
+            self.MessageThread.start()
+            if debug.on(debug.Function): logfile.Write ("StartReadThread(): Thread started")
+
+    def Read(self, drop, timeout=20):
+        if self.UseThread and self.ThreadActive:
+            # Reading is done by ReadThread()
+            pass
+        else:
+            self._Read(drop, timeout)
+
+    def ReadThread(self):
+        while self.ThreadActive:
+            # print('*** Thread read message')
+            self._Read(False)
+
+    def StopReadThread(self):
+        if self.MessageThread:
+            if debug.on(debug.Function): logfile.Write ("StopReadThread(): Stop thread reading messages from ANT dongle")
+            self.ThreadActive = False       # Signal thread to stop
+            self.MessageThread.join()       # Wait that thread is stopped
+            self.MessageThread = None
+            if debug.on(debug.Function): logfile.Write ("StopReadThread(): Thread stopped")
+
+
     #-----------------------------------------------------------------------
     # Standard dongle commands
     # Observation: all commands have two bytes 00 00 for which purpose is unclear
@@ -846,8 +890,11 @@ class clsAntDongle():
                                                                 # network for Tacx i-Vortex
         ]
         self.Write(messages)
+        self.StartReadThread()          # Start reading in a thread from now on
 
     def ResetDongle(self):
+        self.StopReadThread()           # Stop reading in a thread
+
         if self.Cycplus:
             # For CYCPLUS dongles this command may be given on initialization only
             # If done lateron, the dongle hangs
