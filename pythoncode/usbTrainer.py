@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-08-10"
+__version__ = "2022-08-22"
+# 2022-08-22    Steering only active when -S wired specified.
 # 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-03-01    #361 clsSimulatedTrainer.Refresh() must correct data type of
 #               variables otherwise CurrentPower = iPower is not integer.
@@ -978,10 +979,14 @@ class clsSimulatedTrainer(clsTacxTrainer):
         self.clv.PowerFactor = 1            # Not applicable for simulation
         self.Operational     = True         # Always true
 
-        self.Steering1st     = True
-        self.SteeringFrame   = steering.clsSteering(InitialCalLeft=-100,
-                                                    InitialCalRight=100,
-                                                    DeadZone=7.0)
+        # ----------------------------------------------------------------------
+        # Steering
+        # ----------------------------------------------------------------------
+        if self.clv.Steering == 'wired':
+            self.Steering1st     = True
+            self.SteeringFrame   = steering.clsSteering(InitialCalLeft=-100,
+                                                        InitialCalRight=100,
+                                                        DeadZone=7.0)
 
     # --------------------------------------------------------------------------
     # R e f r e s h
@@ -1075,15 +1080,16 @@ class clsSimulatedTrainer(clsTacxTrainer):
         # ----------------------------------------------------------------------
         # Steering
         # ----------------------------------------------------------------------
-        if self.Steering1st:
-            # First time, send the stable center position. For us zero is fine.
-            for _i in range(10): self.SteeringFrame.Update(   0) # Calibrate center
-            for _i in range(10): self.SteeringFrame.Update( 110) # Calibrate right
-            for _i in range(10): self.SteeringFrame.Update(-110) # Calibrate left
-            self.Steering1st = False
+        if self.clv.Steering == 'wired':
+            if self.Steering1st:
+                # First time, send the stable center position. For us zero is fine.
+                for _i in range(10): self.SteeringFrame.Update(   0) # Calibrate center
+                for _i in range(10): self.SteeringFrame.Update( 110) # Calibrate right
+                for _i in range(10): self.SteeringFrame.Update(-110) # Calibrate left
+                self.Steering1st = False
 
-        # Invert axis value so lower value -> left (not right)
-        for _i in range(10): self.SteeringFrame.Update(-self.Axis)
+            # Invert axis value so lower value -> left (not right)
+            for _i in range(10): self.SteeringFrame.Update(-self.Axis)
 
 #-------------------------------------------------------------------------------
 # c l s T a c x A n t V o r t e x T r a i n e r
@@ -2606,9 +2612,13 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
         self.SpeedScale = 11.9 # GoldenCheetah: curSpeed = curSpeedInternal / (1.19f * 10.0f);
         #PowerResistanceFactor = (1 / 0.0036)     # GoldenCheetah ~= 277.778
 
-        self.SteeringFrame = steering.clsSteering(InitialCalLeft=-25,
-                                                  InitialCalRight=25,
-                                                  DeadZone=7.0)
+        # ----------------------------------------------------------------------
+        # Steering
+        # ----------------------------------------------------------------------
+        if self.clv.Steering == 'wired':
+            self.SteeringFrame = steering.clsSteering(InitialCalLeft=-25,
+                                                    InitialCalRight=25,
+                                                    DeadZone=7.0)
 
     #---------------------------------------------------------------------------
     # Basic physics: Power = Resistance * Speed  <==> Resistance = Power / Speed
@@ -2781,11 +2791,15 @@ class clsTacxLegacyUsbTrainer(clsTacxUsbTrainer):
         self.Wheel2Speed()
         self.CurrentResistance2Power()
 
-        axisNotConnected = 0
-        if self.Axis != axisNotConnected:
-            self.SteeringFrame.Update(self.Axis)
-        else:
-            self.SteeringFrame.Update(None)
+        # ----------------------------------------------------------------------
+        # Steering
+        # ----------------------------------------------------------------------
+        if self.clv.Steering == 'wired':
+            axisNotConnected = 0
+            if self.Axis != axisNotConnected:
+                self.SteeringFrame.Update(self.Axis)
+            else:
+                self.SteeringFrame.Update(None)
 
         if debug.on(debug.Function):
             logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s, Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s %s" % \
@@ -2826,9 +2840,13 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
                                                     # 01 = T1901 (Magnetic brake)
         self.Version2               = 0
 
-        self.SteeringFrame = steering.clsSteering(InitialCalLeft=-100,
-                                                  InitialCalRight=100,
-                                                  DeadZone=7.0)
+        # ----------------------------------------------------------------------
+        # Steering
+        # ----------------------------------------------------------------------
+        if self.clv.Steering == 'wired':
+            self.SteeringFrame = steering.clsSteering(InitialCalLeft=-100,
+                                                    InitialCalRight=100,
+                                                    DeadZone=7.0)
 
         #---------------------------------------------------------------------------
         # Resistance values for MagneticBrake
@@ -3280,12 +3298,16 @@ class clsTacxNewUsbTrainer(clsTacxUsbTrainer):
             self.Wheel2Speed()
             self.CurrentResistance2Power()
 
-            axisNotConnected = 0x0a0d
-            if self.Axis != axisNotConnected:
-                # Invert axis value so lower value -> left (not right)
-                self.SteeringFrame.Update(-self.Axis)
-            else:
-                self.SteeringFrame.Update(None)
+            # ----------------------------------------------------------------------
+            # Steering
+            # ----------------------------------------------------------------------
+            if self.clv.Steering == 'wired':
+                axisNotConnected = 0x0a0d
+                if self.Axis != axisNotConnected:
+                    # Invert axis value so lower value -> left (not right)
+                    self.SteeringFrame.Update(-self.Axis)
+                else:
+                    self.SteeringFrame.Update(None)
 
             if debug.on(debug.Function):
                 logfile.Write ("ReceiveFromTrainer() = hr=%s Buttons=%s Cadence=%s Speed=%s TargetRes=%s CurrentRes=%s CurrentPower=%s, pe=%s hdr=%s %s" % \

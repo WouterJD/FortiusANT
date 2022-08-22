@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-08-10"
+__version__ = "2022-08-22"
+# 2022-08-22    Small debugging line added
 # 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2021-11-14    Initial version, switchable
 #-------------------------------------------------------------------------------
@@ -131,6 +132,8 @@ class clsSteering:
 
         if debug.on(debug.Function):
             logfile.Write("Steering: CalLeft=%d, CalMid=%d, CalRight=%d" % (self.CalLeft, self.CalMid, self.CalRight))
+
+        # logfile.Console("Steering Angle = %s" % self.Angle)   # For quick debugging
 
 #-------------------------------------------------------------------------------
 # FilterWindow
