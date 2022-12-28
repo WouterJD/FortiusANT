@@ -2,6 +2,10 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2022-08-10"
+# 2022-12-28    PowerFactor limit changed to 0.2 ... 1.5 (20 ... 150)
+#               to correspond with FortiusAntCommand.py
+#               See also 2021-01-19
+# 2022-12-28    Default values changed; see also 2022-04-11.
 # 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-04-15    The new flags for debugging (performance, logging) are not
 #               translated to the user-interface.
@@ -241,12 +245,15 @@ def ReadJsonFile (args):
 
             # ------------------------------------------------------------------
             # Correct values, to be compatibel with command-line
+            # Issue#404; when default value specified wrong behaviour
+            # 2022-12-28: Now the same values (None, False) used as the default=
+            #             values in FortiusAntCommand.py
             # ------------------------------------------------------------------
-            if args.debug       == '':    args.debug        = False
-            if args.antDeviceID == '':    args.antDeviceID  = False
-            if args.factor      == '100': args.factor       = False
+            if args.debug       == '':    args.debug        = None
+            if args.antDeviceID == '':    args.antDeviceID  = None
+            if args.factor      == '':    args.factor       = None
             if args.TacxType    == '':    args.TacxType     = False
-            if args.Steering    == '':    args.Steering     = None
+            if args.Steering    == '':    args.Steering     = False
 
             # ------------------------------------------------------------------
             # Warn for (possibly) incompatible json-file
@@ -1110,7 +1117,7 @@ if constants.UseGui:
         # Checkbox -p
         # --------------------------------------------------------------------------
         def EVT_KILL_FOCUS_txt_p (self, event):
-            EVT_KILL_FOCUS_int_range(self.txt_p, event, 50, 150, 100)
+            EVT_KILL_FOCUS_int_range(self.txt_p, event, 20, 150, 100)   # 2022-12-28
             
         # --------------------------------------------------------------------------
         # Checkbox -R

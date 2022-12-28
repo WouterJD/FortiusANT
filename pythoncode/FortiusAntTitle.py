@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v6.6" # Double quotes, see below!
+WindowTitle = "Fortius Antifier v6.7" # Double quotes, see below!
+# 2022-12-28    Version 6.7     #404 BLE does not work when debug=0
+#                               #404 PowerFactor setting always reset to 20
+# 2022-08-24    Version 6.7     #341 Refactoring of ANT reading loop
 # 2022-08-16    Version 6.6     #152 Zwift steering implemented
 # 2022-08-10    Version 6.5     #366 BLE-bless released
 # 2022-04-14    Version 6.4     #366 BLE-bless; #360 #361 #362 #363 #373 #379

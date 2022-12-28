@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-04-07"
+__version__ = "2022-12-28"
+# 2022-12-28    PythonLogger.info() error in Write() avoided by disabling.
 # 2022-04-07    Comment typo corrected
 # 2022-03-28    Traceback() added
 # 2022-03-24    fLogfile is set to None, so that modules can check it
@@ -236,12 +237,13 @@ def IsOpen():
 def Print(*objects, sep=' ', end='\n'):
     global fLogfile, PythonLogger
 
-    if True:                                # When introducing UsePythonLogging
-        s = ''
-        for obj in objects:
-            if s != '': s += ' '            # Add space between each object
-            s += str(obj)                   # Add object as string
-        Write (s)                           # Write all objects on one line
+    if UsePythonLogging:
+        if False: # Disabled because sometimes fails, on encoding error.
+            s = ''
+            for obj in objects:
+                if s != '': s += ' '            # Add space between each object
+                s += str(obj)                   # Add object as string
+            Write (s)                           # Write all objects on one line
 
     else:
         if IsOpen():
