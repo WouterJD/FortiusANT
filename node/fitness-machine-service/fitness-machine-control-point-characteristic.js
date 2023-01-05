@@ -94,6 +94,7 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
         if (this.hasControl) {
           debug('Control reset');
           this.hasControl = false;
+          this.isStarted = false;
           response = this.result(code, Success);
 
           // Notify all connected clients that control has been reset
