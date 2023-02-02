@@ -3,6 +3,8 @@
 *.lnk
 *.tcx
 *.json
+*.spec
+venv
 Thumbs.db
 pythoncode/build/
 pythoncode/dist/
