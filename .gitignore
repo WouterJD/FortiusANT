@@ -3,10 +3,6 @@
 *.lnk
 *.tcx
 *.json
-*.spec
-*.snap
-venv
-snap
 Thumbs.db
 pythoncode/build/
 pythoncode/dist/
