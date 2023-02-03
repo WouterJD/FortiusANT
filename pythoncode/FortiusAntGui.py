@@ -164,7 +164,7 @@ class frmFortiusAntGui(wx.Frame):
         # (First versions did not use panel, and that's why TABs did not work)
         # ----------------------------------------------------------------------
         wx.Frame.__init__(self, parent, -1, githubWindowTitle(), \
-               style = wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
+               style = wx.DEFAULT_FRAME_STYLE & ~ wx.MAXIMIZE_BOX)
         if True:
             self.panel = wx.Panel(self) # Controls on panel for TAB-handling
         else:
@@ -318,6 +318,7 @@ class frmFortiusAntGui(wx.Frame):
         #
         ButtonX = Margin
         ButtonW = 85           # 2021-03-02 changed from 80 --> 85 for Raspberry
+        ButtonH = 25           # 2023-02-03 added to resolve issues with buttons overlapping - see changes below to button constructors
 
         SpeedWH     = int((BitmapW - ButtonW - 5 * Margin) / 3) # width/height equal (square)
         RevsWH      = SpeedWH
@@ -634,31 +635,31 @@ class frmFortiusAntGui(wx.Frame):
         b.Rescale(16,16)
         b = wx.Bitmap(b)
 
-        self.btnSettings = wx.BitmapButton(self.panel, bitmap=b, size=(ButtonW, -1), style=0) # wx.NO_BORDER)
+        self.btnSettings = wx.BitmapButton(self.panel, bitmap=b, size=(ButtonW, ButtonH), style=wx.NO_BORDER)
         self.btnSettings.SetToolTip ("Modify settings and optionally save for next session")
         self.btnSettings.SetPosition((ButtonX, self.btnSettings.Size[1]))
         self.btnSettings.SetFocus()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnSettings, self.btnSettings)
 
-        self.btnLocateHW = wx.Button(self.panel, label="Locate HW", size=(ButtonW, -1))
+        self.btnLocateHW = wx.Button(self.panel, label="Locate HW", size=(ButtonW, ButtonH))
         self.btnLocateHW.SetToolTip ("Connect to USB-devices (Tacx trainer and/or ANTdongle)")
         self.btnLocateHW.SetPosition((ButtonX, self.btnSettings.Position[1] + self.btnSettings.Size[1] + Margin))
         self.btnLocateHW.SetFocus()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnLocateHW, self.btnLocateHW)
 
-        self.btnRunoff   = wx.Button(self.panel, label="Runoff", size=(ButtonW, -1))
+        self.btnRunoff   = wx.Button(self.panel, label="Runoff", size=(ButtonW, ButtonH))
         self.btnRunoff.SetToolTip ("Execute runoff-procedure (recommended for magnetic brake trainers)")
         self.btnRunoff.SetPosition((ButtonX, self.btnLocateHW.Position[1] + self.btnLocateHW.Size[1] + Margin))
         self.btnRunoff.Disable()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnRunoff, self.btnRunoff)
 
-        self.btnStart    = wx.Button(self.panel, label="Start", size=(ButtonW, -1))
+        self.btnStart    = wx.Button(self.panel, label="Start", size=(ButtonW, ButtonH))
         self.btnStart.SetToolTip ("Start communication with Cycle Training Program")
         self.btnStart.SetPosition((ButtonX, self.btnRunoff.Position[1] + self.btnRunoff.Size[1] + Margin))
         self.btnStart.Disable()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnStart, self.btnStart)
 
-        self.btnStop     = wx.Button(self.panel, label="Stop", size=(ButtonW, -1))
+        self.btnStop     = wx.Button(self.panel, label="Stop", size=(ButtonW, ButtonH))
         self.btnStop.SetToolTip ("Stop FortiusAnt bridge")
         self.btnStop.SetPosition((ButtonX, self.btnStart.Position[1] + self.btnStart.Size[1] + Margin))
         self.btnStop.Disable()
@@ -666,11 +667,12 @@ class frmFortiusAntGui(wx.Frame):
 
         b = wx.Image(sponsor_bmp)       # Must fit, no rescale
         b = wx.Bitmap(b)
-        self.btnSponsor = wx.BitmapButton(self.panel, bitmap=b, size=(ButtonW, -1), style=0) # wx.NO_BORDER)
+        self.btnSponsor  = wx.Button(self.panel, label="Sponsor", size=(ButtonW, ButtonH))
+        #self.btnSponsor = wx.BitmapButton(self.panel, bitmap=b, size=(ButtonW, ButtonH), style= wx.NO_BORDER)
         self.btnSponsor.SetToolTip ("Become a sponsor for FortiusAnt")
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnSponsor, self.btnSponsor)
 
-        self.btnHelp     = wx.Button(self.panel, label="Help", size=(ButtonW, -1))
+        self.btnHelp     = wx.Button(self.panel, label="Help", size=(ButtonW, ButtonH))
         self.btnHelp.SetToolTip ("Open the manual on github")
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnHelp, self.btnHelp)
 
