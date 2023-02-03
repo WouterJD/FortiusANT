@@ -3,7 +3,7 @@
         "device ID": ""
     },
     "bluetooth": {
-        "bless": true,
+        "bless": false,
         "nodejs": false
     },
     "general": {
@@ -37,7 +37,7 @@
             "time": "7.0"
         },
         "transmission": "34-50*x34-30-27-25-23-21-19*-17-15-13-11",
-        "type": ""
+        "type": "Bushido"
     },
     "version": "1"
 }
