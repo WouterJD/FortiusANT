@@ -834,7 +834,7 @@ class clsAntDongle():
     def Trainer_ChannelConfig(self):
         if self.OK:
             if self.ConfigMsg:
-                logfile.Console ('FortiusANT broadcasts data as an ANT+ Controlled Fitness Equipent device (FE-C), id=%s' % DeviceNumber_FE)
+                logfile.Console ('FortiusANT broadcasts data as an ANT+ Controlled Fitness Equipment device (FE-C), id=%s' % DeviceNumber_FE)
             if debug.on(debug.Data1): logfile.Write ("Trainer_ChannelConfig()")
         messages=[
             msg42_AssignChannel         (channel_FE, ChannelType_BidirectionalTransmit, NetworkNumber=0x00),
