@@ -6,3 +6,4 @@ pyusb
 requests
 service_identity
 wheel
+dbus_next

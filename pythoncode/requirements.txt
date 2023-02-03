@@ -7,3 +7,4 @@ requests
 service_identity
 wxPython
 wheel
+dbus_next
