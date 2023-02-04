@@ -1,0 +1,12 @@
+Source: fortius-ant
+Section: python
+Priority: extra
+Maintainer: Sebastien Laclau <seb.laclau@gmail.com>
+Build-Depends: debhelper (>= 9), python, dh-virtualenv (>= 0.8)
+Standards-Version: 3.9.5
+
+Package: fortius-ant
+Architecture: any
+Pre-Depends: dpkg (>= 1.16.1), python2.7 | python2.6, ${misc:Pre-Depends}
+Depends: ${misc:Depends}
+Description: FortiusANT by WouterJD

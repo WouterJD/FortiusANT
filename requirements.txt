@@ -1,0 +1,10 @@
+bless
+lib_programname
+numpy != 1.19.4
+pyinstaller
+pyusb
+requests
+service_identity
+wheels/wxPython-4.2.0-cp37-cp37m-linux_x86_64.whl
+wheel
+dbus_next
