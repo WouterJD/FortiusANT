@@ -714,7 +714,7 @@ def mainProgram():
 #-----------------------------------------------------------------------------------
 # Main program; when restart is required due to new parameters we will loop
 #-----------------------------------------------------------------------------------
-if __name__ == "__main__":
+def main():
     multiprocessing.freeze_support()
     global RestartApplication, clv
 
@@ -728,3 +728,5 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------
     if OnRaspberry:
         raspberry.ShutdownIfRequested()
+if __name__ == "__main__":
+    main()
