@@ -24,7 +24,7 @@ if True:
     #---------------------------------------------------------------------------
     # Import in the FortiusAnt context
     #---------------------------------------------------------------------------
-    from   structConstants      import little_endian, unsigned_char, short, unsigned_short, unsigned_long  # pylint: disable=import-error
+    from   structConstants      import little_endian, unsigned_char, short, unsigned_short, unsigned_long, float  # pylint: disable=import-error
     from   logfile              import HexSpace
 
 else:
@@ -131,6 +131,27 @@ cHeartRateMeasurementUUID       = "00002a37-0000-1000-8000-00805f9b34fb"
 cHeartRateMeasurementName       = "Heart Rate Measurement"
                                 # HRS_SPEC_V10, section 3.1 p 9:                 Flags, Heartrate
 hrm_Info                        = struct.pack(little_endian + unsigned_char * 2, 0,     123)
+
+# Service
+sSteeringUUID                   = "347b0001-7635-408b-8918-8ff3949ce592"
+sSteeringName                   = "Steering"
+# Service characteristics
+cSteeringUnknown1UUID           = "347b0012-7635-408b-8918-8ff3949ce592"
+cSteeringUnknown1Name           = "Unknown 1"
+cSteeringUnknown2UUID           = "347b0013-7635-408b-8918-8ff3949ce592"
+cSteeringUnknown2Name           = "Unknown 2"
+cSteeringUnknown3UUID           = "347b0014-7635-408b-8918-8ff3949ce592"
+cSteeringUnknown3Name           = "Unknown 3"
+cSteeringUnknown4UUID           = "347b0019-7635-408b-8918-8ff3949ce592"
+cSteeringUnknown4Name           = "Unknown 4"
+cSteeringAngleUUID              = "347b0030-7635-408b-8918-8ff3949ce592"
+cSteeringAngleName              = "Angle"
+cSteeringTxUUID                 = "347b0032-7635-408b-8918-8ff3949ce592"
+cSteeringTxName                 = "Transmission"
+cSteeringRxUUID                 = "347b0031-7635-408b-8918-8ff3949ce592"
+cSteeringRxName                 = "Reception"
+
+angle_Info                      = struct.pack(little_endian + float, 0)
 
 # ==============================================================================
 # Main program

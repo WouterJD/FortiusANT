@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-05-12"
+__version__ = "2022-08-10"
+# 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-05-12    Message added on failing calibration
 # 2022-04-07    BLE disabled on error to avoid repeated error-messages
 # 2022-03-01    #366 Implement BLE using bless
@@ -245,6 +246,7 @@ import constants
 import debug
 import logfile
 import raspberry
+import steering
 import TCXexport
 import usbTrainer
 
@@ -826,6 +828,19 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
         #-------------------------------------------------------------------
         AntDongle.CTRL_ChannelConfig(ant.DeviceNumber_CTRL)
 
+    BlackTrack = None
+    if clv.Steering == 'Blacktrack':
+        # -------------------------------------------------------------------
+        # Create ANT slave channel for BLTR (Tacx BlackTrack)
+        # -------------------------------------------------------------------
+        AntDongle.SlaveBLTR_ChannelConfig(0)
+        BlackTrack = steering.clsBlackTrack(AntDongle)
+        Steering = BlackTrack.Steering
+    elif clv.Steering == 'wired':
+        Steering = TacxTrainer.SteeringFrame
+    else:
+        Steering = None
+
     AntDongle.ConfigMsg = False # Displayed only once
 
     if not clv.gui: logfile.Console ("Ctrl-C to exit")
@@ -1368,6 +1383,10 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                     bleCTP.SetAthleteData(HeartRate)
                     bleCTP.SetTrainerData(TacxTrainer.SpeedKmh, \
                                     TacxTrainer.Cadence, TacxTrainer.CurrentPower)
+
+                    if Steering is not None:
+                        bleCTP.SetSteeringAngle(Steering.Angle)
+
                     if bleCTP.Refresh():
                         bleEvent = True
                         CTPcommandTime = time.time()
@@ -1419,6 +1438,10 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                 if clv.Tacx_Vortex or clv.Tacx_Genius or clv.Tacx_Bushido:
                     if TacxTrainer.HandleANTmessage(d):
                         continue                    # Message is handled or ignored
+
+                if BlackTrack is not None:
+                    if BlackTrack.HandleAntMessage(d):
+                        continue
 
                 #---------------------------------------------------------------
                 # AcknowledgedData = Slave -> Master

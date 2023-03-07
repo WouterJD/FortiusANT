@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v6.5" # Double quotes, see below!
+WindowTitle = "Fortius Antifier v6.6" # Double quotes, see below!
+# 2022-08-16    Version 6.6     #152 Zwift steering implemented
 # 2022-08-10    Version 6.5     #366 BLE-bless released
 # 2022-04-14    Version 6.4     #366 BLE-bless; #360 #361 #362 #363 #373 #379
 # 2022-01-04    Version 6.3     Issues 340, 342, 353 implemented

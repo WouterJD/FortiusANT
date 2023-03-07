@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2022-03-24"
+__version__ = "2022-08-10"
+# 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-03-24    logfile.fLogfile must be checked before usage
 #                   -b -dB causes logging to be written to PythonLogging
 #                   which is not accessible for this module.
@@ -51,6 +52,7 @@ class clsBleInterface():
         self.port      = port
         self.interface = None
         self.jsondata  = None
+        self.steering  = clv.Steering is not None
         if UseBluetooth and clv.ble:
             self.Message   = ", Bluetooth interface available (node)"
             #---------------------------------------------------------------
@@ -105,6 +107,9 @@ class clsBleInterface():
                     "node",
                     "server.js"
                 ]
+                if self.steering:
+                    command.append("steering")
+
                 directory = dirname + "/node"
                 if debug.on(debug.Ble): logfile.Write("... Popen(%s,%s)" % (directory, command) )
                 try:
@@ -122,6 +127,7 @@ class clsBleInterface():
 
             if self.OK: logfile.Console("FortiusANT exchanges data with a bluetooth Cycling Training Program")
             return self.OK
+
         #-------------------------------------------------------------------
         # W r i t e
         #-------------------------------------------------------------------
@@ -235,6 +241,7 @@ class clsBleCTP(clsBleInterface):
     CurrentSpeed        = 0
     Cadence             = 0
     CurrentPower        = 0
+    SteeringAngle       = 0
 
     #-----------------------------------------------------------------------
     # CTP data
@@ -256,10 +263,22 @@ class clsBleCTP(clsBleInterface):
         self.Cadence        = Cadence
         self.CurrentPower   = CurrentPower
     
+    def SetSteeringAngle(self, SteeringAngle):
+        self.SteeringAngle  = SteeringAngle
+
     def Refresh(self):
         rtn                 = False
 
-        if UseBluetooth:
+        if UseBluetooth and self.OK:
+            if self.steering:
+                steering = {'steering_angle': self.SteeringAngle}
+
+                # We need to send steering information in a separate message, otherwise Zwift will
+                # not pick it up correctly
+                if not self.Write(steering):
+                    return False      # WD: I do not like muliple exit points
+                                      #     but leave it for now.
+
             #----------------------------------------------------------------
             # Send data to CTP and receive 'further instructions' from CTP
             #----------------------------------------------------------------
@@ -269,7 +288,7 @@ class clsBleCTP(clsBleInterface):
             data['watts']       = self.CurrentPower
             data['cadence']     = self.Cadence
 
-            if self.OK and self.Write(data):
+            if self.Write(data):
                 if self.Read():
                     #--------------------------------------------------------
                     # Let's see what we got back
