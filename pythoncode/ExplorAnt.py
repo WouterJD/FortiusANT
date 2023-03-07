@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2020-05-07"
+__version__ = "2022-08-22"
+# 2022-08-22    AntDongle stores received messages in a queue.
 # 2020-05-07    clsAntDongle encapsulates all functions
 #               and implements dongle recovery
 # 2020-05-01    Added: Vortex Headunit
@@ -173,7 +174,7 @@ if AntDongle.OK and not clv.SimulateTrainer:
             #-------------------------------------------------------------------
             # Receive response from channels
             #-------------------------------------------------------------------
-            data = AntDongle.Read(False)
+            AntDongle.Read(False)
 
             #-------------------------------------------------------------------
             # Only handle ChannelID messages and ignore everyting else
@@ -182,7 +183,8 @@ if AntDongle.OK and not clv.SimulateTrainer:
             # received, but we ignore them here because we want to pair only.
             #-------------------------------------------------------------------
             Unknown = True
-            for d in data:
+            while AntDongle.MessageQueueSize() > 0:
+                d = AntDongle.MessageQueueGet()
                 synch, length, id, info, checksum, rest, Channel, DataPageNumber = \
                     ant.DecomposeMessage(d)
 
@@ -441,14 +443,14 @@ while AntDongle.OK:
                 # Receive data
                 #---------------------------------------------------------------
                 if clv.SimulateTrainer and len(messages) > 0:
-                    data = AntDongle.Write(messages, True, False)
+                    AntDongle.Write(messages, True, False)
                 else:
-                    data = AntDongle.Read( False)
+                    AntDongle.Read( False)
 
                 #---------------------------------------------------------------
                 # Simulate vortex data, just to test the loop
                 #---------------------------------------------------------------
-                if len(data) == 0 and VortexData:
+                if AntDongle.MessageQueueSize() == 0 and VortexData:
                     VortexData = False
                     messages = [    'a4 09 4e 07 00 00 03 60 08 00 8a 00 05', \
                                     'a4 09 4e 07 00 00 00 cc 00 00 18 00 30', \
@@ -458,7 +460,7 @@ while AntDongle.OK:
                                 ]
                     for m in messages:
                         d = binascii.unhexlify(m.replace(' ',''))
-                        data.append(d)
+                        AntDongle.MessageQueuePut(d)
 
                 #---------------------------------------------------------------
                 # Here all response from the ANT dongle are processed
@@ -468,7 +470,8 @@ while AntDongle.OK:
                 #       on the network
                 #---------------------------------------------------------------
                 Unknown = True
-                for d in data:
+                while AntDongle.MessageQueueSize() > 0:
+                    d = AntDongle.MessageQueueGet()
                     synch, length, id, info, checksum, rest, Channel, DataPageNumber = ant.DecomposeMessage(d)
 
                     #-----------------------------------------------------------

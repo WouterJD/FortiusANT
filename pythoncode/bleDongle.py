@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2022-08-10"
+__version__ = "2022-12-28"
+# 2022-12-28    Issue#404, incorrect usages of() corrected. See 2022-03-24.
 # 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-03-24    logfile.fLogfile must be checked before usage
 #                   -b -dB causes logging to be written to PythonLogging
@@ -113,7 +114,7 @@ class clsBleInterface():
                 directory = dirname + "/node"
                 if debug.on(debug.Ble): logfile.Write("... Popen(%s,%s)" % (directory, command) )
                 try:
-                    if debug.on(debug.Any and logfile.fLogfile != None):
+                    if debug.on(debug.Any) and logfile.fLogfile != None:
                         self.interface = subprocess.Popen(command, cwd=directory, stdout=logfile.fLogfile, stderr=logfile.fLogfile)
                     else:
                         self.interface = subprocess.Popen(command, cwd=directory)
