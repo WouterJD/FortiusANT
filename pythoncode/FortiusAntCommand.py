@@ -311,7 +311,7 @@ class CommandLineVariables(object):
             self.gui                = self.args.gui
         self.homeTrainer            = self.args.homeTrainer # Exersize Bike
         if UseGui or OnRaspberry:
-            self.StatusLeds             = self.args.StatusLeds
+            self.StatusLeds         = self.args.StatusLeds
         self.imperial               = self.args.imperial
         self.manual                 = self.args.manual
         self.manualGrade            = self.args.manualGrade
