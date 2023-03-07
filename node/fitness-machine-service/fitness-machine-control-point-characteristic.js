@@ -80,20 +80,22 @@ class FitnessMachineControlPointCharacteristic extends  bleno.Characteristic {
       case RequestControl:
         debug('[FitnessMachineControlPointCharacteristic] onWriteRequest: RequestControl');
         if (this.hasControl) {
-          debug('Error: already has control');
-          response = this.result(code, ControlNotPermitted);
+          debug('Warning: already has control');
         }
         else {
-          debug('Given control');
           this.hasControl = true;
-          response = this.result(code, Success);
+          debug('Given control');
         }
+
+        // Requesting control always succeeds
+        response = this.result(code, Success);
         break;
       case Reset:
         debug('[FitnessMachineControlPointCharacteristic] onWriteRequest: Reset');
         if (this.hasControl) {
           debug('Control reset');
           this.hasControl = false;
+          this.isStarted = false;
           response = this.result(code, Success);
 
           // Notify all connected clients that control has been reset
