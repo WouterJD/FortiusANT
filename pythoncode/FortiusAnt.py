@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-11-19"
+__version__ = "2023-03-17"
+# 2023-03-17    #422 importlib not found; ignore that issue
 # 2022-11-19    importlib_metadata_version used to print bless.version
 # 2022-03-08    bleBless, bleBlessClass added
 # 2021-04-29    If no hrm used (-H-1) thgen do not show on console.
@@ -32,7 +33,10 @@ import constants                        #  for __version__
 
 import argparse
 from datetime                           import datetime
-from importlib.metadata                 import version  as importlib_metadata_version
+try:
+    from importlib.metadata             import version  as importlib_metadata_version
+except:
+    pass
 import multiprocessing
 import numpy
 import pickle
@@ -636,7 +640,10 @@ def mainProgram():
         #       but works for bless and numpy
         #   I did not try them all.
         logfile.Write(s % ('argparse',             argparse.__version__ ))
-        logfile.Write(s % ('bless',        importlib_metadata_version("bless") ))
+        try:
+            logfile.Write(s % ('bless',    importlib_metadata_version("bless") ))
+        except:
+            pass
     #   logfile.Write(s % ('binascii',             binascii.__version__ ))
     #   logfile.Write(s % ('math',                     math.__version__ ))
         logfile.Write(s % ('numpy',                   numpy.__version__ ))
