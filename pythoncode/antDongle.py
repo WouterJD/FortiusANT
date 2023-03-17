@@ -1,7 +1,9 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2022-08-22"
+__version__ = "2023-03-15"
+# 2023-03-15    Even when there is no ANT-dongle, the message queue must be
+#               created, so that MessageQueueSize() returns zero.
 # 2022-08-22    Data from the ANT dongle is stored in a queue.
 #               This class only adds messages to the queue, the user removes
 #               the messages. Messages are never skipped anymore.
@@ -405,8 +407,8 @@ class clsAntDongle():
     DongleReconnected   = False     # So can be used even when OK=False
 
     # Messages are store in a queue since 22-8-2022
-    MessageQueue        = None
-    MessageLock         = None
+    _MessageQueue       = None
+    _MessageLock        = None
 
     # Read messages in a separate thread
     UseThread           = True     # "Compile time" flag to use threading
@@ -419,15 +421,15 @@ class clsAntDongle():
     # Function  Create the class and try to find a dongle
     #-----------------------------------------------------------------------
     def __init__(self, DeviceID = None):
-        self.DeviceID = DeviceID
-        self.OK       = True                    # Otherwise we're disabled!!
+        self.DeviceID      = DeviceID
+        self._MessageQueue = queue.Queue()      # Here messages are stored
+        self._MessageLock  = threading.Lock()   # This lock protects the queue
+        self.OK            = True               # Otherwise we're disabled!!
         if self.DeviceID == -1:
-            self.OK      = False                   # No ANT dongle wanted
+            self.OK      = False                # No ANT dongle wanted
             self.Message = "No ANT"
         else:
-            self._MessageQueue = queue.Queue()     # Here messages are stored
-            self._MessageLock  = threading.Lock()  # This lock protects the queue
-            self.OK            = self.__GetDongle()
+            self.OK      = self.__GetDongle()
 
     #-----------------------------------------------------------------------
     # G e t D o n g l e

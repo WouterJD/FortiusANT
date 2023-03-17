@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-08-10"
+__version__ = "2023-03-15"
+# 2023-03-15    Typo in message corrected
 # 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-03-03    #366 -bb added
 #               -d can be defined as characters
@@ -334,7 +335,7 @@ class CommandLineVariables(object):
         if self.manualGrade:    i += 1
 
         if i > 1:
-            logfile.Console("Only one of -h, -m and -M may be specified; manual power selected")
+            logfile.Console("Only one of -e, -m and -M may be specified; manual power selected")
             self.homeTrainer = False
             self.manual      = True
             self.manualGrade = False
