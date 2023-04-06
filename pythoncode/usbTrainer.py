@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-08-22"
+__version__ = "2023-04-06"
+# 2023-04-06    If UserAndBikeWeight is set below the minimum, a sensible value is set.
 # 2022-08-22    Steering only active when -S wired specified.
 # 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-03-01    #361 clsSimulatedTrainer.Refresh() must correct data type of
@@ -555,6 +556,9 @@ class clsTacxTrainer():
         self.GearRatio              = GearRatio
         self.UserWeight             = UserWeight
         self.UserAndBikeWeight      = UserWeight + BicycleWeight
+        if self.UserAndBikeWeight < 70:
+            logfile.Console("UserAndBikeWeight is set to %d, which is below the expected minimum of 70kg; corrected to 85kg." % self.UserAndBikeWeight)
+            self.UserAndBikeWeight = 75 + 10
 
     #---------------------------------------------------------------------------
     # SendToTrainer() and ReceivedFromTrainer() to be defined by sub-class
