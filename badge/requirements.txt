@@ -3,7 +3,7 @@ arrow==0.17.0
 certifi==2022.12.7
 chardet==4.0.0
 click==7.1.2
-Flask==1.1.2
+Flask==2.2.5
 Flask-RESTful==0.3.8
 gunicorn==20.0.4
 idna==2.10
