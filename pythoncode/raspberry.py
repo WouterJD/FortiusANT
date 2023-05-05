@@ -1,7 +1,9 @@
 #---------------------------------------------------------------------------
 # Version info
 #---------------------------------------------------------------------------
-__version__ = "2022-01-14"
+__version__ = "2023-03-22"
+# 2023-03-22  When the trainer is idle (60 seconds no cadence) the display
+#             is dimmed, just displaying "Idle"
 # 2022-01-14  #363 st7789b added; Waveshare 1.3 LCD with different pin layout
 #             Also, button-pins pulled-up explicitly on init.
 # 2021-04-13  clv.imperial: speed in mph
@@ -191,6 +193,9 @@ class clsRaspberry:
     buttonDown      = False     # same
 
     ButtonDefaultValue = True   # The value when the button is NOT pressed
+
+    IdleCount       = 0         # Monitor that there is no activity
+    PreviousTarget  = ""        # Previously displayed target
 
     def __init__(self, clv):
         global MySelf
@@ -853,12 +858,29 @@ class clsRaspberry:
 
             # ------------------------------------------------------------------
             # And draw on the display
+            # idle: if cadence is zero and target does not change for 60 seconds
+            #       then switch to 'idle' because the display is less bright.
+            #       This is useful for an exercise bike which is stationary;
+            #       the display dims when unused and the target not changed.
             # ------------------------------------------------------------------
-            self._DrawTextTable ( [ [ 'Speed'  , s                         ],\
-                                    [ 'Cadence', "{:d}/min".format(iRevs)  ],\
-                                    [ 'Power'  , "{:d}Watt".format(iPower) ],\
-                                    [ 'Target ', t                         ],\
-                                    [ 'Gears'  , g                         ]], True)
+            if (iRevs > 0 or t != self.PreviousTarget):
+                self.IdleCount = 0                              # Not idle
+            else:
+                self.IdleCount = min(60, self.IdleCount + 1)
+
+            if self.IdleCount == 60:
+                self._DrawTextTable ( [ [ '',        '' ],\
+                                        [ '',        '' ],\
+                                        [ 'Idle',    '' ],\
+                                        [ '',        '' ],\
+                                        [ '',        '' ]], True)
+            else:
+                self._DrawTextTable ( [ [ 'Speed'  , s                         ],\
+                                        [ 'Cadence', "{:d}/min".format(iRevs)  ],\
+                                        [ 'Power'  , "{:d}Watt".format(iPower) ],\
+                                        [ 'Target ', t                         ],\
+                                        [ 'Gears'  , g                         ]], True)
+                self.PreviousTarget = t
 
 # ------------------------------------------------------------------------------
 # Code for test-purpose
