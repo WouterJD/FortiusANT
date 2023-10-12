@@ -32,7 +32,7 @@ For inspiration, visit the [Raspberry Pi Hall of Fame](https://github.com/Wouter
 
 GPLv3
 
-Copyright (c) 2020 [Wouter Dubbeldam](https://github.com/WouterJD). Please have a look at the [LICENSE](LICENSE) for more details.
+Copyright (c) 2020...2023 [Wouter Dubbeldam](https://github.com/WouterJD). Please have a look at the [LICENSE](LICENSE) for more details.
 
 # Sponsor
 [![Custom badge](https://github.com/WouterJD/FortiusANT/blob/master/pythoncode/sponsor36.bmp)](https://github.com/sponsors/WouterJD)
