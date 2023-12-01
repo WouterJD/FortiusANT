@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2023-11-30"
+__version__ = "2023-12-01"
+# 2023-12-01    Improvement so that reconnect DOES NOT occur when succesful reads
+#               follow on unsuccesful reads.
 # 2023-10-30    Error recovery on the USB-device improved, because of issue #446
 #               If reading (including retry) fails multiple times, the USB-device is 
 #               re-initialized.
@@ -2501,18 +2503,41 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     #
     # function  Same plus:
     #           At least 40 bytes must be returned, retry 4 times
+    #
+    #           If multiple USB_Read_retry4x40() fail, the USB device is
+    #           reattached.
+    #
+    #           One might argue this error-recovery should also happen in
+    #           USB_write(). USB_Write does not fail unless the USB cable is
+    #           actually disconnected. Since both functions are in the main loop
+    #           reconnecting here works fine.
     #---------------------------------------------------------------------------
     def USB_Read_retry4x40(self, expectedHeader = USB_ControlResponse):
-        TryToReinitialize = False
+        #-----------------------------------------------------------------------
+        # If multiple reads fail, we try to reconnect.
+        # This is not necessary when succesfull reads occur in the meantime.
+        # This is quite arbitrary, practice must reveal that no unneccessary
+        #       reconnects occur.
+        #
+        # A reconnect occurs:
+        #   fail - fail - fail - fail                 USB_ReadErrorCount = 4
+        #   fail - fail - ok - fail - fail - fail     USB_ReadErrorCount = 4
+        # A reconnect DOES NOT occur:
+        #   fail - ok - fail - ok - fail - ok - fail  USB_ReadErrorCount = 1
+        #-----------------------------------------------------------------------
+        self.USB_ReadErrorCount = max(self.USB_ReadErrorCount - 1, 0)
 
-        while True:                             # Recover through InitializeUSB()
+        #-----------------------------------------------------------------------
+        # Let's go
+        #-----------------------------------------------------------------------
+        while True:                         # Recover through InitializeUSB()
             retry = 4
-            while True:                         # Retry reading through USB_Read()
+            while True:                     # Retry reading through USB_Read()
                 data  = self.USB_Read()
 
-                #-------------------------------------------------------------------
+                #---------------------------------------------------------------
                 # Retry if no correct buffer received
-                #-------------------------------------------------------------------
+                #---------------------------------------------------------------
                 if retry and (len(data) < 40 or self.Header != expectedHeader):
                     if debug.on(debug.Any):
                         logfile.Write ( \
@@ -2523,9 +2548,9 @@ class clsTacxUsbTrainer(clsTacxTrainer):
                 else:
                     break
 
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # Inform when there's something unexpected
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             if len(data) < 40:
                 self.tacxEvent           = False
                 self.USB_ReadErrorCount += 1
@@ -2547,14 +2572,14 @@ class clsTacxUsbTrainer(clsTacxTrainer):
                 logfile.Console('Tacx head unit returns incorrect header %s (expected: %s)' % \
                                             (hex(expectedHeader), hex(self.Header)))
 
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # If errors occurred multiple times, try to reconnect the USB device...
             # There is no timeout here, because it's in a loop itself.
             #
             # This path has been tested by unplugging the USB-cable which produces
             # a heap of errors. After connection, FortiusAnt proceeds nicely.
             # Issue #446 (presumably hw-error) to be tested and confirmed.
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             if self.USB_ReadErrorCount > 4:
                 self.USB_ReadErrorCount = 0
                 logfile.Console('Try to reconnect to Tacx head unit')
