@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-WindowTitle = "Fortius Antifier v6.7" # Double quotes, see below!
+WindowTitle = "Fortius Antifier v6.8" # Double quotes, see below!
+# 2023-12-01    Version 6.8     #446 Continuously message "insufficient data"
 # 2022-12-28    Version 6.7     #404 BLE does not work when debug=0
 #                               #404 PowerFactor setting always reset to 20
 # 2022-08-24    Version 6.7     #341 Refactoring of ANT reading loop

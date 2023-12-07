@@ -1,7 +1,12 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2023-04-06"
+__version__ = "2023-12-01"
+# 2023-12-01    Improvement so that reconnect DOES NOT occur when succesful reads
+#               follow on unsuccesful reads.
+# 2023-10-30    Error recovery on the USB-device improved, because of issue #446
+#               If reading (including retry) fails multiple times, the USB-device is 
+#               re-initialized.
 # 2023-04-06    If UserAndBikeWeight is set below the minimum, a sensible value is set.
 # 2022-08-22    Steering only active when -S wired specified.
 # 2022-08-10    Steering merged from marcoveeneman and switchable's code
@@ -380,19 +385,65 @@ class clsTacxTrainer():
         if clv.Tacx_Genius:     return clsTacxAntGeniusTrainer(clv, AntDevice)
         if clv.Tacx_Bushido:    return clsTacxAntBushidoTrainer(clv, AntDevice)
 
+
+        #-----------------------------------------------------------------------
+        # Let's see whether there is a USB-headunit connected...
+        #-----------------------------------------------------------------------
+        msg, hu, dev, LegacyProtocol = clsTacxTrainer.InitializeUSB(0)
+
+        #-----------------------------------------------------------------------
+        # Done
+        #-----------------------------------------------------------------------
+        logfile.Console(msg)
+        if debug.on(debug.Function):
+            logfile.Write ("GetTrainer() returns, trainertype=" + hex(hu))
+
+        #-----------------------------------------------------------------------
+        # Return the correct Object
+        #-----------------------------------------------------------------------
+        if dev != False:
+            if LegacyProtocol:
+                return clsTacxLegacyUsbTrainer(clv, msg, hu, dev)
+            else:
+                return clsTacxNewUsbTrainer(clv, msg, hu, dev)
+        else:
+            return clsTacxTrainer (clv, msg)           # where .OK = False
+
+    #---------------------------------------------------------------------------
+    # I n i t i a l i z e U S B
+    #---------------------------------------------------------------------------
+    # Input         previousHU, is used to reconnect on error-recovery
+    #
+    # Function      Find USB-connected headunit and perform initialization
+    #               This function was part of GetTrainer().
+    #               Issue #446 reports disconnect of the USB headunit which does
+    #               not recover.
+    #               InitializeUSB() is used to reconnect when erros occur,
+    #               practice must reveal whether this works.
+    #
+    # Output        msg, hu, dev, LegacyProtocol
+    #---------------------------------------------------------------------------
+    @staticmethod
+    def InitializeUSB(previousHu):
+        logfile.Console ("Find and initialise USB head unit")
         #-----------------------------------------------------------------------
         # So we are going to initialize USB
         # This may be either 'Legacy interface' or 'New interface'
         #-----------------------------------------------------------------------
         msg             = "No Tacx trainer found"
-        hu              = None                      # TrainerType
+        hu              = 0                         # TrainerType
         dev             = False
         LegacyProtocol  = False
 
         #-----------------------------------------------------------------------
         # Find supported trainer (actually we talk to a headunit)
         #-----------------------------------------------------------------------
-        for hu in [hu1902, hu1902_nfw, hu1904, hu1932, hu1942, hue6be_nfw]:
+        if previousHu == 0:
+            HuList = [hu1902, hu1902_nfw, hu1904, hu1932, hu1942, hue6be_nfw]
+        else:
+            HuList = [previousHu]
+
+        for hu in HuList:
             try:
                 if debug.on(debug.Function):
                     logfile.Write ("GetTrainer - Check for trainer %s" % (hex(hu)))
@@ -481,22 +532,9 @@ class clsTacxTrainer():
                 dev.write(0x02,data)
 
         #-----------------------------------------------------------------------
-        # Done
+        # Return results
         #-----------------------------------------------------------------------
-        logfile.Console(msg)
-        if debug.on(debug.Function):
-            logfile.Write ("GetTrainer() returns, trainertype=" + hex(hu))
-
-        #-----------------------------------------------------------------------
-        # Return the correct Object
-        #-----------------------------------------------------------------------
-        if dev != False:
-            if LegacyProtocol:
-                return clsTacxLegacyUsbTrainer(clv, msg, hu, dev)
-            else:
-                return clsTacxNewUsbTrainer(clv, msg, hu, dev)
-        else:
-            return clsTacxTrainer (clv, msg)           # where .OK = False
+        return msg, hu, dev, LegacyProtocol
 
     #---------------------------------------------------------------------------
     # Functions from external to provide data
@@ -2358,6 +2396,7 @@ class clsTacxAntBushidoTrainer(clsTacxAntTrainer):
 # c l s T a c x U s b T r a i n e r
 #-------------------------------------------------------------------------------
 class clsTacxUsbTrainer(clsTacxTrainer):
+    USB_ReadErrorCount = 0
     #---------------------------------------------------------------------------
     # Convert WheelSpeed --> Speed in km/hr
     # SpeedScale must be defined in sub-class
@@ -2464,48 +2503,91 @@ class clsTacxUsbTrainer(clsTacxTrainer):
     #
     # function  Same plus:
     #           At least 40 bytes must be returned, retry 4 times
+    #
+    #           If multiple USB_Read_retry4x40() fail, the USB device is
+    #           reattached.
+    #
+    #           One might argue this error-recovery should also happen in
+    #           USB_write(). USB_Write does not fail unless the USB cable is
+    #           actually disconnected. Since both functions are in the main loop
+    #           reconnecting here works fine.
     #---------------------------------------------------------------------------
     def USB_Read_retry4x40(self, expectedHeader = USB_ControlResponse):
-        retry = 4
+        #-----------------------------------------------------------------------
+        # If multiple reads fail, we try to reconnect.
+        # This is not necessary when succesfull reads occur in the meantime.
+        # This is quite arbitrary, practice must reveal that no unneccessary
+        #       reconnects occur.
+        #
+        # A reconnect occurs:
+        #   fail - fail - fail - fail                 USB_ReadErrorCount = 4
+        #   fail - fail - ok - fail - fail - fail     USB_ReadErrorCount = 4
+        # A reconnect DOES NOT occur:
+        #   fail - ok - fail - ok - fail - ok - fail  USB_ReadErrorCount = 1
+        #-----------------------------------------------------------------------
+        self.USB_ReadErrorCount = max(self.USB_ReadErrorCount - 1, 0)
 
-        while True:
-            data  = self.USB_Read()
+        #-----------------------------------------------------------------------
+        # Let's go
+        #-----------------------------------------------------------------------
+        while True:                         # Recover through InitializeUSB()
+            retry = 4
+            while True:                     # Retry reading through USB_Read()
+                data  = self.USB_Read()
+
+                #---------------------------------------------------------------
+                # Retry if no correct buffer received
+                #---------------------------------------------------------------
+                if retry and (len(data) < 40 or self.Header != expectedHeader):
+                    if debug.on(debug.Any):
+                        logfile.Write ( \
+    'Retry because short buffer (len=%s) or incorrect header received (expected: %s received: %s)' % \
+                                        (len(data), hex(expectedHeader), hex(self.Header)))
+                    time.sleep(0.1)             # 2020-09-29 short delay @RogerPleijers
+                    retry -= 1
+                else:
+                    break
 
             #-------------------------------------------------------------------
-            # Retry if no correct buffer received
+            # Inform when there's something unexpected
             #-------------------------------------------------------------------
-            if retry and (len(data) < 40 or self.Header != expectedHeader):
-                if debug.on(debug.Any):
-                    logfile.Write ( \
-'Retry because short buffer (len=%s) or incorrect header received (expected: %s received: %s)' % \
-                                    (len(data), hex(expectedHeader), hex(self.Header)))
-                time.sleep(0.1)             # 2020-09-29 short delay @RogerPleijers
-                retry -= 1
+            if len(data) < 40:
+                self.tacxEvent           = False
+                self.USB_ReadErrorCount += 1
+                # 2020-09-29 the buffer is ignored when too short (was processed before)
+                logfile.Console('Tacx head unit returns insufficient data, len=%s' % len(data))
+                if self.clv.PedalStrokeAnalysis:
+                    logfile.Console('To resolve, try to run without Pedal Stroke Analysis.')
+                else:
+                    logfile.Console('To resolve, check all (signal AND power) cabling for loose contacts.')
+                    # 2021-04-29 On Raspberry Pi Zero W this also occurs when the
+                    #            system is too busy. 
+                    #            When the system is less busy (FortiusAnt only active
+                    #            process) then the message disappears automatically.
+                    #            A longer timeout does not help (tried: 100ms).
+
+            elif self.Header != expectedHeader:
+                self.tacxEvent           = False
+                self.USB_ReadErrorCount += 1
+                logfile.Console('Tacx head unit returns incorrect header %s (expected: %s)' % \
+                                            (hex(expectedHeader), hex(self.Header)))
+
+            #-------------------------------------------------------------------
+            # If errors occurred multiple times, try to reconnect the USB device...
+            # There is no timeout here, because it's in a loop itself.
+            #
+            # This path has been tested by unplugging the USB-cable which produces
+            # a heap of errors. After connection, FortiusAnt proceeds nicely.
+            # Issue #446 (presumably hw-error) to be tested and confirmed.
+            #-------------------------------------------------------------------
+            if self.USB_ReadErrorCount > 4:
+                self.USB_ReadErrorCount = 0
+                logfile.Console('Try to reconnect to Tacx head unit')
+                msg, hu, self.UsbDevice, LegacyProtocol = clsTacxTrainer.InitializeUSB(self.Headunit)
+                logfile.Console (msg)
+                # Note that, if dev == False, msg shows what has gone wrong
             else:
                 break
-
-        #-----------------------------------------------------------------------
-        # Inform when there's something unexpected
-        #-----------------------------------------------------------------------
-        if len(data) < 40:
-            self.tacxEvent = False
-            # 2020-09-29 the buffer is ignored when too short (was processed before)
-            logfile.Console('Tacx head unit returns insufficient data, len=%s' % len(data))
-            if self.clv.PedalStrokeAnalysis:
-                logfile.Console('To resolve, try to run without Pedal Stroke Analysis.')
-            else:
-                logfile.Console('To resolve, check all (signal AND power) cabling for loose contacts.')
-                # 2021-04-29 On Raspberry Pi Zero W this also occurs when the
-                #            system is too busy. 
-                #            When the system is less busy (FortiusAnt only active
-                #            process) then the message disappears automatically.
-                #            A longer timeout does not help (tried: 100ms).
-
-        elif self.Header != expectedHeader:
-            self.tacxEvent = False
-            logfile.Console('Tacx head unit returns incorrect header %s (expected: %s)' % \
-                                        (hex(expectedHeader), hex(self.Header)))
-
         return data
 
     #---------------------------------------------------------------------------
