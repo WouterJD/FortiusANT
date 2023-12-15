@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2023-03-15"
+__version__ = "2023-03-13"
+# 2023-12-13    Issue #445: Specifying Vortex interactively has no effect
 # 2023-03-15    Typo in message corrected
 # 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-03-03    #366 -bb added
@@ -592,28 +593,7 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         # Get TacxType
         #-----------------------------------------------------------------------
-        AntRequired = False
-        if self.args.TacxType:
-            self.TacxType = self.args.TacxType
-            if 'Vortex' in self.TacxType:
-                self.Tacx_Vortex  = True
-                self.Tacx_Cadence = False
-                AntRequired = True
-            elif 'Genius' in  self.TacxType:
-                self.Tacx_Genius  = True
-                self.Tacx_Cadence = False
-                AntRequired = True
-            elif 'Bushido' in self.TacxType:
-                self.Tacx_Bushido = True
-                self.Tacx_Cadence = False
-                AntRequired = True
-            elif 'Magneticbrake' in self.TacxType:
-                self.Tacx_Magneticbrake = True
-            elif 'Motorbrake' in self.TacxType:
-                self.Tacx_MotorBrake = True
-            else:
-                logfile.Console('Command line error; -t incorrect value=%s' % self.args.TacxType)
-                self.args.TacxType = False
+        AntRequired = self.SetTacxType(self.args.TacxType)
 
         if AntRequired and self.antDeviceID == -1:
             logfile.Console('You have selected an ANT-trainer (-t %s) and de-selected ANT-dongle (-D-1); -D-1 ignored.' % self.TacxType)
@@ -713,6 +693,58 @@ class CommandLineVariables(object):
             logfile.Console("Pedal stroke analysis is not possible in console mode or this Tacx type")
             self.PedalStrokeAnalysis = False
 
+    #---------------------------------------------------------------------------
+    # S e t T a c x T y p e
+    #---------------------------------------------------------------------------
+    # Input         newTacxType
+    #
+    # Function      Check provided newTacxType and set required values
+    #               Originally inline code from where called in __init__()
+    #                   but aditionally required in settings.py (issue #445).
+    #
+    # Output        TacxType, Tacx_Vortex/Tacx_Bushido/... and Tacx_Cadence
+    #
+    # Returns       whether an ANT interface is required
+    #---------------------------------------------------------------------------
+    def SetTacxType(self, newTacxType):
+        AntRequired             = False
+
+        self.TacxType           = False     # As copied from declaration
+        self.Tacx_Vortex        = False     # may be changed interactively!
+        self.Tacx_Genius        = False
+        self.Tacx_Bushido       = False
+        self.Tacx_MotorBrake    = False
+        self.Tacx_MagneticBrake = False
+        self.Tacx_Cadence       = True
+
+        if newTacxType:                     # It's NOT False or ''
+            self.TacxType = newTacxType
+            if 'Vortex' in self.TacxType:
+                self.Tacx_Vortex  = True
+                self.Tacx_Cadence = False
+                AntRequired = True
+            elif 'Genius' in  self.TacxType:
+                self.Tacx_Genius  = True
+                self.Tacx_Cadence = False
+                AntRequired = True
+            elif 'Bushido' in self.TacxType:
+                self.Tacx_Bushido = True
+                self.Tacx_Cadence = False
+                AntRequired       = True
+            elif 'Magneticbrake' in self.TacxType:
+                self.Tacx_Magneticbrake = True
+            elif 'Motorbrake' in self.TacxType:
+                self.Tacx_MotorBrake = True
+            else:
+                logfile.Console('Command line error; -t incorrect value=%s' % newTacxType)
+                self.args.TacxType = False
+        return AntRequired
+
+    #---------------------------------------------------------------------------
+    # p r i n t
+    #---------------------------------------------------------------------------
+    # Function      Print all command-line settings
+    #---------------------------------------------------------------------------
     def print(self):
         try:
             v = self.debug                          # Verbose: print all command-line variables with values

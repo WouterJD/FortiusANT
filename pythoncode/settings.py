@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-08-10"
+__version__ = "2023-12-13"
+# 2023-12-13    Issue #445: Specifying Vortex interactively has no effect
+#               Incorrect values typed in combobxo, replaced with '' without
+#               further notice.
 # 2022-12-28    PowerFactor limit changed to 0.2 ... 1.5 (20 ... 150)
 #               to correspond with FortiusAntCommand.py
 #               See also 2021-01-19
@@ -521,6 +524,26 @@ if constants.UseGui:
         event.Skip()
 
     # ------------------------------------------------------------------------------
+    # E V T _ K I L L _ F O C U S _ c o m b o b o x
+    # ------------------------------------------------------------------------------
+    # input:        KILL_FOCUS event on a combo box
+    #               ValueWhenUnknown: '' by default, more elegant solution for future.
+    #
+    # Description:  Check whether the field is allowed
+    #               
+    # Returns:      KILL_FOCUS is always allowed
+    # ------------------------------------------------------------------------------
+    def EVT_KILL_FOCUS_combobox (control, event, ValueWhenUnknown=''):
+        ok = False
+        for i in range(0, control.Count):
+            if control.GetValue() == control.GetString(i):
+                ok = True
+                break
+        if not ok:
+            control.SetValue(ValueWhenUnknown)
+        event.Skip()
+
+    # ------------------------------------------------------------------------------
     # E V T _ C H A R _ f l o a t
     # ------------------------------------------------------------------------------
     # input:        CHAR event on an TextCtrl (some character entered)
@@ -629,7 +652,9 @@ if constants.UseGui:
             c = clv.ant_tacx_models
             if True:                # Required?? platform.system() in [ 'Windows' ]:
                 self.combo_t = wx.ComboBox(panel, id=wx.ID_ANY, value=v, pos=p, size=s, choices=c, style=0, validator=wx.DefaultValidator, name=wx.ComboBoxNameStr)
-                self.combo_t.Bind(wx.EVT_COMBOBOX, self.EVT_COMBOBOX_combo_t)
+                self.combo_t.Bind(wx.EVT_COMBOBOX,   self.EVT_COMBOBOX_combo_t)
+                self.combo_t.Bind(wx.EVT_CHAR,       self.EVT_CHAR_combo_t)          # Issue #445
+                self.combo_t.Bind(wx.EVT_KILL_FOCUS, self.EVT_KILL_FOCUS_combo_t)
             else:
                 self.combo_t = wx.ListBox(panel, id=wx.ID_ANY, pos=p, size=s, choices=c, style=0, validator=wx.DefaultValidator, name=wx.ListBoxNameStr)
                 self.combo_t.Bind(wx.EVT_LISTBOX, self.EVT_COMBOBOX_combo_t)
@@ -644,7 +669,9 @@ if constants.UseGui:
             p = Under(self.combo_t)
             c = ['wired', 'Blacktrack']
             self.combo_S = wx.ComboBox(panel, id=wx.ID_ANY, value=v, pos=p, size=s, choices=c, style=0, validator=wx.DefaultValidator, name=wx.ComboBoxNameStr)
-            self.combo_S.Bind(wx.EVT_COMBOBOX, self.EVT_COMBOBOX_combo_S)
+            self.combo_S.Bind(wx.EVT_COMBOBOX,   self.EVT_COMBOBOX_combo_S)
+            self.combo_S.Bind(wx.EVT_CHAR,       self.EVT_CHAR_combo_S)          # Analogue to combo_t (Issue #445)
+            self.combo_S.Bind(wx.EVT_KILL_FOCUS, self.EVT_KILL_FOCUS_combo_S)
 
             l = constants.help_S + " (-S *)"
             s = (-1, -1)
@@ -1149,11 +1176,33 @@ if constants.UseGui:
         def EVT_COMBOBOX_combo_t (self, event):
             self.cb_restart.SetValue(True)
 
+        def EVT_CHAR_combo_t (self, event):     # Issue #445
+            self.cb_restart.SetValue(True)
+
+            event.Skip()               # Accept this CHAR for default processing
+                                       # Typing correct values checked on KILL FOCUS
+
+            return
+
+        def EVT_KILL_FOCUS_combo_t (self, event):
+            EVT_KILL_FOCUS_combobox (self.combo_t, event)
+
         # --------------------------------------------------------------------------
         # Combobox -S
         # --------------------------------------------------------------------------
         def EVT_COMBOBOX_combo_S (self, event):
             self.cb_restart.SetValue(True)
+
+        def EVT_CHAR_combo_S (self, event):     # Analogue to combo_t  (Issue #445)
+            self.cb_restart.SetValue(True)
+
+            event.Skip()               # Accept this CHAR for default processing
+                                       # Typing correct values checked on KILL FOCUS
+
+            return
+
+        def EVT_KILL_FOCUS_combo_S (self, event):
+            EVT_KILL_FOCUS_combobox (self.combo_S, event)
 
         # --------------------------------------------------------------------------
         # Checkbox -restart
@@ -1228,10 +1277,7 @@ if constants.UseGui:
                 else:
                     clv.hrm             = int(self.txt_H.GetValue())
 
-                if self.combo_t.GetValue() == '':
-                    clv.TacxType        = False
-                else:
-                    clv.TacxType        = self.combo_t.GetValue()
+                clv.SetTacxType ( self.combo_t.GetValue() )             # Issue #445
 
                 if self.combo_S.GetValue() == '':
                     clv.Steering        = None
