@@ -1,7 +1,14 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2023-12-01"
+__version__ = "2023-01-19"
+# 2024-01-19    In GradeMode virtual gearbox does not work (#381) for antTrainers,
+#               like Genius and Vortex.
+#               Reason is that, for the other trainers, always a target-resistance
+#               is sent, which is calculated by Grade2Power().
+#               But for Vortex/Genius, the target-grade is provided, which is unchanged.
+#               Therefore now in grademode+gearbox, powermode is used.
+#
 # 2023-12-01    Improvement so that reconnect DOES NOT occur when succesful reads
 #               follow on unsuccesful reads.
 # 2023-10-30    Error recovery on the USB-device improved, because of issue #446
@@ -667,7 +674,7 @@ class clsTacxTrainer():
         self.PreviousPedalEcho = self.PedalEcho
 
         #-----------------------------------------------------------------------
-        # Calculate Virtual speed applying the digital gearbox
+        # Calculate Virtual speed applying the digital gearbox (@GearboxReduction, #381)
         # if DOWN has been pressed, we pretend to be riding slower than the
         #       trainer wheel rotates
         # if UP has been pressed, we pretend to be faster than the trainer
@@ -1600,19 +1607,34 @@ class clsTacxAntTrainer(clsTacxTrainer):
                         #---------------------------------------------------------------
                         # Set target slope
                         #---------------------------------------------------------------
+                        if self.GearboxReduction == 1:   # Original code
+                            # the brake does not support changing the rolling resistance
+                            # directly; higher than default rolling resistance is simulated
+                            # by increasing the grade (result is the same)
+                            effectiveGrade = self.TargetGrade + self.__RollingResistance2Grade()
 
-                        # the brake does not support changing the rolling resistance
-                        # directly; higher than default rolling resistance is simulated
-                        # by increasing the grade (result is the same)
-                        effectiveGrade = self.TargetGrade + self.__RollingResistance2Grade()
+                            info = ant.msgPage220_01_TacxGeniusSetTarget(self.Channel, ant.GNS_Mode_Slope,
+                                                                        effectiveGrade, self.UserAndBikeWeight)
 
-                        info = ant.msgPage220_01_TacxGeniusSetTarget(self.Channel, ant.GNS_Mode_Slope,
-                                                                     effectiveGrade, self.UserAndBikeWeight)
+                            if debug.on(debug.Function):
+                                logfile.Write(
+                                    "Tacx page 220/0x01 (OUT)  Mode=%d Target=%.1f Weight=%.1f" % \
+                                    (ant.GNS_Mode_Slope, effectiveGrade, self.UserAndBikeWeight))
 
-                        if debug.on(debug.Function):
-                            logfile.Write(
-                                "Tacx page 220/0x01 (OUT)  Mode=%d Target=%.1f Weight=%.1f" % \
-                                (ant.GNS_Mode_Slope, effectiveGrade, self.UserAndBikeWeight))
+                        else: #381, Gearbox modification, thanks to @krusty82
+                            # To account for the gearbox, power mode is always used
+                            # Note: This might be always valid, but now modifies the code only when
+                            #       the gearbox is used, for other users code is unchanged.
+
+                            Weight   = max(0x0a, int(self.GearboxReduction * self.UserAndBikeWeight))
+                            abspower = max(0, self.TargetResistance)
+                            info     = ant.msgPage220_01_TacxGeniusSetTarget(self.Channel, 
+                                                                ant.GNS_Mode_Power, abspower, Weight)                        
+                            if debug.on(debug.Function):
+                                logfile.Write(
+                                    "Tacx page 220/0x01 (OUT)  Mode=%d Target=%.1f Weight=%.1f" % \
+                                    (ant.GNS_Mode_Power, abspower, Weight))
+
                     else:
                         #---------------------------------------------------------------
                         # Set wind resistance and speed

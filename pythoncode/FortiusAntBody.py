@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-08-22"
+__version__ = "2024-01-19"
+# 2024-01-19    #381/1  ANT/Remote buttons are processed twice
+#               #381/2  ANT/Remote has four buttons, but 3 are implemented
 # 2022-08-22    AntDongle stores received messages in a queue.
 # 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-05-12    Message added on failing calibration
@@ -1206,6 +1208,11 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                     if   ctrl_CommandNr == ctrl.MenuUp:     TacxTrainer.Buttons = usbTrainer.UpButton
                     elif ctrl_CommandNr == ctrl.MenuDown:   TacxTrainer.Buttons = usbTrainer.DownButton
                     elif ctrl_CommandNr == ctrl.MenuSelect: TacxTrainer.Buttons = usbTrainer.OKButton
+
+                    # krusty82 #381/2 suggests to replace the last line by:
+                    #elif ctrl_CommandNr == ctrl.MenuSelect: TacxTrainer.Buttons = usbTrainer.CancelButton
+                    #elif ctrl_CommandNr == ctrl.Start:      TacxTrainer.Buttons = usbTrainer.OKButton
+
                     ctrl_CommandNr = ctrl.NoAction
 
                 #-------------------------------------------------------------------
@@ -1295,7 +1302,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                                 CrancksetIndex = 0
 
                 else:                                                   pass
-
+                TacxTrainer.Buttons = 0       #381/1 Buttons processed, so reset
             #-------------------------------------------------------------------
             # Calculate Reduction
             #
