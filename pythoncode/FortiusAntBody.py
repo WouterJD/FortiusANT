@@ -4,6 +4,9 @@
 __version__ = "2024-01-19"
 # 2024-01-19    #381/1  ANT/Remote buttons are processed twice
 #               #381/2  ANT/Remote has four buttons, but 3 are implemented
+#               #381/3  Additional datapage implemented for HRM
+#               #381/4  HRM set to zero when no signal for 5 seconds
+#               #381/5  HRM transmitted to FE-C
 # 2022-08-22    AntDongle stores received messages in a queue.
 # 2022-08-10    Steering merged from marcoveeneman and switchable's code
 # 2022-05-12    Message added on failing calibration
@@ -732,6 +735,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
     HeartRate       = 0         # This field is displayed
                                 # We have two sources: the trainer or
                                 # our own HRM slave channel.
+    HeartRateTime   = 0         # #381/4 Last time that heartrate is updated
     #Cadence        = 0         # Analogously for Speed Cadence Sensor
                                 # But is not yet implemented
     #---------------------------------------------------------------------------
@@ -1144,8 +1148,17 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
             # If NO HRM defined, use the HeartRate from the trainer
             #-------------------------------------------------------------------
             if clv.hrm == None:
-                HeartRate = TacxTrainer.HeartRate
-                # print('Use heartrate from trainer', HeartRate)
+                HeartRate     = TacxTrainer.HeartRate
+                HeartRateTime = time.time()                   #381/4
+                # logfile.Console('Use heartrate from trainer %d' % HeartRate)
+
+            #-------------------------------------------------------------------
+            # #381/4 If NO HeartRate received, set to 0
+            #-------------------------------------------------------------------
+            if HeartRate and (time.time() - HeartRateTime) > 5:
+                # logfile.Console('No Heartrate received for 5 seconds')
+                HeartRate     = 0
+                HeartRateTime = 0
             
             #-------------------------------------------------------------------
             # Show actual status; once for the GUI, once for Raspberry
@@ -1376,10 +1389,13 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
 
                 #---------------------------------------------------------------
                 # Broadcast TrainerData message to the CTP (Trainer Road, ...)
+                # #381/5 The heartrate that is displayed (HeartRate) is transmitted
+                #      to FE-C; this is either from HRM or Trainer.
+                #      Initially, TacxTrainer.HeartRate was always used.
                 #---------------------------------------------------------------
                 # print('fe.BroadcastTrainerDataMessage', Cadence, CurrentPower, SpeedKmh, HeartRate)
                 messages.append(fe.BroadcastTrainerDataMessage (TacxTrainer.Cadence, \
-                    TacxTrainer.CurrentPower, TacxTrainer.SpeedKmh, TacxTrainer.HeartRate))
+                    TacxTrainer.CurrentPower, TacxTrainer.SpeedKmh, HeartRate))
 
                 #---------------------------------------------------------------
                 # Send/receive to Bluetooth interface
@@ -1735,13 +1751,16 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                         #-------------------------------------------------------
                         # Data page 0...4 HRM data
                         # Only expected when -H flag specified
+                        # #383/3 datapage 64 added, because of @krusty82's
+                        #        ANT+ HRM from Ciclosport...
                         #-------------------------------------------------------
-                        if DataPageNumber & 0x7f in (0,1,2,3,4,5,6,7,89,95):
+                        if DataPageNumber & 0x7f in (0,1,2,3,4,5,6,7,64,89,95):
                             if clv.hrm >= 0:
                                 _Channel, _DataPageNumber, _Spec1, _Spec2, _Spec3, \
                                     _HeartBeatEventTime, _HeartBeatCount, HeartRate = \
                                     ant.msgUnpage_Hrm(info)
-                                # print('Set heartrate from HRM', HeartRate)
+                                HeartRateTime = time.time() #381/4
+                                # logfile.Console('Heartrate received from HRM: %d' % HeartRate)
 
                             else:
                                 pass                            # Ignore it
@@ -1799,6 +1818,7 @@ def Tacx2DongleSub(FortiusAntGui, Restart):
                     elif Channel == ant.channel_HRM_s and DeviceTypeID == ant.DeviceTypeID_HRM:
                         AntHRMpaired = True
                         FortiusAntGui.SetMessages(HRM='Heart Rate Monitor paired: %s' % DeviceNumber)
+                        # logfile.Console('Heart Rate Monitor paired: %s' % DeviceNumber)
 
                     elif Channel == ant.channel_CTRL:
                         pass # Ignore since 2022-08-22; to be investigated
