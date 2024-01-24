@@ -2,6 +2,7 @@
 # Version info
 #-------------------------------------------------------------------------------
 __version__ = "2022-01-05"
+# 2024-01-24    Addition of an overlay window with gearing info
 # 2022-01-05    MinHeigth/MinWidth replaced by Size() for consistency
 # 2022-01-04    text-fields on top of other controls were flickering, because
 #                    the parent was not the on-top control #353
@@ -158,7 +159,12 @@ class frmFortiusAntGui(wx.Frame):
     StatusLedsXr = None # Right side of rightmost status-led-label
     StatusLedsYb = None # Bottom of status-led-row
 
+
     def __init__(self, parent, pclv):
+        self.child = ChildFrame(self)
+        
+        #self.child.Show(True)
+        
         # ----------------------------------------------------------------------
 		# Create frame and panel for TAB-handling
         # (First versions did not use panel, and that's why TABs did not work)
@@ -474,8 +480,8 @@ class frmFortiusAntGui(wx.Frame):
                                                                             # Assign A Font To The Center Text
 
             Min = 0
-            NrIntervals = 10
-            Step  = 40
+            NrIntervals = 12
+            Step  = 50
             Max   = Min + Step * NrIntervals
             self.PowerMax = Max
             self.PowerArray = numpy.array([0,0,0,0,0,0,0,0,0,0])            # Array for running everage
@@ -489,7 +495,7 @@ class frmFortiusAntGui(wx.Frame):
             ticks = [str(interval) for interval in intervals]               # Assign The Ticks: Here They Are Simply The String Equivalent Of The Intervals
             self.Power.SetTicks(ticks)
             self.Power.SetTicksColour(wx.WHITE)                        		# Set The Ticks/Tick Markers Colour
-            self.Power.SetNumberOfSecondaryTicks(5)                        	# We Want To Draw 5 Secondary Ticks Between The Principal Ticks
+            self.Power.SetNumberOfSecondaryTicks(4)                        	# We Want To Draw 5 Secondary Ticks Between The Principal Ticks
 
             self.Power.SetTicksFont(wx.Font(TicksFontSize, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
                                                                             # Set The Font For The Ticks Markers
@@ -663,6 +669,13 @@ class frmFortiusAntGui(wx.Frame):
         self.btnStop.SetPosition((ButtonX, self.btnStart.Position[1] + self.btnStart.Size[1] + Margin))
         self.btnStop.Disable()
         self.Bind(wx.EVT_BUTTON, self.OnClick_btnStop, self.btnStop)
+        
+        #Button to show/hide an overlay window with info on gearing 
+        self.btnOverlay     = wx.ToggleButton(self.panel, label="Overlay", size=(ButtonW, -1))
+        self.btnOverlay.SetToolTip ("Show Overlay")
+        self.btnOverlay.SetPosition((ButtonX, self.btnStop.Position[1] + self.btnStop.Size[1] + Margin))
+        self.btnOverlay.Enable()
+        self.Bind(wx.EVT_TOGGLEBUTTON, self.OnClick_btnOverlay, self.btnOverlay)
 
         b = wx.Image(sponsor_bmp)       # Must fit, no rescale
         b = wx.Bitmap(b)
@@ -886,10 +899,11 @@ class frmFortiusAntGui(wx.Frame):
                     iTacx, iHeartRate, \
                     iCrancksetIndex, iCassetteIndex, fReduction)
 
+
     def SetValuesGUI(self, fSpeed, iRevs, iPower, iTargetMode, iTargetPower, fTargetGrade, \
                         iTacx, iHeartRate, \
                         iCrancksetIndex, iCassetteIndex, fReduction):
-
+        
         # ----------------------------------------------------------------------
         # When zero, display default setting
         # ----------------------------------------------------------------------
@@ -973,7 +987,7 @@ class frmFortiusAntGui(wx.Frame):
                 if iTacx == 0:
                     self.txtTacx.SetValue  ("")
                 else:
-                    self.txtTacx.SetValue  ("%i"       % iTacx            + suffix)
+                    self.txtTacx.SetValue  ("%.1f"       % fReduction           + suffix)
                 fTargetPower = "%iW"
             else:
                 if self.clv.imperial:
@@ -989,18 +1003,18 @@ class frmFortiusAntGui(wx.Frame):
                 self.txtTarget.SetValue(fTargetPower     % iTargetPower + suffix)
 
             elif iTargetMode == mode_Grade:
-                s = "%2.0f%%" % fTargetGrade
+                s = "%.1f%%" % fTargetGrade
                 s += "%iW" % iTargetPower        # Target power added for reference
                                                  # Can be negative!
                 self.txtTarget.SetValue(s + suffix)
 
             else:
-                self.txtTarget.SetValue("No target"  + suffix)
+                self.txtTarget.SetValue("No target"+ suffix)
 
             if logfile.IsOpen() and debug.on(debug.Data1 | debug.Data2):
                 Elapsed = time.time() - self.LastFields
                 logfile.Write ("SetValues() done in %s ms" % int(Elapsed*1000))
-
+        
         # ----------------------------------------------------------------------
         # If there is a HeartRate, bounce the image
         # We pass here every 0.250 second = 400 times/minute
@@ -1057,6 +1071,9 @@ class frmFortiusAntGui(wx.Frame):
                 self.txtCranckset.Show()
 
             self.txtCranckset.SetValue  ("%i" % self.clv.Cranckset[self.CrancksetIndex])
+            # send info also to child window
+            self.child.txtCranckset.SetValue  ("%i" % self.clv.Cranckset[self.CrancksetIndex])
+            
             bRefreshRequired  = True            # So that Cranckset is painted
             
         else:
@@ -1076,6 +1093,8 @@ class frmFortiusAntGui(wx.Frame):
                 teeth = self.clv.Cassette[self.CassetteIndex]
 
             self.txtCassette.SetValue  ("%i" % int(round(teeth / self.Reduction) ) )
+            # send info also to child window
+            self.child.txtCassette.SetValue  ("%i" % int(round(teeth / self.Reduction) ) )
             bRefreshRequired  = True            # So that Cassette is painted
             
         else:
@@ -1470,6 +1489,25 @@ class frmFortiusAntGui(wx.Frame):
         if __name__ == "__main__": print ("OnClick_btnStop()")
         self.RunningSwitch = False
         self.btnStop.Disable()
+   
+    # --------------------------------------------------------------------------
+    # O n C l i c k _ b t n Overlay
+    # --------------------------------------------------------------------------
+    # input:        [Overlay] pressed
+    #
+    # Description:  Displays/Hides Overlay Window with Gearing Info
+    #
+    # Output:       None
+    # --------------------------------------------------------------------------
+    def OnClick_btnOverlay(self, event=False):
+        if __name__ == "__main__": print ("OnClick_btnOverlay()")
+        state = event.GetEventObject().GetValue() 
+        if state == True: 
+            self.child.Show()
+        else: 
+            self.child.Hide()
+
+            
 
     # --------------------------------------------------------------------------
     # O n C l i c k _ b t n S p o n s o r
@@ -1530,6 +1568,42 @@ class frmFortiusAntGui(wx.Frame):
         else:                                   # No thread is running;
             event.Skip()				        # Do default actions (stop program)
 
+
+    # --------------------------------------------------------------------------
+    # Overlay window
+    # --------------------------------------------------------------------------
+    # Child window with info on gearing. 
+    # Semi-transparent and always-on-top
+    # Meant to be overlayed to the CTP window to keep track of the virtual gearing
+    # --------------------------------------------------------------------------
+
+class ChildFrame(wx.Frame): 
+    def __init__(self, parent):
+        style = (wx.CAPTION | wx.STAY_ON_TOP | wx.FRAME_TOOL_WINDOW)
+        wx.Frame.__init__(self, None, title='Overlay', size = (120,150), style = style)
+        self.SetTransparent( 140 )
+        TextCtrlFont = wx.Font(36, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        # ----------------------------------------------------------------------
+		# self.Cranckset, shown to the right of the Cranckset image
+        # ----------------------------------------------------------------------
+        self.txtCranckset = wx.TextCtrl(self, value="--", size=(80,50), style=wx.TE_CENTER | wx.TE_READONLY)
+        self.txtCranckset.SetBackgroundColour(bg)
+        self.txtCranckset.SetPosition(( 10, 5))
+
+        # ----------------------------------------------------------------------
+		# self.Cassette, shown to the right of the Cassette image
+        # ----------------------------------------------------------------------
+        self.txtCassette = wx.TextCtrl(self, value="--", size=(80,50), style=wx.TE_CENTER | wx.TE_READONLY)
+        self.txtCassette.SetBackgroundColour(bg)
+        self.txtCassette.SetPosition(( 10, 60))
+        
+        self.txtCranckset.SetFont(TextCtrlFont)
+        self.txtCassette.SetFont(TextCtrlFont)
+
+
+ 
+   
+
 # ------------------------------------------------------------------------------
 # our normal wxApp-derived class, as usual
 # ------------------------------------------------------------------------------
@@ -1541,5 +1615,4 @@ if __name__ == "__main__":
     app.SetTopWindow(frame)
     frame.Show()
     frame.Autostart()
-
     app.MainLoop()
