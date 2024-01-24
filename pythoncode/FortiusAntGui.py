@@ -1504,8 +1504,10 @@ class frmFortiusAntGui(wx.Frame):
         state = event.GetEventObject().GetValue() 
         if state == True: 
             self.child.Show()
+            self.btnOverlay.SetToolTip ("Hide Overlay")
         else: 
             self.child.Hide()
+            self.btnOverlay.SetToolTip ("Show Overlay")
 
             
 
