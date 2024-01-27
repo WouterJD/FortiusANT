@@ -2,9 +2,11 @@
 # Version info
 #---------------------------------------------------------------------------
 __version__ = "2024-01-22"
-# 2024-01-23    #381 Weight should be positive
-#               #381 HRM is searched for infinitely
-#               #381 HRM is transmitted through FE-C
+# 2024-01-23    #381/1 Weight should be positive and <= 255
+#               #381/2 HRM is searched for infinitely
+#                       This is implemented for all slaves, for consistency.
+#                       I hope it improves quality, if not clearly marked to remove.
+#               #381/3 HRM is transmitted through FE-C
 # 2023-03-15    Even when there is no ANT-dongle, the message queue must be
 #               created, so that MessageQueueSize() returns zero.
 # 2022-08-22    Data from the ANT dongle is stored in a queue.
@@ -928,6 +930,7 @@ class clsAntDongle():
             msg45_ChannelRfFrequency    (channel_pair, RfFrequency_2457Mhz),
             msg43_ChannelPeriod         (channel_pair, ChannelPeriod=0x1f86),
             msg60_ChannelTransmitPower  (channel_pair, TransmitPower_0dBm),
+            msg44_ChannelSearchTimeout  (channel_pair, 255),  #381/2 Analogously to other slaves; I hope it improves
             msg4B_OpenChannel           (channel_pair)
         ]
         self.Write(messages) # 2021-04-15 ", True, False"  removed because it's inconsistent
@@ -960,6 +963,7 @@ class clsAntDongle():
             msg45_ChannelRfFrequency    (channel_FE_s, RfFrequency_2457Mhz),
             msg43_ChannelPeriod         (channel_FE_s, ChannelPeriod=8192),         # 4 Hz
             msg60_ChannelTransmitPower  (channel_FE_s, TransmitPower_0dBm),
+            msg44_ChannelSearchTimeout  (channel_FE_s, 255),  #381/2 Analogously to other slaves; I hope it improves
             msg4B_OpenChannel           (channel_FE_s),
             msg4D_RequestMessage        (channel_FE_s, msgID_ChannelID)
         ]
@@ -994,7 +998,7 @@ class clsAntDongle():
             msg51_ChannelID             (channel_HRM_s, DeviceNumber, DeviceTypeID_HRM, TransmissionType_Pairing),
             msg45_ChannelRfFrequency    (channel_HRM_s, RfFrequency_2457Mhz),
             msg43_ChannelPeriod         (channel_HRM_s, ChannelPeriod=8070),        # 4,06 Hz
-            msg44_ChannelSearchTimeout  (channel_HRM_s, 255),                       #381 Search infinitely for HRM
+            msg44_ChannelSearchTimeout  (channel_HRM_s, 255),                       #381/2 Search infinitely for HRM
             msg60_ChannelTransmitPower  (channel_HRM_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_HRM_s),
             msg4D_RequestMessage        (channel_HRM_s, msgID_ChannelID)
@@ -1042,6 +1046,7 @@ class clsAntDongle():
             msg42_AssignChannel         (channel_SCS_s, ChannelType_BidirectionalReceive, NetworkNumber=0x00),
             msg51_ChannelID             (channel_SCS_s, DeviceNumber, DeviceTypeID_SCS, TransmissionType_Pairing),
             msg45_ChannelRfFrequency    (channel_SCS_s, RfFrequency_2457Mhz),
+            msg44_ChannelSearchTimeout  (channel_SCS_s, 255),                       #381/2 Analogously to other slaves; I hope it improves
             msg43_ChannelPeriod         (channel_SCS_s, ChannelPeriod=8086),        # 4,05 Hz
             msg60_ChannelTransmitPower  (channel_SCS_s, TransmitPower_0dBm),
             msg4B_OpenChannel           (channel_SCS_s),
@@ -1156,6 +1161,7 @@ class clsAntDongle():
             msg45_ChannelRfFrequency    (channel_VHU_s, RfFrequency_2478Mhz),
             msg43_ChannelPeriod         (channel_VHU_s, ChannelPeriod=0x0f00),
             msg60_ChannelTransmitPower  (channel_VHU_s, TransmitPower_0dBm),
+            msg44_ChannelSearchTimeout  (channel_VHU_s, 255),  #381/2 Analogously to other slaves; I hope it improves
             msg4B_OpenChannel           (channel_VHU_s),
             msg4D_RequestMessage        (channel_VHU_s, msgID_ChannelID)
         ]
@@ -1170,13 +1176,14 @@ class clsAntDongle():
                 logfile.Console('FortiusANT receives data from an ANT Tacx BlackTrack steering unit (BLTR)' + s)
             if debug.on(debug.Data1): logfile.Write("SlaveBLTR_ChannelConfig()")
         messages = [
-            msg42_AssignChannel(channel_BLTR_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
-            msg51_ChannelID(channel_BLTR_s, DeviceNumber, DeviceTypeID_BLTR, TransmissionType_IC),
-            msg45_ChannelRfFrequency(channel_BLTR_s, RfFrequency_2460Mhz),
-            msg43_ChannelPeriod(channel_BLTR_s, ChannelPeriod=0x2000),
-            msg60_ChannelTransmitPower(channel_BLTR_s, TransmitPower_0dBm),
-            msg4B_OpenChannel(channel_BLTR_s),
-            msg4D_RequestMessage(channel_BLTR_s, msgID_ChannelID)
+            msg42_AssignChannel         (channel_BLTR_s, ChannelType_BidirectionalReceive, NetworkNumber=0x01),
+            msg51_ChannelID             (channel_BLTR_s, DeviceNumber, DeviceTypeID_BLTR, TransmissionType_IC),
+            msg45_ChannelRfFrequency    (channel_BLTR_s, RfFrequency_2460Mhz),
+            msg43_ChannelPeriod         (channel_BLTR_s, ChannelPeriod=0x2000),
+            msg60_ChannelTransmitPower  (channel_BLTR_s, TransmitPower_0dBm),
+            msg44_ChannelSearchTimeout  (channel_BLTR_s, 255),  #381/2 Analogously to other slaves; I hope it improves
+            msg4B_OpenChannel           (channel_BLTR_s),
+            msg4D_RequestMessage        (channel_BLTR_s, msgID_ChannelID)
         ]
         self.Write(messages)
 
@@ -2063,7 +2070,7 @@ def msgUnpage173_01_TacxVortexHU_SerialMode (info):
 def msgPage220_01_TacxGeniusSetTarget (Channel, Mode, Target, Weight):
     DataPageNumber      = 220
     SubPageNumber       = 0x01
-    Weight              = int(min(0xff, Weight))    #381 Avoid negative weigth
+    Weight              = int(max(0,min(0xff, Weight)))    #381/1 Avoid negative weigth
     if Mode == GNS_Mode_Slope:
         Target = int(Target * 10)
     else:
@@ -2247,7 +2254,7 @@ def msgPage16_GeneralFEdata (Channel, ElapsedTime, DistanceTravelled, Speed, Hea
     # Old: Capabilities = 0x30 | 0x03 | 0x00 | 0x00 # IN_USE | HRM | Distance | Speed
     #               bit  7......0   #185 Rewritten as below for better documenting bit-pattern
     # HRM            = 0b00000011 # 0b____ __xx bits 0-1  3 = hand contact sensor    (2020-12-28: Unclear why this option chosen)
-    HRM              = 0b00000001 # 0b____ __xx bits 0-1  1 = HRM                    (2024-01-22: #381 transmit HRM through FE-C)
+    HRM              = 0b00000001 # 0b____ __xx bits 0-1  1 = HRM                    (2024-01-22: #381/3 transmit HRM through FE-C)
     Distance         = 0b00000000 # 0b____ _x__ bit 2     0 = No distance in byte 3  (2020-12-28: Unclear why this option chosen)
     VirtualSpeedFlag = 0b00000000 # 0b____ x___ bit 3     0 = Real speed in byte 4/5 (2020-12-28: Could be virtual speed)
     FEstate          = 0b00110000 # 0b_xxx ____ bits 4-6  3 = IN USE

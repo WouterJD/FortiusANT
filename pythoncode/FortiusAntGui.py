@@ -1,7 +1,10 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-01-05"
+__version__ = "2022-01-24"
+# 2024-01-24    #456 Addition of an overlay window with gearing info
+#               Target grade is displayed with one decimal
+#               #456 When power exceeds the display, it's resized
 # 2022-01-05    MinHeigth/MinWidth replaced by Size() for consistency
 # 2022-01-04    text-fields on top of other controls were flickering, because
 #                    the parent was not the on-top control #353
@@ -473,24 +476,8 @@ class frmFortiusAntGui(wx.Frame):
             self.Power.SetMiddleTextFont(wx.Font(MiddleTextFontSize, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
                                                                             # Assign A Font To The Center Text
 
-            Min = 0
-            NrIntervals = 10
-            Step  = 40
-            Max   = Min + Step * NrIntervals
-            self.PowerMax = Max
-            self.PowerArray = numpy.array([0,0,0,0,0,0,0,0,0,0])            # Array for running everage
-
-            intervals = range(Min, Max+1, Step)                             # Create The Intervals That Will Divide Our self.SpeedMeter In Sectors
-            self.Power.SetIntervals(intervals)
-
-#           colours = [wx.BLACK] * NrIntervals                              # Assign The Same Colours To All Sectors (We Simulate A Car Control For self.Speed)
-#           self.Power.SetIntervalColours(colours)
-
-            ticks = [str(interval) for interval in intervals]               # Assign The Ticks: Here They Are Simply The String Equivalent Of The Intervals
-            self.Power.SetTicks(ticks)
-            self.Power.SetTicksColour(wx.WHITE)                        		# Set The Ticks/Tick Markers Colour
-            self.Power.SetNumberOfSecondaryTicks(5)                        	# We Want To Draw 5 Secondary Ticks Between The Principal Ticks
-
+            self.PowerMax = 0
+            self.DefinePowerMeter(400)
             self.Power.SetTicksFont(wx.Font(TicksFontSize, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
                                                                             # Set The Font For The Ticks Markers
 
@@ -590,6 +577,11 @@ class frmFortiusAntGui(wx.Frame):
         self.txtCassette = wx.TextCtrl(self.panel, value="789", size=(int(self.CassetteWH*2),TextCtrlH), style=wx.TE_CENTER | wx.TE_READONLY)
         self.txtCassette.SetBackgroundColour(bg)
         self.txtCassette.SetPosition(( self.CassetteX + self.CassetteWH + Margin, self.CassetteY))
+
+        # ----------------------------------------------------------------------
+        #456 Create Gearbox Overlay
+        # ----------------------------------------------------------------------
+        self.GearboxOverlay = clsGearboxOverlay(self, self.txtCranckset, self.txtCassette, TextCtrlFont)
 
         # ----------------------------------------------------------------------
         # Add a radar graph for pedal stroke analysis
@@ -694,6 +686,49 @@ class frmFortiusAntGui(wx.Frame):
 
         self.SetDoubleBuffered(True)
 
+    # --------------------------------------------------------------------------
+    # D e f i n e P o w e r M e t e r (created in #456)
+    # --------------------------------------------------------------------------
+    # Define layout of power meter, based upon provided power
+    # Initially, 400Watt was max of the power meter, but some guys want more...
+    # --------------------------------------------------------------------------
+    def DefinePowerMeter(self, iPower):
+        if iPower > self.PowerMax:
+            if iPower > 800:
+                Min         = 0
+                NrIntervals = 10
+                Step        = 100    # max = 1000
+                Ticks       = 4
+            elif iPower > 600:
+                Min         = 0
+                NrIntervals = 8
+                Step        = 100    # max = 800
+                Ticks       = 4
+            elif iPower > 400:
+                Min         = 0
+                NrIntervals = 12
+                Step        = 50    # max = 600
+                Ticks       = 4
+            else:
+                Min         = 0
+                NrIntervals = 10
+                Step        = 40    # max = 400
+                Ticks       = 5
+
+            Max   = Min + Step * NrIntervals
+            self.PowerMax = Max
+            self.PowerArray = numpy.array([0,0,0,0,0,0,0,0,0,0])            # Array for running everage
+
+            intervals = range(Min, Max+1, Step)                             # Create The Intervals That Will Divide Our self.SpeedMeter In Sectors
+            self.Power.SetIntervals(intervals)
+
+#           colours = [wx.BLACK] * NrIntervals                              # Assign The Same Colours To All Sectors (We Simulate A Car Control For self.Speed)
+#           self.Power.SetIntervalColours(colours)
+
+            ticks = [str(interval) for interval in intervals]               # Assign The Ticks: Here They Are Simply The String Equivalent Of The Intervals
+            self.Power.SetTicks(ticks)
+            self.Power.SetTicksColour(wx.WHITE)                        		# Set The Ticks/Tick Markers Colour
+            self.Power.SetNumberOfSecondaryTicks(Ticks)                    	# We Want To Draw 5 Secondary Ticks Between The Principal Ticks
 
     # --------------------------------------------------------------------------
     # F u n c t i o n s  --  to be provided by subclass.
@@ -946,6 +981,8 @@ class frmFortiusAntGui(wx.Frame):
             self.Revs.SetSpeedValue (float(min(max(0, iRevs),      self.RevsMax )))
             self.Power.SetSpeedValue(float(min(max(0, iPowerMean), self.PowerMax)))
 
+            self.DefinePowerMeter(iPowerMean)       # This may redefine the scale
+
             if ForceRefreshDC:
                 # Alternating suffix makes the texts being refreshed
                 suffix1 = '.'                       # str(0x32) # space
@@ -989,7 +1026,7 @@ class frmFortiusAntGui(wx.Frame):
                 self.txtTarget.SetValue(fTargetPower     % iTargetPower + suffix)
 
             elif iTargetMode == mode_Grade:
-                s = "%2.0f%%" % fTargetGrade
+                s = "%.1f%%" % fTargetGrade      #456
                 s += "%iW" % iTargetPower        # Target power added for reference
                                                  # Can be negative!
                 self.txtTarget.SetValue(s + suffix)
@@ -1082,6 +1119,12 @@ class frmFortiusAntGui(wx.Frame):
             if self.txtCassette.IsShown():
                 self.txtCassette.Hide()
                 bRefreshRequired  = True
+
+        # ----------------------------------------------------------------------
+        #456 Show the values in the GearboxOverlay
+        # ----------------------------------------------------------------------
+        if self.CrancksetIndex != None and self.CassetteIndex != None:
+            self.GearboxOverlay.SetValues(self.IsActive(), self.txtCranckset.GetValue(), self.txtCassette.GetValue())
 
         # ----------------------------------------------------------------------
         # Refresh if required; so that JPGs are drawn in the OnPaint() event
@@ -1529,6 +1572,94 @@ class frmFortiusAntGui(wx.Frame):
 
         else:                                   # No thread is running;
             event.Skip()				        # Do default actions (stop program)
+
+# ------------------------------------------------------------------------------
+# Create the GearBox overlay frame (added #456)
+# ------------------------------------------------------------------------------
+# Note:         Every window has it's own class, because on creation, the object 
+#               get's the required behaviour, so no two frames can (or should)
+#               be created in the same class...
+#
+# GearBoxOverlay
+# Meant to be overlayed to the CTP window to keep track of the virtual gearing
+#
+#               The frame is created, transparent/on top but hidden, containing the
+#               required fields; crackset and cassette.
+#               If the gearbox is used (the values change) then the frame is
+#               "active" and may become visible.
+#               When the FortiusAntGui is active, the GearBoxOverlay is not required
+#               and remains hidden, as soon as the Gui is NOT active, the overlay
+#               is show.
+#               When the user closes the overlay, however, it will disappear and
+#               not return again.
+#
+# ------------------------------------------------------------------------------
+class clsGearboxOverlay(wx.Frame):
+    bGearboxOverlayActive = False
+    bGearboxOverlayClosed = False
+    PreviousValues        = None
+    def __init__(self, parent, pCranckset, pCassette, pTextCtrlFont):
+        # ----------------------------------------------------------------------
+		# Create frame
+        # ----------------------------------------------------------------------
+        frameX = 2 * Margin +     pCranckset.Size[0] + 15
+        frameY = 3 * Margin + 2 * pCranckset.Size[1] + 39
+
+        style = wx.STAY_ON_TOP | wx.FRAME_TOOL_WINDOW | wx.CAPTION | wx.DEFAULT_FRAME_STYLE
+        wx.Frame.__init__(self, None, title='Gearbox', size = (frameX,frameY), style = style)
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
+
+        self.SetTransparent( 140 ) # 0 = fully transparent, 255=fully visible
+        self.SetPosition((10, 10))
+
+        # ----------------------------------------------------------------------
+		# self.Cranckset
+        # ----------------------------------------------------------------------
+        self.txtCranckset = wx.TextCtrl(self, value="--", size=pCranckset.Size, style=wx.TE_CENTER | wx.TE_READONLY)
+        self.txtCranckset.SetBackgroundColour(bg)
+        self.txtCranckset.SetPosition(( Margin, Margin))
+
+        # ----------------------------------------------------------------------
+		# self.Cassette
+        # ----------------------------------------------------------------------
+        self.txtCassette = wx.TextCtrl(self, value="--", size=pCassette.Size, style=wx.TE_CENTER | wx.TE_READONLY)
+        self.txtCassette.SetBackgroundColour(bg)
+        self.txtCassette.SetPosition(( Margin, self.txtCranckset.Position[1] + pCranckset.Size[1] + Margin))
+        
+        self.txtCranckset.SetFont(pTextCtrlFont)
+        self.txtCassette.SetFont(pTextCtrlFont)
+
+    def OnClose(self, event):
+        if True:
+            self.Hide()                         # Close not allowed
+            self.bGearboxOverlayClosed = True   # But do not show again
+        else:
+            event.Skip()				        # Do default actions
+
+    def SetValues(self, bFortiusAndGuiIsActive, sCranckset, sCassette):
+        # ----------------------------------------------------------------------
+        # If values are provided, different from previous, the overlay is
+        # activated (so users, not using the gearbox will never see it) 
+        # ----------------------------------------------------------------------
+        if self.PreviousValues != None and (sCranckset, sCassette) != self.PreviousValues:
+            self.bGearboxOverlayActive = True
+        self.PreviousValues = (sCranckset, sCassette)
+
+        # ----------------------------------------------------------------------
+        # If the user closes the overlay, it will not come back
+        # ----------------------------------------------------------------------
+        if not self.bGearboxOverlayActive or self.bGearboxOverlayClosed:
+            self.Hide()
+        else:
+            # ------------------------------------------------------------------
+            # The overlay is visible when FortiusAntGui is not active
+            # ------------------------------------------------------------------
+            if bFortiusAndGuiIsActive: 
+                self.Hide()
+            else: 
+                self.txtCranckset.SetValue (sCranckset)
+                self.txtCassette.SetValue  (sCassette)
+                self.Show()
 
 # ------------------------------------------------------------------------------
 # our normal wxApp-derived class, as usual
