@@ -34,6 +34,17 @@ else
     #
     # https://www.marcdobler.com/2020/05/17/how-to-compile-and-install-wxpython-on-raspberry-pi/
     # ----------------------------------------------------------
+    #
+    # Issue #457 with OS Bookworm, this does not work and the mentioned
+    # site is no longer available.
+    # 
+    # Nevertheless, @decodeais managed to generate a suitable one:
+    #   sudo apt-get install libgtk-3-dev
+    #   sudo apt-get install libpng-dev libjpeg-dev libtiff-dev
+    # pip install -U --no-binary :all: wxPython
+    # The generated file "wxPython-4.2.1-cp311-cp311-linux_aarch64.whl" works,
+    # The but the scales on the performance and speed indicators have disappeared.
+    # ----------------------------------------------------------
 
     # ----------------------------------------------------------
     # Cleanup

@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2022-01-24"
+__version__ = "2024-01-31"
+# 2024-01-31    Smoother power was reset when powermeter resized
 # 2024-01-24    #456 Addition of an overlay window with gearing info
 #               Target grade is displayed with one decimal
 #               #456 When power exceeds the display, it's resized
@@ -477,6 +478,7 @@ class frmFortiusAntGui(wx.Frame):
                                                                             # Assign A Font To The Center Text
 
             self.PowerMax = 0
+            self.PowerArray = numpy.array([0,0,0,0,0,0,0,0,0,0])            # Array for running everage
             self.DefinePowerMeter(400)
             self.Power.SetTicksFont(wx.Font(TicksFontSize, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
                                                                             # Set The Font For The Ticks Markers
@@ -717,7 +719,6 @@ class frmFortiusAntGui(wx.Frame):
 
             Max   = Min + Step * NrIntervals
             self.PowerMax = Max
-            self.PowerArray = numpy.array([0,0,0,0,0,0,0,0,0,0])            # Array for running everage
 
             intervals = range(Min, Max+1, Step)                             # Create The Intervals That Will Divide Our self.SpeedMeter In Sectors
             self.Power.SetIntervals(intervals)
