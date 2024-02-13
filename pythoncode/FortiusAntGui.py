@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2024-01-31"
+__version__ = "2024-02-13"
+# 2024-02-13    wx.DEFAULT_FRAME_STYLE replaced by wx.CLOSE_BOX on overlay frame
 # 2024-01-31    Smoother power was reset when powermeter resized
 # 2024-01-24    #456 Addition of an overlay window with gearing info
 #               Target grade is displayed with one decimal
@@ -1606,7 +1607,7 @@ class clsGearboxOverlay(wx.Frame):
         frameX = 2 * Margin +     pCranckset.Size[0] + 15
         frameY = 3 * Margin + 2 * pCranckset.Size[1] + 39
 
-        style = wx.STAY_ON_TOP | wx.FRAME_TOOL_WINDOW | wx.CAPTION | wx.DEFAULT_FRAME_STYLE
+        style = wx.STAY_ON_TOP | wx.FRAME_TOOL_WINDOW | wx.CAPTION | wx.CLOSE_BOX               # old: wx.DEFAULT_FRAME_STYLE
         wx.Frame.__init__(self, None, title='Gearbox', size = (frameX,frameY), style = style)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
 
