@@ -1,7 +1,8 @@
 #-------------------------------------------------------------------------------
 # Version info
 #-------------------------------------------------------------------------------
-__version__ = "2023-03-13"
+__version__ = "2024-03-14"
+# 2024-03-14    Issue #463: parameter -c handled incorrectly
 # 2023-12-13    Issue #445: Specifying Vortex interactively has no effect
 # 2023-03-15    Typo in message corrected
 # 2022-08-10    Steering merged from marcoveeneman and switchable's code
@@ -364,7 +365,7 @@ class CommandLineVariables(object):
         #-----------------------------------------------------------------------
         if self.args.CalibrateRR != None:
             try:
-                self.CalibrateRR = float(self.args.CalibrateRR.replace(',', '.'))
+                self.CalibrateRR = self.args.CalibrateRR #463 It's an int because so defined in the commandline, no conversion needed
             except:
                 logfile.Console('Command line error; -c incorrect calibration of Rolling Resistance=%s' % self.args.CalibrateRR)
 
