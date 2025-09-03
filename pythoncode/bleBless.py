@@ -325,8 +325,31 @@ class clsFTMS_bless(clsBleServer):
     def __init__(self, activate):
         if UseBluetooth and activate:
             super().__init__("FortiusAntTrainer", FitnessMachineGatt)
+            self.last_call_time = 0
+            self.min_interval = 1 / 500  # 500 times per second
         else:
             pass                        # Data structure is created, no actions
+
+    # --------------------------------------------------------------------------
+    # Ratelimitedcall
+    # --------------------------------------------------------------------------
+    # Input     function parameters
+    #
+    # Function  slows calling the bless library down
+    #
+    # Output    returncode
+    # --------------------------------------------------------------------------
+
+    def rate_limited_call(self, func, *args, **kwargs):
+        current_time = time.time()
+        elapsed_time = current_time - self.last_call_time
+
+        if elapsed_time < self.min_interval:
+            time.sleep(self.min_interval - elapsed_time)
+
+        result = func(*args, **kwargs)
+        self.last_call_time = time.time()
+        return result
 
     # --------------------------------------------------------------------------
     # SetAthleteData, SetTrainerData, SetSteeringAngle
@@ -354,9 +377,10 @@ class clsFTMS_bless(clsBleServer):
         if self.OK:
             flags = 0
             h     = int(self.HeartRate) & 0xff      # Avoid value anomalities
-            info = struct.pack (bc.little_endian + bc.unsigned_char * 2, flags, h)
-            self.BlessServer.get_characteristic(bc.cHeartRateMeasurementUUID).value = info
-            self.BlessServer.update_value(bc.sHeartRateUUID, bc.cHeartRateMeasurementUUID)
+            info = struct.pack(bc.little_endian + bc.unsigned_char * 2, flags, h)
+            characteristic = self.BlessServer.get_characteristic(bc.cHeartRateMeasurementUUID)
+            self.rate_limited_call(setattr, characteristic, "value", info)
+            self.rate_limited_call(self.BlessServer.update_value, bc.sHeartRateUUID, bc.cHeartRateMeasurementUUID,)
         else:
             self.logfileConsole("clsFTMS_bless.SetAthleteData() error, interface not open")
 
@@ -385,8 +409,9 @@ class clsFTMS_bless(clsBleServer):
             p     = int(self.CurrentPower)       & 0xffff      # Avoid value anomalities
             info  = struct.pack (bc.little_endian + bc.unsigned_short * 4, flags, s, c, p)
 
-            self.BlessServer.get_characteristic(bc.cIndoorBikeDataUUID).value = info
-            self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cIndoorBikeDataUUID)
+            characteristic = self.BlessServer.get_characteristic(bc.cIndoorBikeDataUUID)
+            self.rate_limited_call(setattr, characteristic, "value", info)
+            self.rate_limited_call(self.BlessServer.update_value, bc.sFitnessMachineUUID, bc.cIndoorBikeDataUUID,)
         else:
             self.logfileConsole("clsFTMS_bless.SetTrainerData() error, interface not open")
             
@@ -407,8 +432,9 @@ class clsFTMS_bless(clsBleServer):
         if self.OK:
             a    = SteeringAngle      # Avoid value anomalities here (if needed)
             info = struct.pack (bc.little_endian + bc.float, a)
-            self.BlessServer.get_characteristic(bc.cSteeringAngleUUID).value = info
-            self.BlessServer.update_value(bc.sSteeringUUID, bc.cSteeringAngleUUID)
+            characteristic = self.BlessServer.get_characteristic(bc.cSteeringAngleUUID)
+            self.rate_limited_call(setattr, characteristic, "value", info)
+            self.rate_limited_call(self.BlessServer.update_value, bc.sSteeringUUID, bc.cSteeringAngleUUID)
         else:
             self.logfileConsole("clsFTMS_bless.SetSteeringAngle() error, interface not open")
 
@@ -646,14 +672,16 @@ class clsFTMS_bless(clsBleServer):
     def notifyStartOrResume(self):
         self.logfileWrite("bleBless.notifyStartOrResume()")
         info = struct.pack(bc.little_endian + bc.unsigned_char, bc.fms_FitnessMachineStartedOrResumedByUser)
-        self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID).value = info
-        self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID)
+        characteristic = self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID)
+        self.rate_limited_call(setattr, characteristic, "value", info)
+        self.rate_limited_call(self.BlessServer.update_value, bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID,)
 
     def notifySetTargetPower(self):
         self.logfileWrite("bleBless.notifySetTargetPower()")
         info = struct.pack(bc.little_endian + bc.unsigned_char + bc.unsigned_short, bc.fms_TargetPowerChanged, self.TargetPower)
-        self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID).value = info
-        self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID)
+        characteristic = self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID)
+        self.rate_limited_call(setattr, characteristic, "value", info)
+        self.rate_limited_call(self.BlessServer.update_value, bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID,)
 
     def notifySetIndoorBikeSimulation(self):
         self.logfileWrite("bleBless.notifySetIndoorBikeSimulation()")
@@ -665,20 +693,23 @@ class clsFTMS_bless(clsBleServer):
 
         info = struct.pack(bc.little_endian + bc.unsigned_char + bc.short * 2 + bc.unsigned_char * 2,
                             bc.fms_IndoorBikeSimulationParametersChanged, windSpeed, grade, crr, cw)
-        self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID).value = info
-        self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID)
+        characteristic = self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID)
+        self.rate_limited_call(setattr, characteristic, "value", info)
+        self.rate_limited_call(self.BlessServer.update_value, bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID,)
 
     def notifyStopOrPause(self):
         self.logfileWrite("bleBless.notifyStopOrPause()")
         info = struct.pack(bc.little_endian + bc.unsigned_char, bc.fms_FitnessMachineStoppedOrPausedByUser)
-        self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID).value = info
-        self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID)
+        characteristic = self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID)
+        self.rate_limited_call(setattr, characteristic, "value", info)
+        self.rate_limited_call(self.BlessServer.update_value, bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID,)
 
     def notifyReset(self):
         self.logfileWrite("bleBless.notifyReset()")
         info = struct.pack(bc.little_endian + bc.unsigned_char, bc.fms_Reset)
-        self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID).value = info
-        self.BlessServer.update_value(bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID)
+        characteristic = self.BlessServer.get_characteristic(bc.cFitnessMachineStatusUUID)
+        self.rate_limited_call(setattr, characteristic, "value", info)
+        self.rate_limited_call(self.BlessServer.update_value, bc.sFitnessMachineUUID, bc.cFitnessMachineStatusUUID,)
 
     # ------------------------------------------------------------------------------
     # S i m u l a t o r
